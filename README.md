@@ -191,9 +191,22 @@ Once connected, you can ask things like:
 - "How many leads are in the 'New' stage?"
 - "Show contact details for partner id 42."
 
+## Testing
+
+The suite mocks the XML-RPC layer, so **no real Odoo instance or network is
+needed**. It covers config parsing, the client (read-only guard, limit
+capping, argument forwarding, fault handling), the domain helpers, and every
+domain tool (correct model + domain construction).
+
+```bash
+pip install -e ".[dev]"
+pytest
+```
+
 ## Roadmap
 
 - [x] Domain-specific convenience tools across all major + niche Odoo modules
+- [x] Automated test suite (mocked XML-RPC, no live instance needed)
 - [ ] Write tools (`create` / `write` / `unlink`) behind a confirmation flow
 - [ ] Model allow/deny lists for finer access control
 - [ ] Optional JSON-RPC transport
