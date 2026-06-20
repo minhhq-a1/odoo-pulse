@@ -32,3 +32,27 @@ def safe(func) -> str:
         return json.dumps(func(), ensure_ascii=False, indent=2, default=str)
     except (OdooConfigError, OdooError) as exc:
         return json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2)
+
+
+def name_domain(query: str | None, fields: list[str]) -> list:
+    """Build an OR-of-ilike domain across `fields` for a free-text query.
+
+    e.g. name_domain("acme", ["name", "email"]) ->
+        ["|", ("name", "ilike", "acme"), ("email", "ilike", "acme")]
+    """
+    if not query:
+        return []
+    triplets = [(f, "ilike", query) for f in fields]
+    if len(triplets) == 1:
+        return [triplets[0]]
+    return ["|"] * (len(triplets) - 1) + triplets
+
+
+def date_domain(field: str, date_from: str | None, date_to: str | None) -> list:
+    """Build a closed-interval domain on a date/datetime field."""
+    domain: list = []
+    if date_from:
+        domain.append((field, ">=", date_from))
+    if date_to:
+        domain.append((field, "<=", date_to))
+    return domain

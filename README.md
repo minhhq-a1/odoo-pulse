@@ -30,7 +30,10 @@ needs to be installed inside Odoo.
 ### Domain (convenience wrappers)
 
 Pre-built filters and field sets for common business objects, so the LLM
-doesn't need to know technical model/field names.
+doesn't need to know technical model/field names. Tools whose Odoo app is not
+installed return a friendly error instead of failing.
+
+**Contacts / CRM / Sales / Purchase**
 
 | Tool | Module | Purpose |
 | --- | --- | --- |
@@ -39,9 +42,63 @@ doesn't need to know technical model/field names.
 | `list_sale_orders` | Sales | List sales orders by customer / state / date range |
 | `get_sale_order` | Sales | One order with its line items |
 | `list_purchase_orders` | Purchase | List purchase orders by vendor / state |
+| `get_purchase_order` | Purchase | One purchase order with its line items |
+
+**Inventory / Accounting**
+
+| Tool | Module | Purpose |
+| --- | --- | --- |
 | `find_products` | Inventory | Products with on-hand & forecasted qty |
 | `check_stock` | Inventory | On-hand stock per location (`stock.quant`) |
+| `list_pickings` | Inventory | Transfers: deliveries / receipts / internal |
 | `list_invoices` | Accounting | Invoices/bills, filter unpaid / type / date |
+| `get_invoice` | Accounting | One invoice/bill with its line items |
+| `list_payments` | Accounting | Customer/vendor payments |
+
+**HR**
+
+| Tool | Purpose |
+| --- | --- |
+| `list_employees` | Employees, filter by department |
+| `list_departments` | Departments with headcount |
+| `list_time_off` | Leave / time-off requests |
+| `list_expenses` | Employee expenses |
+| `list_job_positions` | Recruitment job positions |
+| `list_applicants` | Recruitment applicants |
+| `list_attendances` | Check in/out records |
+
+**Project**
+
+| Tool | Purpose |
+| --- | --- |
+| `list_projects` | Projects |
+| `list_tasks` | Tasks by project / assignee / stage |
+| `list_timesheets` | Timesheet entries |
+
+**Operations**
+
+| Tool | Purpose |
+| --- | --- |
+| `list_manufacturing_orders` | Manufacturing orders (MRP) |
+| `list_boms` | Bills of materials |
+| `list_pos_orders` | Point of Sale orders |
+| `list_pos_sessions` | PoS sessions |
+| `list_repair_orders` | Repair orders |
+| `list_maintenance_requests` | Maintenance requests |
+| `list_equipment` | Maintenance equipment / assets |
+| `list_helpdesk_tickets` | Helpdesk tickets (Enterprise) |
+| `list_vehicles` | Fleet vehicles |
+
+**Engagement**
+
+| Tool | Purpose |
+| --- | --- |
+| `list_events` | Events |
+| `list_event_registrations` | Event attendees |
+| `list_calendar_events` | Calendar meetings |
+| `list_activities` | Scheduled activities / to-dos |
+| `list_surveys` | Surveys with response counts |
+| `list_email_campaigns` | Email marketing mailings |
 
 Write operations (`create`/`write`/`unlink`) are **not** exposed in this
 read-only MVP, and the underlying client blocks them while
@@ -111,7 +168,7 @@ Once connected, you can ask things like:
 
 ## Roadmap
 
-- [x] Domain-specific convenience tools (Contacts, CRM, Sales, Purchase, Inventory, Accounting)
+- [x] Domain-specific convenience tools across all major Odoo modules
 - [ ] Write tools (`create` / `write` / `unlink`) behind a confirmation flow
 - [ ] Model allow/deny lists for finer access control
 - [ ] Optional JSON-RPC transport

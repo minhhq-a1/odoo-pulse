@@ -8,9 +8,9 @@ Covered modules:
   - Contacts    (res.partner)
   - CRM         (crm.lead)
   - Sales       (sale.order, sale.order.line)
-  - Purchase    (purchase.order)
-  - Inventory   (product.product, stock.quant)
-  - Accounting  (account.move)
+  - Purchase    (purchase.order, purchase.order.line)
+  - Inventory   (product.product, stock.quant, stock.picking)
+  - Accounting  (account.move, account.move.line, account.payment)
 
 Everything here is read-only.
 """
@@ -19,31 +19,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .runtime import get_client, mcp, safe
-
-
-def _name_domain(query: str | None, fields: list[str]) -> list:
-    """Build an OR-of-ilike domain across `fields` for a free-text query.
-
-    e.g. _name_domain("acme", ["name", "email"]) ->
-        ["|", ("name", "ilike", "acme"), ("email", "ilike", "acme")]
-    """
-    if not query:
-        return []
-    triplets = [(f, "ilike", query) for f in fields]
-    if len(triplets) == 1:
-        return [triplets[0]]
-    return ["|"] * (len(triplets) - 1) + triplets
-
-
-def _date_domain(field: str, date_from: str | None, date_to: str | None) -> list:
-    domain: list = []
-    if date_from:
-        domain.append((field, ">=", date_from))
-    if date_to:
-        domain.append((field, "<=", date_to))
-    return domain
-
+from .runtime import date_domain, get_client, mcp, name_domain, safe
 
 # --- Contacts -----------------------------------------------------------------
 
@@ -56,7 +32,7 @@ def find_partner(query: str, limit: int = 20) -> str:
         query: Free text matched against name, email, phone and customer ref.
         limit: Max results.
     """
-    domain = _name_domain(query, ["name", "email", "phone", "mobile", "ref", "vat"])
+    domain = name_domain(query, ["name", "email", "phone", "mobile", "ref", "vat"])
     return safe(
         lambda: get_client().search_read(
             "res.partner",
@@ -97,7 +73,7 @@ def list_opportunities(
         limit: Max results.
     """
     domain: list = [("type", "=", "opportunity")]
-    domain += _name_domain(query, ["name", "partner_name", "contact_name"])
+    domain += name_domain(query, ["name", "partner_name", "contact_name"])
     if stage:
         domain.append(("stage_id.name", "ilike", stage))
     if salesperson:
@@ -149,7 +125,7 @@ def list_sale_orders(
         domain.append(("partner_id.name", "ilike", customer))
     if state and state in _SALE_STATES:
         domain.append(("state", "=", state))
-    domain += _date_domain("date_order", date_from, date_to)
+    domain += date_domain("date_order", date_from, date_to)
     return safe(
         lambda: get_client().search_read(
             "sale.order",
@@ -261,7 +237,7 @@ def find_products(query: str | None = None, limit: int = 20) -> str:
         query: Free text matched against product name or internal reference.
         limit: Max results.
     """
-    domain = _name_domain(query, ["name", "default_code", "barcode"])
+    domain = name_domain(query, ["name", "default_code", "barcode"])
     return safe(
         lambda: get_client().search_read(
             "product.product",
@@ -336,7 +312,7 @@ def list_invoices(
         domain.append(("partner_id.name", "ilike", customer))
     if unpaid_only:
         domain.append(("payment_state", "in", ("not_paid", "partial")))
-    domain += _date_domain("invoice_date", date_from, date_to)
+    domain += date_domain("invoice_date", date_from, date_to)
     return safe(
         lambda: get_client().search_read(
             "account.move",
@@ -353,5 +329,188 @@ def list_invoices(
             ],
             limit=limit,
             order="invoice_date desc",
+        )
+    )
+
+
+@mcp.tool()
+def get_invoice(move_id: int | None = None, number: str | None = None) -> str:
+    """Fetch a single invoice/bill (account.move) with its line items.
+
+    Provide either the numeric `move_id` or the `number` (e.g. 'INV/2026/0001').
+    """
+    client = get_client()
+
+    def _run() -> dict[str, Any]:
+        mid = move_id
+        if mid is None:
+            if not number:
+                return {"error": "Provide move_id or number."}
+            found = client.search_read(
+                "account.move", domain=[("name", "=", number)], fields=["id"], limit=1
+            )
+            if not found:
+                return {"error": f"No invoice numbered {number!r}."}
+            mid = found[0]["id"]
+
+        header = client.read(
+            "account.move",
+            [mid],
+            fields=[
+                "name",
+                "partner_id",
+                "move_type",
+                "invoice_date",
+                "invoice_date_due",
+                "amount_untaxed",
+                "amount_tax",
+                "amount_total",
+                "amount_residual",
+                "payment_state",
+                "state",
+                "invoice_line_ids",
+            ],
+        )
+        if not header:
+            return {"error": f"No invoice with id {mid}."}
+        move = header[0]
+        lines = client.read(
+            "account.move.line",
+            move.get("invoice_line_ids", []),
+            fields=["name", "product_id", "quantity", "price_unit", "price_subtotal", "account_id"],
+        )
+        move["lines"] = lines
+        move.pop("invoice_line_ids", None)
+        return move
+
+    return safe(_run)
+
+
+@mcp.tool()
+def list_payments(
+    partner: str | None = None,
+    payment_type: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    limit: int = 20,
+) -> str:
+    """List customer/vendor payments (account.payment).
+
+    Args:
+        partner: Filter by partner name.
+        payment_type: 'inbound' (received) or 'outbound' (sent).
+        date_from: Inclusive lower bound on payment date (YYYY-MM-DD).
+        date_to: Inclusive upper bound on payment date (YYYY-MM-DD).
+        limit: Max results.
+    """
+    domain: list = []
+    if partner:
+        domain.append(("partner_id.name", "ilike", partner))
+    if payment_type in ("inbound", "outbound"):
+        domain.append(("payment_type", "=", payment_type))
+    domain += date_domain("date", date_from, date_to)
+    return safe(
+        lambda: get_client().search_read(
+            "account.payment",
+            domain=domain,
+            fields=["name", "partner_id", "payment_type", "amount", "date", "state", "journal_id"],
+            limit=limit,
+            order="date desc",
+        )
+    )
+
+
+# --- Purchase (supplement) ----------------------------------------------------
+
+
+@mcp.tool()
+def get_purchase_order(order_id: int | None = None, order_name: str | None = None) -> str:
+    """Fetch a single purchase order with its line items.
+
+    Provide either the numeric `order_id` or the `order_name` (e.g. 'P00007').
+    """
+    client = get_client()
+
+    def _run() -> dict[str, Any]:
+        oid = order_id
+        if oid is None:
+            if not order_name:
+                return {"error": "Provide order_id or order_name."}
+            found = client.search_read(
+                "purchase.order", domain=[("name", "=", order_name)], fields=["id"], limit=1
+            )
+            if not found:
+                return {"error": f"No purchase order named {order_name!r}."}
+            oid = found[0]["id"]
+
+        header = client.read(
+            "purchase.order",
+            [oid],
+            fields=[
+                "name",
+                "partner_id",
+                "date_order",
+                "amount_untaxed",
+                "amount_tax",
+                "amount_total",
+                "state",
+                "order_line",
+            ],
+        )
+        if not header:
+            return {"error": f"No purchase order with id {oid}."}
+        order = header[0]
+        lines = client.read(
+            "purchase.order.line",
+            order.get("order_line", []),
+            fields=["product_id", "name", "product_qty", "price_unit", "price_subtotal"],
+        )
+        order["lines"] = lines
+        order.pop("order_line", None)
+        return order
+
+    return safe(_run)
+
+
+# --- Inventory (supplement) ---------------------------------------------------
+
+
+@mcp.tool()
+def list_pickings(
+    picking_type: str | None = None,
+    partner: str | None = None,
+    state: str | None = None,
+    limit: int = 20,
+) -> str:
+    """List stock transfers / pickings (stock.picking): deliveries, receipts, internal.
+
+    Args:
+        picking_type: 'incoming' (receipts), 'outgoing' (deliveries) or 'internal'.
+        partner: Filter by partner name.
+        state: draft, waiting, confirmed, assigned, done or cancel.
+        limit: Max results.
+    """
+    domain: list = []
+    if picking_type in ("incoming", "outgoing", "internal"):
+        domain.append(("picking_type_id.code", "=", picking_type))
+    if partner:
+        domain.append(("partner_id.name", "ilike", partner))
+    if state:
+        domain.append(("state", "=", state))
+    return safe(
+        lambda: get_client().search_read(
+            "stock.picking",
+            domain=domain,
+            fields=[
+                "name",
+                "partner_id",
+                "scheduled_date",
+                "date_done",
+                "state",
+                "origin",
+                "picking_type_id",
+            ],
+            limit=limit,
+            order="scheduled_date desc",
         )
     )
