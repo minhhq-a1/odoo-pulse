@@ -1,5 +1,7 @@
 # odoo-mcp
 
+[![CI](https://github.com/minhhq-a1/odoo-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/minhhq-a1/odoo-mcp/actions/workflows/ci.yml)
+
 An [MCP](https://modelcontextprotocol.io) server that gives an MCP client
 (e.g. Claude) **read-only** access to an [Odoo](https://www.odoo.com) instance
 over the standard XML-RPC external API.
@@ -207,6 +209,7 @@ pytest
 
 - [x] Domain-specific convenience tools across all major + niche Odoo modules
 - [x] Automated test suite (mocked XML-RPC, no live instance needed)
+- [x] CI on GitHub Actions (pytest on Python 3.10–3.12)
 - [ ] Write tools (`create` / `write` / `unlink`) behind a confirmation flow
 - [ ] Model allow/deny lists for finer access control
 - [ ] Optional JSON-RPC transport
