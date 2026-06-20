@@ -205,6 +205,28 @@ pip install -e ".[dev]"
 pytest
 ```
 
+### Live smoke test (against a real Odoo)
+
+To verify a real connection and catch field-name mismatches on your specific
+Odoo version, run the live smoke script. It connects with your `.env`
+credentials and calls every read-only list tool once — staying read-only and
+never writing anything:
+
+```bash
+cp .env.example .env      # fill in your ODOO_* credentials
+python scripts/smoke_live.py
+```
+
+Each tool is reported as:
+
+- `ok` — works, with the number of records returned
+- `skip` — the app/model is not installed (expected, harmless)
+- `CHECK` — the model exists but a field differs on your version; adjust the
+  field list in the matching tool
+
+Options: `--env <path>` (default `.env`), `--limit <n>` (records per tool,
+default 1), `--no-color`.
+
 ## Roadmap
 
 - [x] Domain-specific convenience tools across all major + niche Odoo modules
