@@ -16,6 +16,8 @@ needs to be installed inside Odoo.
 
 ## Tools
 
+### Generic (model-agnostic)
+
 | Tool | Purpose |
 | --- | --- |
 | `odoo_version` | Connectivity / version check |
@@ -24,6 +26,22 @@ needs to be installed inside Odoo.
 | `search_read` | Query records with an Odoo domain filter |
 | `search_count` | Count records matching a domain |
 | `read_records` | Fetch specific records by id |
+
+### Domain (convenience wrappers)
+
+Pre-built filters and field sets for common business objects, so the LLM
+doesn't need to know technical model/field names.
+
+| Tool | Module | Purpose |
+| --- | --- | --- |
+| `find_partner` | Contacts | Find contacts/companies by name, email, phone, ref, VAT |
+| `list_opportunities` | CRM | List opportunities, filter by stage / salesperson |
+| `list_sale_orders` | Sales | List sales orders by customer / state / date range |
+| `get_sale_order` | Sales | One order with its line items |
+| `list_purchase_orders` | Purchase | List purchase orders by vendor / state |
+| `find_products` | Inventory | Products with on-hand & forecasted qty |
+| `check_stock` | Inventory | On-hand stock per location (`stock.quant`) |
+| `list_invoices` | Accounting | Invoices/bills, filter unpaid / type / date |
 
 Write operations (`create`/`write`/`unlink`) are **not** exposed in this
 read-only MVP, and the underlying client blocks them while
@@ -93,7 +111,7 @@ Once connected, you can ask things like:
 
 ## Roadmap
 
+- [x] Domain-specific convenience tools (Contacts, CRM, Sales, Purchase, Inventory, Accounting)
 - [ ] Write tools (`create` / `write` / `unlink`) behind a confirmation flow
-- [ ] Domain-specific convenience tools (CRM, Sales, Inventory, Accounting)
 - [ ] Model allow/deny lists for finer access control
 - [ ] Optional JSON-RPC transport
