@@ -100,6 +100,31 @@ installed return a friendly error instead of failing.
 | `list_surveys` | Surveys with response counts |
 | `list_email_campaigns` | Email marketing mailings |
 
+**Niche / specialised** (mostly Enterprise apps — return a friendly error if not installed)
+
+| Tool | Module | Purpose |
+| --- | --- | --- |
+| `list_subscriptions` | Subscriptions | Recurring subscriptions |
+| `list_sign_requests` | Sign | E-signature requests |
+| `list_documents` | Documents | Document files |
+| `list_knowledge_articles` | Knowledge | Knowledge articles |
+| `list_approval_requests` | Approvals | Approval requests |
+| `list_lunch_orders` | Lunch | Lunch orders |
+| `list_quality_checks` | Quality | Quality checks |
+| `list_quality_alerts` | Quality | Quality alerts |
+| `list_planning_slots` | Planning | Shifts / slots |
+| `list_courses` | eLearning | Courses |
+| `list_loyalty_programs` | Loyalty | Programs / coupons / gift cards |
+| `list_loyalty_cards` | Loyalty | Loyalty / gift cards |
+| `list_memberships` | Membership | Membership lines |
+| `list_payslips` | Payroll | Payslips |
+| `list_appraisals` | Appraisal | Employee appraisals |
+| `list_social_posts` | Social | Social media posts |
+| `list_website_visitors` | Website | Website visitors |
+| `list_engineering_changes` | PLM | Engineering change orders (`mrp.eco`) |
+| `list_iot_devices` | IoT | IoT devices |
+| `list_notes` | Notes | Notes |
+
 Write operations (`create`/`write`/`unlink`) are **not** exposed in this
 read-only MVP, and the underlying client blocks them while
 `ODOO_READ_ONLY=true`.
@@ -168,7 +193,7 @@ Once connected, you can ask things like:
 
 ## Roadmap
 
-- [x] Domain-specific convenience tools across all major Odoo modules
+- [x] Domain-specific convenience tools across all major + niche Odoo modules
 - [ ] Write tools (`create` / `write` / `unlink`) behind a confirmation flow
 - [ ] Model allow/deny lists for finer access control
 - [ ] Optional JSON-RPC transport

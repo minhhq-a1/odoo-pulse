@@ -15,6 +15,9 @@ Domain tools (convenience wrappers for common modules):
   - Project:    projects, tasks, timesheets
   - Operations: manufacturing, BoM, PoS, repair, maintenance, helpdesk, fleet
   - Engagement: events, calendar, activities, surveys, email campaigns
+  - Niche:      subscriptions, sign, documents, knowledge, approvals, lunch,
+                quality, planning, eLearning, loyalty, memberships, payroll,
+                appraisals, social, website, PLM, IoT, notes
 
 Write operations (create/write/unlink) are intentionally not exposed yet, and
 the underlying client blocks them while ODOO_READ_ONLY is true.
@@ -31,6 +34,7 @@ from . import tools_hr  # noqa: F401  (Human Resources)
 from . import tools_projects  # noqa: F401  (Project & Timesheets)
 from . import tools_operations  # noqa: F401  (MRP/PoS/Repair/Maintenance/Helpdesk/Fleet)
 from . import tools_engagement  # noqa: F401  (Events/Calendar/Activities/Marketing)
+from . import tools_niche  # noqa: F401  (specialised / Enterprise modules)
 
 
 def main() -> None:
