@@ -42,6 +42,8 @@ class OdooConfig:
     read_only: bool = True
     max_records: int = 200
     verify_ssl: bool = True
+    writable_models: frozenset[str] = frozenset()
+    allow_delete: bool = False
 
     @classmethod
     def from_env(cls) -> "OdooConfig":
@@ -80,6 +82,17 @@ class OdooConfig:
             "0",
             "no",
         )
+        writable_models = frozenset(
+            m.strip()
+            for m in os.environ.get("ODOO_WRITABLE_MODELS", "").split(",")
+            if m.strip()
+        )
+        allow_delete = os.environ.get("ODOO_ALLOW_DELETE", "false").lower() not in (
+            "false",
+            "0",
+            "no",
+            "",
+        )
 
         return cls(
             url=url,
@@ -89,6 +102,8 @@ class OdooConfig:
             read_only=read_only,
             max_records=max_records,
             verify_ssl=verify_ssl,
+            writable_models=writable_models,
+            allow_delete=allow_delete,
         )
 
 

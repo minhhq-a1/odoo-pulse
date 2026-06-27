@@ -64,3 +64,32 @@ def test_max_records_parsing_and_fallback(monkeypatch):
 
     _set_env(monkeypatch, ODOO_MAX_RECORDS="not-a-number")
     assert OdooConfig.from_env().max_records == 200
+
+
+def test_from_env_parses_writable_models_and_allow_delete(monkeypatch):
+    monkeypatch.setenv("ODOO_URL", "https://acme.odoo.com")
+    monkeypatch.setenv("ODOO_DB", "acme")
+    monkeypatch.setenv("ODOO_USERNAME", "me@acme.com")
+    monkeypatch.setenv("ODOO_API_KEY", "secret")
+    monkeypatch.setenv("ODOO_WRITABLE_MODELS", "crm.lead, res.partner ,")
+    monkeypatch.setenv("ODOO_ALLOW_DELETE", "true")
+
+    cfg = OdooConfig.from_env()
+
+    assert cfg.writable_models == frozenset({"crm.lead", "res.partner"})
+    assert cfg.allow_delete is True
+
+
+def test_from_env_writable_models_defaults_empty(monkeypatch):
+    monkeypatch.setenv("ODOO_URL", "https://acme.odoo.com")
+    monkeypatch.setenv("ODOO_DB", "acme")
+    monkeypatch.setenv("ODOO_USERNAME", "me@acme.com")
+    monkeypatch.setenv("ODOO_API_KEY", "secret")
+    monkeypatch.delenv("ODOO_WRITABLE_MODELS", raising=False)
+    monkeypatch.delenv("ODOO_ALLOW_DELETE", raising=False)
+
+    cfg = OdooConfig.from_env()
+
+    assert cfg.writable_models == frozenset()
+    assert cfg.allow_delete is False
+
