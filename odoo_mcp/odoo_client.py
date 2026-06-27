@@ -242,6 +242,15 @@ class OdooClient:
     ) -> list[dict]:
         return self.execute_kw(model, "read", [ids], {"fields": fields or []})
 
+    def create(self, model: str, values: dict) -> int:
+        return self.execute_kw(model, "create", [values])
+
+    def write(self, model: str, ids: list[int], values: dict) -> bool:
+        return self.execute_kw(model, "write", [ids, values])
+
+    def unlink(self, model: str, ids: list[int]) -> bool:
+        return self.execute_kw(model, "unlink", [ids])
+
     def fields_get(self, model: str, attributes: list[str] | None = None) -> dict:
         return self.execute_kw(
             model,

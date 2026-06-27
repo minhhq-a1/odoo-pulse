@@ -160,3 +160,20 @@ def test_unlink_gated_by_allow_delete():
     )
     client.execute_kw("crm.lead", "unlink", [[1]])
     assert proxy.calls[0][4] == "unlink"
+
+
+def test_create_write_unlink_forward_to_execute_kw():
+    client, proxy = make_client(
+        return_value=55, read_only=False, writable_models=["crm.lead"], allow_delete=True
+    )
+    assert client.create("crm.lead", {"name": "X"}) == 55
+    assert proxy.calls[-1][4] == "create"
+    assert proxy.calls[-1][5] == [{"name": "X"}]
+
+    client.write("crm.lead", [1, 2], {"name": "Y"})
+    assert proxy.calls[-1][4] == "write"
+    assert proxy.calls[-1][5] == [[1, 2], {"name": "Y"}]
+
+    client.unlink("crm.lead", [3])
+    assert proxy.calls[-1][4] == "unlink"
+    assert proxy.calls[-1][5] == [[3]]
