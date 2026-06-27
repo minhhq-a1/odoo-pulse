@@ -105,6 +105,60 @@ def test_create_task_sets_project_and_assignee(fake_client):
     }
 
 
+def test_create_lead_merges_extra_values(fake_client):
+    out = json.loads(
+        tools_write.create_lead(
+            "Big deal", extra_values={"presales_id": 5, "priority": "2"}, confirm=True
+        )
+    )
+    assert out["created_id"] == 101
+    call = fake_client.last("create")
+    assert call["values"] == {"name": "Big deal", "presales_id": 5, "priority": "2"}
+
+
+def test_create_lead_extra_values_shows_in_preview(fake_client):
+    out = json.loads(
+        tools_write.create_lead("Big deal", extra_values={"presales_id": 5}, confirm=False)
+    )
+    assert out["preview"] is True
+    assert out["values"] == {"name": "Big deal", "presales_id": 5}
+    assert fake_client.calls == []
+
+
+def test_create_contact_merges_extra_values(fake_client):
+    out = json.loads(
+        tools_write.create_contact("ACME", extra_values={"vat": "VN123"}, confirm=True)
+    )
+    assert out["created_id"] == 101
+    assert fake_client.last("create")["values"] == {"name": "ACME", "vat": "VN123"}
+
+
+def test_create_task_merges_extra_values(fake_client):
+    out = json.loads(
+        tools_write.create_task(
+            "Do it", project_id=7, extra_values={"tag_ids": [(6, 0, [1])]}, confirm=True
+        )
+    )
+    assert out["created_id"] == 101
+    assert fake_client.last("create")["values"] == {
+        "name": "Do it",
+        "project_id": 7,
+        "tag_ids": [(6, 0, [1])],
+    }
+
+
+def test_extra_values_override_helper_built_fields(fake_client):
+    # An explicit extra_values key wins over the helper's own mapping.
+    out = json.loads(
+        tools_write.create_lead(
+            "Big deal", email="a@b.com", extra_values={"email_from": "override@b.com"},
+            confirm=True,
+        )
+    )
+    assert out["created_id"] == 101
+    assert fake_client.last("create")["values"]["email_from"] == "override@b.com"
+
+
 def test_confirm_sale_order_calls_action_confirm(fake_client):
     out = json.loads(tools_write.confirm_sale_order(9, confirm=True))
     assert out["confirmed"] is True

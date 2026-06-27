@@ -21,6 +21,18 @@ def _require_ids() -> None:
     raise OdooError("ids must be a non-empty list.")
 
 
+def _merge_extra(values: dict, extra_values: dict | None) -> dict:
+    """Merge caller-supplied extra fields into a helper-built values dict.
+
+    Lets callers pass instance-specific or mandatory custom fields (e.g. a
+    custom required ``presales_id`` on crm.lead) that the helper doesn't model.
+    Explicit keys in ``extra_values`` win over the helper's own mapping.
+    """
+    if extra_values:
+        values.update(extra_values)
+    return values
+
+
 @mcp.tool()
 def create_record(model: str, values: dict, confirm: bool = False) -> str:
     """Create one record. Returns a preview unless confirm=True.
@@ -85,9 +97,14 @@ def create_lead(
     email: str | None = None,
     phone: str | None = None,
     description: str | None = None,
+    extra_values: dict | None = None,
     confirm: bool = False,
 ) -> str:
-    """Create a CRM lead/opportunity (crm.lead). Preview unless confirm=True."""
+    """Create a CRM lead/opportunity (crm.lead). Preview unless confirm=True.
+
+    Use extra_values to set fields this helper doesn't model, including custom
+    mandatory fields (e.g. {"presales_id": 5}).
+    """
     values: dict = {"name": name}
     if contact_name:
         values["contact_name"] = contact_name
@@ -97,6 +114,7 @@ def create_lead(
         values["phone"] = phone
     if description:
         values["description"] = description
+    values = _merge_extra(values, extra_values)
     if not confirm:
         return safe(lambda: preview("create", "crm.lead", values=values))
     return safe(lambda: {"created_id": get_client().create("crm.lead", values)})
@@ -109,9 +127,13 @@ def create_contact(
     phone: str | None = None,
     is_company: bool = False,
     parent_id: int | None = None,
+    extra_values: dict | None = None,
     confirm: bool = False,
 ) -> str:
-    """Create a contact (res.partner). Preview unless confirm=True."""
+    """Create a contact (res.partner). Preview unless confirm=True.
+
+    Use extra_values to set fields this helper doesn't model (e.g. {"vat": ...}).
+    """
     values: dict = {"name": name}
     if email:
         values["email"] = email
@@ -121,6 +143,7 @@ def create_contact(
         values["is_company"] = True
     if parent_id:
         values["parent_id"] = parent_id
+    values = _merge_extra(values, extra_values)
     if not confirm:
         return safe(lambda: preview("create", "res.partner", values=values))
     return safe(lambda: {"created_id": get_client().create("res.partner", values)})
@@ -133,11 +156,13 @@ def create_task(
     user_id: int | None = None,
     description: str | None = None,
     date_deadline: str | None = None,
+    extra_values: dict | None = None,
     confirm: bool = False,
 ) -> str:
     """Create a project task (project.task). Preview unless confirm=True.
 
-    Use list_projects to find the project_id first.
+    Use list_projects to find the project_id first. Use extra_values to set
+    fields this helper doesn't model (e.g. {"tag_ids": [(6, 0, [1])]}).
     """
     values: dict = {"name": name, "project_id": project_id}
     if user_id:
@@ -146,6 +171,7 @@ def create_task(
         values["description"] = description
     if date_deadline:
         values["date_deadline"] = date_deadline
+    values = _merge_extra(values, extra_values)
     if not confirm:
         return safe(lambda: preview("create", "project.task", values=values))
     return safe(lambda: {"created_id": get_client().create("project.task", values)})
