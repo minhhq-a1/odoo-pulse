@@ -18,9 +18,12 @@ Domain tools (convenience wrappers for common modules):
   - Niche:      subscriptions, sign, documents, knowledge, approvals, lunch,
                 quality, planning, eLearning, loyalty, memberships, payroll,
                 appraisals, social, website, PLM, IoT, notes
+  - Write:      create_record, update_records, delete_records, and helpers
+                create_lead, create_contact, create_task, confirm_sale_order
 
-Write operations (create/write/unlink) are intentionally not exposed yet, and
-the underlying client blocks them while ODOO_READ_ONLY is true.
+Write tools are gated: they require ODOO_READ_ONLY=false, the target model in
+ODOO_WRITABLE_MODELS, a per-call confirm=true, and (for deletes) ODOO_ALLOW_DELETE.
+System models and the configured defaults keep the server read-only out of the box.
 """
 
 from __future__ import annotations
