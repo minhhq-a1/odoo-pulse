@@ -145,7 +145,6 @@ def list_job_positions(query: str | None = None, limit: int = 20) -> str:
                 "department_id",
                 "no_of_recruitment",
                 "no_of_employee",
-                "state",
             ],
             limit=limit,
             order="name",

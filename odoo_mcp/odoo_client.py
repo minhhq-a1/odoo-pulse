@@ -13,6 +13,7 @@ safe by default.
 from __future__ import annotations
 
 import os
+import ssl
 import xmlrpc.client
 from dataclasses import dataclass
 from functools import cached_property
@@ -40,6 +41,7 @@ class OdooConfig:
     api_key: str
     read_only: bool = True
     max_records: int = 200
+    verify_ssl: bool = True
 
     @classmethod
     def from_env(cls) -> "OdooConfig":
@@ -73,6 +75,12 @@ class OdooConfig:
         except ValueError:
             max_records = 200
 
+        verify_ssl = os.environ.get("ODOO_VERIFY_SSL", "true").lower() not in (
+            "false",
+            "0",
+            "no",
+        )
+
         return cls(
             url=url,
             db=db,
@@ -80,6 +88,7 @@ class OdooConfig:
             api_key=api_key,
             read_only=read_only,
             max_records=max_records,
+            verify_ssl=verify_ssl,
         )
 
 
@@ -88,15 +97,27 @@ class OdooClient:
         self.config = config
 
     @cached_property
+    def _ssl_context(self) -> ssl.SSLContext | None:
+        # Only relevant for https endpoints. When verification is disabled we
+        # build an unverified context so self-signed certs are accepted.
+        if self.config.verify_ssl:
+            return None
+        return ssl._create_unverified_context()
+
+    @cached_property
     def _common(self) -> xmlrpc.client.ServerProxy:
         return xmlrpc.client.ServerProxy(
-            f"{self.config.url}/xmlrpc/2/common", allow_none=True
+            f"{self.config.url}/xmlrpc/2/common",
+            allow_none=True,
+            context=self._ssl_context,
         )
 
     @cached_property
     def _models(self) -> xmlrpc.client.ServerProxy:
         return xmlrpc.client.ServerProxy(
-            f"{self.config.url}/xmlrpc/2/object", allow_none=True
+            f"{self.config.url}/xmlrpc/2/object",
+            allow_none=True,
+            context=self._ssl_context,
         )
 
     @cached_property

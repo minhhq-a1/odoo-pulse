@@ -73,7 +73,7 @@ def list_tasks(
                 "stage_id",
                 "date_deadline",
                 "priority",
-                "kanban_state",
+                "state",
             ],
             limit=limit,
             order="priority desc, date_deadline",
