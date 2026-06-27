@@ -55,3 +55,66 @@ def test_update_records_requires_ids(fake_client):
     out = json.loads(tools_write.update_records("crm.lead", [], {"name": "Y"}, confirm=True))
     assert "error" in out
     assert fake_client.calls == []
+
+
+def test_create_lead_builds_values_and_writes(fake_client):
+    out = json.loads(
+        tools_write.create_lead(
+            "Big deal", contact_name="Jane", email="j@x.com", phone="123", confirm=True
+        )
+    )
+    assert out["created_id"] == 101
+    call = fake_client.last("create")
+    assert call["model"] == "crm.lead"
+    assert call["values"] == {
+        "name": "Big deal",
+        "contact_name": "Jane",
+        "email_from": "j@x.com",
+        "phone": "123",
+    }
+
+
+def test_create_lead_preview_no_write(fake_client):
+    out = json.loads(tools_write.create_lead("Big deal", confirm=False))
+    assert out["preview"] is True
+    assert out["values"] == {"name": "Big deal"}
+    assert fake_client.calls == []
+
+
+def test_create_contact_company_flag(fake_client):
+    out = json.loads(
+        tools_write.create_contact("ACME", email="a@b.com", is_company=True, confirm=True)
+    )
+    assert out["created_id"] == 101
+    call = fake_client.last("create")
+    assert call["model"] == "res.partner"
+    assert call["values"] == {"name": "ACME", "email": "a@b.com", "is_company": True}
+
+
+def test_create_task_sets_project_and_assignee(fake_client):
+    out = json.loads(
+        tools_write.create_task("Do it", project_id=7, user_id=4, confirm=True)
+    )
+    assert out["created_id"] == 101
+    call = fake_client.last("create")
+    assert call["model"] == "project.task"
+    assert call["values"] == {
+        "name": "Do it",
+        "project_id": 7,
+        "user_ids": [(6, 0, [4])],
+    }
+
+
+def test_confirm_sale_order_calls_action_confirm(fake_client):
+    out = json.loads(tools_write.confirm_sale_order(9, confirm=True))
+    assert out["confirmed"] is True
+    call = fake_client.last("action_confirm")
+    assert call["model"] == "sale.order"
+    assert call["args"] == [[9]]
+
+
+def test_confirm_sale_order_preview(fake_client):
+    out = json.loads(tools_write.confirm_sale_order(9, confirm=False))
+    assert out["preview"] is True
+    assert out["ids"] == [9]
+    assert fake_client.calls == []

@@ -76,3 +76,90 @@ def delete_records(model: str, ids: list[int], confirm: bool = False) -> str:
             lambda: preview("delete", model, ids=ids, affected=_display_names(model, ids))
         )
     return safe(lambda: {"deleted": get_client().unlink(model, ids), "ids": ids})
+
+
+@mcp.tool()
+def create_lead(
+    name: str,
+    contact_name: str | None = None,
+    email: str | None = None,
+    phone: str | None = None,
+    description: str | None = None,
+    confirm: bool = False,
+) -> str:
+    """Create a CRM lead/opportunity (crm.lead). Preview unless confirm=True."""
+    values: dict = {"name": name}
+    if contact_name:
+        values["contact_name"] = contact_name
+    if email:
+        values["email_from"] = email
+    if phone:
+        values["phone"] = phone
+    if description:
+        values["description"] = description
+    if not confirm:
+        return safe(lambda: preview("create", "crm.lead", values=values))
+    return safe(lambda: {"created_id": get_client().create("crm.lead", values)})
+
+
+@mcp.tool()
+def create_contact(
+    name: str,
+    email: str | None = None,
+    phone: str | None = None,
+    is_company: bool = False,
+    parent_id: int | None = None,
+    confirm: bool = False,
+) -> str:
+    """Create a contact (res.partner). Preview unless confirm=True."""
+    values: dict = {"name": name}
+    if email:
+        values["email"] = email
+    if phone:
+        values["phone"] = phone
+    if is_company:
+        values["is_company"] = True
+    if parent_id:
+        values["parent_id"] = parent_id
+    if not confirm:
+        return safe(lambda: preview("create", "res.partner", values=values))
+    return safe(lambda: {"created_id": get_client().create("res.partner", values)})
+
+
+@mcp.tool()
+def create_task(
+    name: str,
+    project_id: int,
+    user_id: int | None = None,
+    description: str | None = None,
+    date_deadline: str | None = None,
+    confirm: bool = False,
+) -> str:
+    """Create a project task (project.task). Preview unless confirm=True.
+
+    Use list_projects to find the project_id first.
+    """
+    values: dict = {"name": name, "project_id": project_id}
+    if user_id:
+        values["user_ids"] = [(6, 0, [user_id])]
+    if description:
+        values["description"] = description
+    if date_deadline:
+        values["date_deadline"] = date_deadline
+    if not confirm:
+        return safe(lambda: preview("create", "project.task", values=values))
+    return safe(lambda: {"created_id": get_client().create("project.task", values)})
+
+
+@mcp.tool()
+def confirm_sale_order(order_id: int, confirm: bool = False) -> str:
+    """Confirm a quotation into a sales order (sale.order action_confirm)."""
+    if not confirm:
+        return safe(lambda: preview("action_confirm", "sale.order", ids=[order_id]))
+    return safe(
+        lambda: {
+            "confirmed": get_client().execute_kw(
+                "sale.order", "action_confirm", [[order_id]]
+            )
+        }
+    )
