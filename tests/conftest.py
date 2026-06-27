@@ -82,6 +82,30 @@ class FakeClient:
         self._maybe_raise()
         return self.search_responses.get(model, [])
 
+    def create(self, model, values):
+        self.calls.append({"method": "create", "model": model, "values": values})
+        self._maybe_raise()
+        return 101
+
+    def write(self, model, ids, values):
+        self.calls.append(
+            {"method": "write", "model": model, "ids": ids, "values": values}
+        )
+        self._maybe_raise()
+        return True
+
+    def unlink(self, model, ids):
+        self.calls.append({"method": "unlink", "model": model, "ids": ids})
+        self._maybe_raise()
+        return True
+
+    def execute_kw(self, model, method, args=None, kwargs=None):
+        self.calls.append(
+            {"method": method, "model": model, "args": args, "kwargs": kwargs}
+        )
+        self._maybe_raise()
+        return True
+
 
 @pytest.fixture
 def fake_client():

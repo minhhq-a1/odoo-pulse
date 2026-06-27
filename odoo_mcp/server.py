@@ -29,6 +29,7 @@ from .runtime import mcp
 
 # Importing these modules registers their @mcp.tool() functions as a side effect.
 from . import tools_generic  # noqa: F401  (generic CRUD tools)
+from . import tools_write  # noqa: F401
 from . import domain_tools  # noqa: F401  (Contacts/CRM/Sales/Purchase/Inventory/Accounting)
 from . import tools_hr  # noqa: F401  (Human Resources)
 from . import tools_projects  # noqa: F401  (Project & Timesheets)
