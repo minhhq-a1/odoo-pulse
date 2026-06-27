@@ -24,6 +24,22 @@ WRITE_METHODS = frozenset(
     {"create", "write", "unlink", "copy", "action_confirm", "action_post"}
 )
 
+# Models that must never be writable, regardless of ODOO_WRITABLE_MODELS.
+BLOCKED_MODELS = frozenset(
+    {
+        "res.users",
+        "res.groups",
+        "res.company",
+        "ir.config_parameter",
+        "ir.model",
+        "ir.model.fields",
+        "ir.rule",
+        "ir.cron",
+        "ir.actions.server",
+    }
+)
+BLOCKED_PREFIXES = ("ir.", "base")
+
 
 class OdooConfigError(RuntimeError):
     """Raised when required connection settings are missing."""
@@ -152,6 +168,25 @@ class OdooClient:
     def version(self) -> dict[str, Any]:
         return self._common.version()
 
+    def _check_write(self, model: str, method: str) -> None:
+        if self.config.read_only:
+            raise OdooError(
+                f"Method '{method}' is blocked: server is running in read-only mode. "
+                "Set ODOO_READ_ONLY=false to enable write operations."
+            )
+        if model in BLOCKED_MODELS or model.startswith(BLOCKED_PREFIXES):
+            raise OdooError(
+                f"Model '{model}' is a protected system model and can never be written."
+            )
+        if model not in self.config.writable_models:
+            raise OdooError(
+                f"Model '{model}' is not in ODOO_WRITABLE_MODELS; writes are not permitted."
+            )
+        if method == "unlink" and not self.config.allow_delete:
+            raise OdooError(
+                "Deletes are disabled. Set ODOO_ALLOW_DELETE=true to enable unlink."
+            )
+
     def execute_kw(
         self,
         model: str,
@@ -159,11 +194,8 @@ class OdooClient:
         args: list | None = None,
         kwargs: dict | None = None,
     ) -> Any:
-        if self.config.read_only and method in WRITE_METHODS:
-            raise OdooError(
-                f"Method '{method}' is blocked: server is running in read-only mode. "
-                "Set ODOO_READ_ONLY=false to enable write operations."
-            )
+        if method in WRITE_METHODS:
+            self._check_write(model, method)
         try:
             return self._models.execute_kw(
                 self.config.db,

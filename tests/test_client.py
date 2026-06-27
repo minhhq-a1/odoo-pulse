@@ -24,7 +24,15 @@ class FakeProxy:
         return self.return_value
 
 
-def make_client(return_value=None, *, read_only=True, max_records=200, fault=None):
+def make_client(
+    return_value=None,
+    *,
+    read_only=True,
+    max_records=200,
+    fault=None,
+    writable_models=(),
+    allow_delete=False,
+):
     cfg = OdooConfig(
         url="https://acme.odoo.com",
         db="acme",
@@ -32,6 +40,8 @@ def make_client(return_value=None, *, read_only=True, max_records=200, fault=Non
         api_key="secret",
         read_only=read_only,
         max_records=max_records,
+        writable_models=frozenset(writable_models),
+        allow_delete=allow_delete,
     )
     client = OdooClient(cfg)
     proxy = FakeProxy(return_value=return_value, fault=fault)
@@ -63,7 +73,9 @@ def test_read_only_blocks_write_methods():
 
 
 def test_write_allowed_when_not_read_only():
-    client, proxy = make_client(return_value=99, read_only=False)
+    client, proxy = make_client(
+        return_value=99, read_only=False, writable_models=["res.partner"]
+    )
     assert client.execute_kw("res.partner", "create", [{"name": "X"}]) == 99
     assert proxy.calls[0][4] == "create"
 
@@ -118,3 +130,33 @@ def test_read_and_fields_get_and_count():
     client, proxy = make_client(return_value=3)
     assert client.search_count("res.partner", [("x", "=", 1)]) == 3
     assert proxy.calls[-1][4] == "search_count"
+
+
+def test_write_blocked_when_model_not_in_allow_list():
+    client, proxy = make_client(read_only=False, writable_models=["crm.lead"])
+    with pytest.raises(OdooError, match="allow-list|ODOO_WRITABLE_MODELS"):
+        client.execute_kw("res.partner", "create", [{"name": "X"}])
+    assert proxy.calls == []
+
+
+def test_system_models_blocked_even_if_listed():
+    client, proxy = make_client(
+        read_only=False, writable_models=["res.users", "ir.model", "base.x"]
+    )
+    for model in ("res.users", "ir.model", "ir.cron", "base.language.install"):
+        with pytest.raises(OdooError, match="system model|protected"):
+            client.execute_kw(model, "write", [[1], {"x": 1}])
+    assert proxy.calls == []
+
+
+def test_unlink_gated_by_allow_delete():
+    client, proxy = make_client(read_only=False, writable_models=["crm.lead"])
+    with pytest.raises(OdooError, match="delete|ODOO_ALLOW_DELETE"):
+        client.execute_kw("crm.lead", "unlink", [[1]])
+    assert proxy.calls == []
+
+    client, proxy = make_client(
+        read_only=False, writable_models=["crm.lead"], allow_delete=True
+    )
+    client.execute_kw("crm.lead", "unlink", [[1]])
+    assert proxy.calls[0][4] == "unlink"
