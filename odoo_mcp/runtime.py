@@ -56,3 +56,22 @@ def date_domain(field: str, date_from: str | None, date_to: str | None) -> list:
     if date_to:
         domain.append((field, "<=", date_to))
     return domain
+
+
+def preview(action, model, *, values=None, ids=None, affected=None) -> dict:
+    """Describe a write that WOULD happen, without performing it."""
+    payload: dict = {
+        "preview": True,
+        "confirm_required": True,
+        "action": action,
+        "model": model,
+        "hint": "Re-run with confirm=true to apply.",
+    }
+    if ids is not None:
+        payload["ids"] = ids
+        payload["count"] = len(ids)
+    if affected is not None:
+        payload["affected"] = affected
+    if values is not None:
+        payload["values"] = values
+    return payload

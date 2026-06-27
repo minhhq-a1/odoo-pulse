@@ -50,3 +50,23 @@ def test_safe_catches_odoo_error():
 
     out = json.loads(runtime.safe(boom))
     assert out == {"error": "kaboom"}
+
+
+def test_preview_create_echoes_values():
+    from odoo_mcp.runtime import preview
+    out = preview("create", "crm.lead", values={"name": "X"})
+    assert out["preview"] is True
+    assert out["confirm_required"] is True
+    assert out["action"] == "create"
+    assert out["model"] == "crm.lead"
+    assert out["values"] == {"name": "X"}
+    assert "ids" not in out
+
+
+def test_preview_update_includes_ids_count_affected():
+    from odoo_mcp.runtime import preview
+    out = preview("update", "crm.lead", ids=[1, 2], values={"name": "Y"}, affected=["A", "B"])
+    assert out["ids"] == [1, 2]
+    assert out["count"] == 2
+    assert out["affected"] == ["A", "B"]
+    assert out["values"] == {"name": "Y"}
