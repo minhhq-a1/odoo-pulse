@@ -127,9 +127,7 @@ installed return a friendly error instead of failing.
 | `list_iot_devices` | IoT | IoT devices |
 | `list_notes` | Notes | Notes |
 
-Write operations (`create`/`write`/`unlink`) are **not** exposed in this
-read-only MVP, and the underlying client blocks them while
-`ODOO_READ_ONLY=true`.
+Write operations (`create`/`write`/`unlink`) are supported but gated by multiple safety controls. See the [Write operations](#write-operations) section below.
 
 ## Setup
 
@@ -155,6 +153,39 @@ Generate an API key in Odoo under
 | `ODOO_API_KEY` | yes | — | API key (used as password) |
 | `ODOO_READ_ONLY` | no | `true` | Block write methods when true |
 | `ODOO_MAX_RECORDS` | no | `200` | Cap on records per query |
+| `ODOO_WRITABLE_MODELS` | no | *(empty)* | Comma-separated list of models allowed for writes |
+| `ODOO_ALLOW_DELETE` | no | `false` | Set to true to allow record deletion |
+
+## Write operations
+
+Writes are **off by default**. Four independent controls must line up before any
+record can change:
+
+| Control | Default | Effect |
+|---|---|---|
+| `ODOO_READ_ONLY` | `true` | Master switch. Must be `false` to write at all. |
+| `ODOO_WRITABLE_MODELS` | *(empty)* | Comma-separated allow-list. Only listed models are writable. |
+| `ODOO_ALLOW_DELETE` | `false` | Must be `true` to allow `delete_records`. |
+| `confirm` (tool arg) | `false` | Each write tool returns a dry-run preview until called with `confirm=true`. |
+
+System models (`ir.*`, `base*`, `res.users`, `res.groups`, `res.company`,
+`ir.config_parameter`, `ir.model`, …) are **never** writable, even if listed in
+`ODOO_WRITABLE_MODELS`.
+
+Write tools: `create_record`, `update_records`, `delete_records`, plus helpers
+`create_lead`, `create_contact`, `create_task`, `confirm_sale_order`.
+
+Example — enable leads and create one:
+
+```bash
+ODOO_READ_ONLY=false
+ODOO_WRITABLE_MODELS=crm.lead
+```
+
+```text
+create_lead(name="ACME deal", email="a@b.com")          # -> preview, no write
+create_lead(name="ACME deal", email="a@b.com", confirm=true)  # -> {"created_id": 42}
+```
 
 ## Running
 
@@ -232,6 +263,6 @@ default 1), `--no-color`.
 - [x] Domain-specific convenience tools across all major + niche Odoo modules
 - [x] Automated test suite (mocked XML-RPC, no live instance needed)
 - [x] CI on GitHub Actions (pytest on Python 3.10–3.12)
-- [ ] Write tools (`create` / `write` / `unlink`) behind a confirmation flow
-- [ ] Model allow/deny lists for finer access control
+- [x] Write tools (`create` / `write` / `unlink`) behind a confirmation flow
+- [x] Model allow/deny lists for finer access control
 - [ ] Optional JSON-RPC transport
