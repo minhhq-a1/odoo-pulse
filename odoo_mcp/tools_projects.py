@@ -123,6 +123,7 @@ def list_tasks(
 @mcp.tool()
 def standup_digest(
     project: str,
+    sprint_id: int | None = None,
     exclude_stages: list[str] | None = None,
     lookahead_days: int = 7,
     timezone_offset: int = 7,
@@ -136,6 +137,7 @@ def standup_digest(
 
     Args:
         project: Project name (ilike match, e.g. "The Body Shop").
+        sprint_id: Optional sprint ID to filter tasks by sprint.
         exclude_stages: Stage names to treat as closed. Defaults to
             ["Done", "Cancelled", "Delivered"].
         lookahead_days: Days ahead to include in UPCOMING (default 7).
@@ -163,6 +165,8 @@ def standup_digest(
             ("parent_id", "!=", False),
             ("stage_id.name", "not in", exclude_stages),
         ]
+        if sprint_id is not None:
+            domain.append(("sprint_id", "=", sprint_id))
         tasks = client.search_read(
             "project.task",
             domain=domain,
