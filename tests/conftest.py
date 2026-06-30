@@ -106,6 +106,33 @@ class FakeClient:
         self._maybe_raise()
         return True
 
+    def major_version(self):
+        self.calls.append({"method": "major_version"})
+        self._maybe_raise()
+        return 18
+
+    def aggregate_records(
+        self, model, group_by, measures, domain=None, limit=None, offset=0, order=None
+    ):
+        self.calls.append(
+            {
+                "method": "aggregate_records",
+                "model": model,
+                "group_by": group_by,
+                "measures": measures,
+                "domain": domain,
+                "limit": limit,
+                "offset": offset,
+                "order": order,
+            }
+        )
+        self._maybe_raise()
+        return {
+            "method": "read_group",
+            "major_version": 18,
+            "rows": self.search_responses.get(model, []),
+        }
+
 
 @pytest.fixture
 def fake_client():
