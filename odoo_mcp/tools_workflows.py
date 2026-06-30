@@ -171,3 +171,173 @@ def sprint_health(
         )
 
     return safe(run)
+
+
+@mcp.tool()
+def team_workload(
+    project: str | None = None,
+    sprint_id: int | None = None,
+    exclude_stages: list[str] | None = None,
+    done_stages: list[str] | None = None,
+    lookahead_days: int = 7,
+    overload_threshold: int = 8,
+    timezone_offset: int = 7,
+    subtasks_only: bool = True,
+) -> str:
+    """Report who is over- or under-loaded, in one call.
+
+    Composes the open project.task records in scope into a per-assignee load
+    (open count plus overdue / due-soon / high-priority / no-deadline tallies),
+    flags overloaded members and unassigned work, and returns a rule-based
+    verdict. Done tasks carry no current load and are excluded.
+
+    Args:
+        project: Optional project-name filter (ilike).
+        sprint_id: Optional sprint filter (project.task sprint_id).
+        exclude_stages: Stage names dropped from scope. Default ["Cancelled"].
+        done_stages: Stage names treated as completed. Default ["Done", "Delivered"].
+        lookahead_days: Days ahead that count as "due soon" (default 7).
+        overload_threshold: Open-task count above which a member is flagged
+            "overloaded" (default 8). Sign-off point with the workflow owner.
+        timezone_offset: UTC offset for "today" (default 7 = Asia/Ho_Chi_Minh).
+        subtasks_only: Count only subtasks (parent_id != False), the team's unit
+            of work. Default True.
+    """
+
+    def run() -> dict:
+        client = get_client()
+        ex = exclude_stages if exclude_stages is not None else ["Cancelled"]
+        done_set = {
+            s.lower() for s in (done_stages if done_stages is not None else ["Done", "Delivered"])
+        }
+
+        domain: list = []
+        if sprint_id is not None:
+            domain.append(("sprint_id", "=", sprint_id))
+        if subtasks_only:
+            domain.append(("parent_id", "!=", False))
+        if project:
+            domain.append(("project_id.name", "ilike", project))
+        if ex:
+            domain.append(("stage_id.name", "not in", ex))
+
+        tasks = client.search_read(
+            "project.task",
+            domain=domain,
+            fields=[
+                "id", "name", "user_ids", "stage_id",
+                "date_deadline", "priority", "parent_id",
+            ],
+            limit=200,
+            order="date_deadline",
+        )
+
+        today = today_in_tz(timezone_offset)
+        cutoff = today + timedelta(days=lookahead_days)
+
+        # uid (or None for unassigned) -> load tallies
+        load: dict[object, dict] = {}
+        open_tasks = 0
+        unassigned = 0
+
+        def _bucket(uid):
+            return load.setdefault(
+                uid,
+                {"open": 0, "overdue": 0, "due_soon": 0, "high_priority": 0, "no_deadline": 0},
+            )
+
+        for t in tasks:
+            stage = t["stage_id"][1] if t.get("stage_id") else "(none)"
+            if stage.lower() in done_set:
+                continue
+
+            open_tasks += 1
+            assignees = t.get("user_ids") or []
+            if not assignees:
+                unassigned += 1
+
+            dd = parse_deadline(t.get("date_deadline"))
+            high = t.get("priority") == "1"
+
+            for uid in assignees or [None]:
+                rec = _bucket(uid)
+                rec["open"] += 1
+                if dd is None:
+                    rec["no_deadline"] += 1
+                elif dd < today:
+                    rec["overdue"] += 1
+                elif dd <= cutoff:
+                    rec["due_soon"] += 1
+                if high:
+                    rec["high_priority"] += 1
+
+        real_uids = [uid for uid in load if uid is not None]
+        names = resolve_user_names(client, real_uids)
+
+        by_assignee = []
+        overloaded_members = 0
+        busiest = None
+        busiest_open = 0
+        assigned_load = 0
+        for uid, rec in load.items():
+            if uid is None:
+                name = "(unassigned)"
+                status = "unassigned"
+            else:
+                name = names.get(uid, f"User#{uid}")
+                status = "overloaded" if rec["open"] > overload_threshold else "ok"
+                if status == "overloaded":
+                    overloaded_members += 1
+                assigned_load += rec["open"]
+                if rec["open"] > busiest_open:
+                    busiest_open = rec["open"]
+                    busiest = name
+            by_assignee.append({"assignee": name, **rec, "status": status})
+
+        by_assignee.sort(key=lambda r: (-r["open"], r["assignee"]))
+
+        members = len(real_uids)
+        avg_open_per_member = round(assigned_load / members, 1) if members else 0.0
+
+        if overloaded_members > 0 or unassigned > 0:
+            verdict = "action_needed"
+        else:
+            verdict = "balanced"
+
+        summary = {
+            "members": members,
+            "open_tasks": open_tasks,
+            "unassigned": unassigned,
+            "overloaded_members": overloaded_members,
+            "busiest": busiest,
+            "busiest_open": busiest_open,
+            "avg_open_per_member": avg_open_per_member,
+            "verdict": verdict,
+        }
+
+        highlights = [f"{open_tasks} open task(s) across {members} member(s)"]
+        if busiest:
+            highlights.append(f"busiest: {busiest} ({busiest_open} open)")
+        if overloaded_members:
+            highlights.append(f"{overloaded_members} member(s) over {overload_threshold} open")
+
+        risks: list[dict] = []
+        if overloaded_members:
+            risks.append({"code": "overloaded_members", "count": overloaded_members,
+                          "message": f"{overloaded_members} member(s) above {overload_threshold} open tasks"})
+        if unassigned:
+            risks.append({"code": "unassigned_open_tasks", "count": unassigned,
+                          "message": f"{unassigned} open task(s) with no assignee"})
+
+        return build_report(
+            "team_workload",
+            today,
+            summary=summary,
+            breakdown={"by_assignee": by_assignee},
+            highlights=highlights,
+            risks=risks,
+            extra={"project": project, "sprint_id": sprint_id},
+        )
+
+    return safe(run)
+
