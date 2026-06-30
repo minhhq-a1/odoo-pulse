@@ -233,7 +233,8 @@ def standup_digest(
                 f"|---|------|----------|{''.join(['-'] * len(deadline_col))}--|",
             ]
             for t in rows:
-                name = f"🔴 {t['name']}" if t["priority"] == "High" else t["name"]
+                raw_name = t["name"].replace("|", "\\|")
+                name = f"🔴 {raw_name}" if t["priority"] == "High" else raw_name
                 out.append(f"| #{t['id']} | {name} | {t['assignee']} | {deadline_fn(t)} |")
             return out
 
