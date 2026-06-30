@@ -13,6 +13,7 @@ safe by default.
 from __future__ import annotations
 
 import os
+import re
 import ssl
 import xmlrpc.client
 from dataclasses import dataclass
@@ -197,6 +198,79 @@ class OdooClient:
 
     def version(self) -> dict[str, Any]:
         return self._common.version()
+
+    @staticmethod
+    def _parse_major(server_version: Any) -> int | None:
+        if not server_version:
+            return None
+        match = re.search(r"(\d+)", str(server_version))
+        return int(match.group(1)) if match else None
+
+    def major_version(self) -> int | None:
+        """Major Odoo version (e.g. 18), cached on the instance. None if unknown."""
+        if self._major_version is _UNSET:
+            self._major_version = self._parse_major(self.version().get("server_version"))
+        return self._major_version
+
+    def _read_group(self, model, domain, group_by, specs, limit, offset, order):
+        kwargs: dict[str, Any] = {
+            "fields": specs,
+            "groupby": group_by,
+            "lazy": False,
+            "offset": offset,
+        }
+        if limit:
+            kwargs["limit"] = limit
+        if order:
+            kwargs["orderby"] = order
+        return self.execute_kw(model, "read_group", [domain or []], kwargs)
+
+    def _formatted_read_group(self, model, domain, group_by, specs, limit, offset, order):
+        kwargs: dict[str, Any] = {
+            "groupby": group_by,
+            "aggregates": specs,
+            "offset": offset,
+        }
+        if limit:
+            kwargs["limit"] = limit
+        if order:
+            kwargs["order"] = order
+        return self.execute_kw(model, "formatted_read_group", [domain or []], kwargs)
+
+    def aggregate_records(
+        self,
+        model: str,
+        group_by: list[str],
+        measures: list[tuple[str, str]],
+        domain: list | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+        order: str | None = None,
+    ) -> dict:
+        """Server-side grouping. ``measures`` is a list of (field, aggregator).
+
+        Dispatches between Odoo 19+ ``formatted_read_group`` and the legacy
+        ``read_group`` used on Odoo <= 18. Both methods are read-only.
+        """
+        specs = [f"{field}:{agg}" for field, agg in measures]
+        capped = self._cap_limit(limit) if limit else None
+        major = self.major_version()
+        if major is not None and major >= 19:
+            rows = self._formatted_read_group(
+                model, domain, group_by, specs, capped, offset, order
+            )
+            return {"method": "formatted_read_group", "major_version": major, "rows": rows}
+        if major is not None:
+            rows = self._read_group(model, domain, group_by, specs, capped, offset, order)
+            return {"method": "read_group", "major_version": major, "rows": rows}
+        try:
+            rows = self._formatted_read_group(
+                model, domain, group_by, specs, capped, offset, order
+            )
+            return {"method": "formatted_read_group", "major_version": None, "rows": rows}
+        except OdooError:
+            rows = self._read_group(model, domain, group_by, specs, capped, offset, order)
+            return {"method": "read_group", "major_version": None, "rows": rows}
 
     def _check_write(self, model: str, method: str) -> None:
         if self.config.read_only:
