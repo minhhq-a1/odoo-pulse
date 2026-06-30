@@ -156,3 +156,65 @@ def aggregate_records(
         }
 
     return safe(run)
+
+
+_ATTACHMENT_META_FIELDS = [
+    "name",
+    "mimetype",
+    "file_size",
+    "type",
+    "url",
+    "res_model",
+    "res_id",
+    "checksum",
+    "create_date",
+]
+
+
+@mcp.tool()
+def read_attachment(attachment_id: int, include_data: bool = True) -> str:
+    """Read an ir.attachment: metadata always, base64 content when small enough.
+
+    Binary attachments under ODOO_MAX_ATTACHMENT_BYTES are returned with their
+    base64 `datas`; larger ones return metadata plus a warning. URL-type
+    attachments return the link, never binary data.
+
+    Args:
+        attachment_id: The ir.attachment id.
+        include_data: When False, return metadata only (no base64 fetch).
+    """
+
+    def run() -> dict:
+        client = get_client()
+        cap = client.config.max_attachment_bytes
+        meta = client.read("ir.attachment", [attachment_id], _ATTACHMENT_META_FIELDS)
+        if not meta:
+            raise OdooError(f"Attachment {attachment_id} not found.")
+        att = meta[0]
+        warnings: list[str] = []
+        data_base64 = None
+        data_included = False
+
+        if att.get("type") == "url":
+            warnings.append("Attachment is a URL link; no binary data. See 'url'.")
+        elif include_data:
+            size = att.get("file_size") or 0
+            if size <= cap:
+                blob = client.read("ir.attachment", [attachment_id], ["datas"])
+                data_base64 = blob[0].get("datas") if blob else None
+                data_included = data_base64 is not None
+            else:
+                warnings.append(
+                    f"file_size {size} exceeds ODOO_MAX_ATTACHMENT_BYTES "
+                    f"({cap}); data omitted."
+                )
+
+        return {
+            "attachment": att,
+            "data_base64": data_base64,
+            "data_included": data_included,
+            "max_bytes": cap,
+            "warnings": warnings,
+        }
+
+    return safe(run)

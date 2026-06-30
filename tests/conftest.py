@@ -4,6 +4,8 @@ domain tools can be exercised without a real Odoo / network connection.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from odoo_mcp import runtime
@@ -25,6 +27,7 @@ class FakeClient:
         # model -> list[dict] returned by read
         self.read_responses: dict[str, list] = {}
         self.raise_error: str | None = None
+        self.config = SimpleNamespace(max_attachment_bytes=1048576)
 
     # -- helpers for tests --------------------------------------------------
     def last(self, method: str) -> dict:
