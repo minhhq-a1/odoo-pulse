@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import Any
 
+from .cache import TTLCache
+
 # Methods that mutate data. Blocked while the server runs in read-only mode.
 WRITE_METHODS = frozenset(
     {"create", "write", "unlink", "copy", "action_confirm", "action_post"}
@@ -40,6 +42,12 @@ BLOCKED_MODELS = frozenset(
 )
 BLOCKED_PREFIXES = ("ir.", "base")
 
+# Default attribute set requested from Odoo's fields_get.
+DEFAULT_FIELD_ATTRS = ["string", "type", "help", "required", "relation"]
+
+# Sentinel distinguishing "not yet looked up" from a real None major version.
+_UNSET = object()
+
 
 class OdooConfigError(RuntimeError):
     """Raised when required connection settings are missing."""
@@ -60,6 +68,9 @@ class OdooConfig:
     verify_ssl: bool = True
     writable_models: frozenset[str] = frozenset()
     allow_delete: bool = False
+    schema_cache_ttl: float = 300.0
+    schema_cache_max: int = 64
+    max_attachment_bytes: int = 1048576
 
     @classmethod
     def from_env(cls) -> "OdooConfig":
@@ -109,6 +120,20 @@ class OdooConfig:
             "no",
             "",
         )
+        try:
+            schema_cache_ttl = float(os.environ.get("ODOO_SCHEMA_CACHE_TTL", "300"))
+        except ValueError:
+            schema_cache_ttl = 300.0
+        try:
+            schema_cache_max = int(os.environ.get("ODOO_SCHEMA_CACHE_MAX", "64"))
+        except ValueError:
+            schema_cache_max = 64
+        try:
+            max_attachment_bytes = int(
+                os.environ.get("ODOO_MAX_ATTACHMENT_BYTES", "1048576")
+            )
+        except ValueError:
+            max_attachment_bytes = 1048576
 
         return cls(
             url=url,
@@ -120,12 +145,17 @@ class OdooConfig:
             verify_ssl=verify_ssl,
             writable_models=writable_models,
             allow_delete=allow_delete,
+            schema_cache_ttl=schema_cache_ttl,
+            schema_cache_max=schema_cache_max,
+            max_attachment_bytes=max_attachment_bytes,
         )
 
 
 class OdooClient:
     def __init__(self, config: OdooConfig):
         self.config = config
+        self._schema_cache = TTLCache(config.schema_cache_ttl, config.schema_cache_max)
+        self._major_version: Any = _UNSET
 
     @cached_property
     def _ssl_context(self) -> ssl.SSLContext | None:
@@ -251,13 +281,18 @@ class OdooClient:
     def unlink(self, model: str, ids: list[int]) -> bool:
         return self.execute_kw(model, "unlink", [ids])
 
-    def fields_get(self, model: str, attributes: list[str] | None = None) -> dict:
-        return self.execute_kw(
-            model,
-            "fields_get",
-            [],
-            {"attributes": attributes or ["string", "type", "help", "required", "relation"]},
-        )
+    def fields_get(
+        self, model: str, attributes: list[str] | None = None, *, refresh: bool = False
+    ) -> dict:
+        attrs = attributes or DEFAULT_FIELD_ATTRS
+        key = (model, tuple(attrs))
+        if not refresh:
+            hit = self._schema_cache.get(key)
+            if hit is not None:
+                return hit
+        value = self.execute_kw(model, "fields_get", [], {"attributes": attrs})
+        self._schema_cache.set(key, value)
+        return value
 
     def list_models(self, name_filter: str | None = None) -> list[dict]:
         domain = []
