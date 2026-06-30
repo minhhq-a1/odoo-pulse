@@ -78,6 +78,7 @@ installed return a friendly error instead of failing.
 | `list_projects` | Projects |
 | `list_tasks` | Tasks by project / assignee / stage |
 | `list_timesheets` | Timesheet entries |
+| `sprint_health` | One-call sprint status: completion %, overdue/upcoming buckets, per-stage & per-assignee breakdown, risks, and an on-track / at-risk / off-track verdict. |
 
 **Operations**
 
