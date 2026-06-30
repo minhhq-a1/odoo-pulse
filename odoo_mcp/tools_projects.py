@@ -103,13 +103,7 @@ def list_tasks(
 
         all_user_ids = {uid for t in tasks for uid in t.get("user_ids", [])}
         if all_user_ids:
-            users = client.execute_kw(
-                "res.users",
-                "search_read",
-                [[("id", "in", list(all_user_ids))]],
-                {"fields": ["id", "name"], "limit": len(all_user_ids), "context": {"active_test": False}},
-            )
-            user_map = {u["id"]: u["name"] for u in users}
+            user_map = resolve_user_names(client, all_user_ids)
             for task in tasks:
                 task["user_ids"] = [
                     {"id": uid, "name": user_map.get(uid, str(uid))}
