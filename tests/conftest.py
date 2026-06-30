@@ -28,6 +28,8 @@ class FakeClient:
         self.read_responses: dict[str, list] = {}
         self.raise_error: str | None = None
         self.config = SimpleNamespace(max_attachment_bytes=1048576)
+        # (model, method) -> canned return value for execute_kw; falls back to True.
+        self.execute_kw_responses: dict[tuple[str, str], object] = {}
 
     # -- helpers for tests --------------------------------------------------
     def last(self, method: str) -> dict:
@@ -107,6 +109,9 @@ class FakeClient:
             {"method": method, "model": model, "args": args, "kwargs": kwargs}
         )
         self._maybe_raise()
+        key = (model, method)
+        if key in self.execute_kw_responses:
+            return self.execute_kw_responses[key]
         return True
 
     def major_version(self):
