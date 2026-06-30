@@ -89,6 +89,7 @@ def list_tasks(
                 "project_id",
                 "user_ids",
                 "stage_id",
+                "sprint_id",
                 "date_deadline",
                 "priority",
                 "state",
@@ -220,22 +221,54 @@ def standup_digest(
 
         def days_ago(d) -> str:
             n = (today - d).days
-            return f"{n} day{'s' if n != 1 else ''} ago"
+            return f"{n} ngày trước" if n > 1 else "hôm qua"
 
-        lines = [f"=== Daily Standup — {project} — {today_str} ===\n"]
-        lines.append(f"OVERDUE ({len(overdue)})")
-        for t in overdue:
-            lines.append(f"  ❌ #{t['id']} [{t['priority']}] {t['name']} — Assigned: {t['assignee']} — Due: {days_ago(t['deadline'])}")
-        lines.append(f"\nTODAY ({len(today_tasks)})")
-        for t in today_tasks:
-            lines.append(f"  ⏳ #{t['id']} [{t['priority']}] {t['name']} — Assigned: {t['assignee']} — Due: Today")
-        lines.append(f"\nUPCOMING ({len(upcoming)})")
-        for t in upcoming:
-            lines.append(f"  ⭕ #{t['id']} [{t['priority']}] {t['name']} — Assigned: {t['assignee']} — Due: {t['deadline'].strftime('%d/%m/%Y')}")
-        lines.append(f"\nNO DEADLINE ({len(no_deadline)})")
-        for t in no_deadline:
-            lines.append(f"  ❓ #{t['id']} [{t['priority']}] {t['name']} — Assigned: {t['assignee']}")
-        lines.append(f"\n---\nSummary: {len(overdue)} overdue, {len(today_tasks)} today, {len(upcoming)} upcoming, {len(no_deadline)} no deadline")
+        def task_table(rows: list[dict], deadline_col: str, deadline_fn) -> list[str]:
+            out = [
+                f"| # | Task | Assignee | {deadline_col} |",
+                f"|---|------|----------|{''.join(['-'] * len(deadline_col))}--|",
+            ]
+            for t in rows:
+                name = f"🔴 {t['name']}" if t["priority"] == "High" else t["name"]
+                out.append(f"| #{t['id']} | {name} | {t['assignee']} | {deadline_fn(t)} |")
+            return out
+
+        lines = [f"## 🗓️ Daily Standup — {project}", f"**{today_str}**", ""]
+
+        if overdue:
+            lines.append(f"### ❌ Quá hạn ({len(overdue)})")
+            lines += task_table(overdue, "Quá hạn", lambda t: days_ago(t["deadline"]))
+            lines.append("")
+
+        if today_tasks:
+            lines.append(f"### ⏳ Hôm nay ({len(today_tasks)})")
+            lines += task_table(today_tasks, "Deadline", lambda t: "Hôm nay")
+            lines.append("")
+
+        if upcoming:
+            lines.append(f"### ⭕ Sắp đến hạn ({len(upcoming)})")
+            lines += task_table(upcoming, "Deadline", lambda t: t["deadline"].strftime("%d/%m/%Y"))
+            lines.append("")
+
+        if no_deadline:
+            lines.append(f"### ❓ Chưa có deadline ({len(no_deadline)})")
+            lines += task_table(no_deadline, "Deadline", lambda t: "—")
+            lines.append("")
+
+        total = len(overdue) + len(today_tasks) + len(upcoming) + len(no_deadline)
+        if total == 0:
+            lines.append("✅ Không có task pending nào hôm nay.")
+        else:
+            parts = []
+            if overdue:
+                parts.append(f"**{len(overdue)} quá hạn**")
+            if today_tasks:
+                parts.append(f"**{len(today_tasks)} hôm nay**")
+            if upcoming:
+                parts.append(f"{len(upcoming)} sắp đến")
+            if no_deadline:
+                parts.append(f"{len(no_deadline)} chưa có deadline")
+            lines.append(f"---\n📊 Tổng: {' · '.join(parts)}")
 
         return "\n".join(lines)
 

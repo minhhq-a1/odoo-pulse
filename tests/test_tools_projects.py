@@ -1,0 +1,57 @@
+"""Tests for tools_projects: list_tasks subtask filtering."""
+
+from __future__ import annotations
+
+import json
+
+from odoo_mcp import tools_projects
+
+
+def test_list_tasks_default_excludes_subtasks(fake_client):
+    """Default call must add parent_id = False to domain."""
+    tools_projects.list_tasks()
+    call = fake_client.last("search_read")
+    assert call["model"] == "project.task"
+    assert ("parent_id", "=", False) in call["domain"]
+
+
+def test_list_tasks_include_subtasks_removes_parent_filter(fake_client):
+    """include_subtasks=True must NOT add a parent_id filter."""
+    tools_projects.list_tasks(include_subtasks=True)
+    call = fake_client.last("search_read")
+    parent_filters = [t for t in call["domain"] if isinstance(t, tuple) and t[0] == "parent_id"]
+    assert parent_filters == [], f"Unexpected parent_id filter: {parent_filters}"
+
+
+def test_list_tasks_returns_parent_id_field(fake_client):
+    """parent_id must always be in the requested fields."""
+    tools_projects.list_tasks()
+    call = fake_client.last("search_read")
+    assert "parent_id" in call["fields"]
+
+
+def test_list_tasks_include_subtasks_returns_valid_json(fake_client):
+    out = tools_projects.list_tasks(include_subtasks=True)
+    json.loads(out)
+
+
+def test_list_tasks_offset_forwarded(fake_client):
+    """offset must be passed through to search_read for pagination."""
+    tools_projects.list_tasks(offset=200, limit=200)
+    call = fake_client.last("search_read")
+    assert call["offset"] == 200
+    assert call["limit"] == 200
+
+
+def test_list_tasks_other_filters_still_apply_with_subtasks(fake_client):
+    """project / assignee / stage filters compose correctly alongside include_subtasks."""
+    tools_projects.list_tasks(
+        project="MyProject", assignee="Alice", stage="In Progress", include_subtasks=True
+    )
+    call = fake_client.last("search_read")
+    domain = call["domain"]
+    assert ("project_id.name", "ilike", "MyProject") in domain
+    assert ("user_ids.name", "ilike", "Alice") in domain
+    assert ("stage_id.name", "ilike", "In Progress") in domain
+    # No parent filter when include_subtasks=True
+    assert not any(isinstance(t, tuple) and t[0] == "parent_id" for t in domain)
