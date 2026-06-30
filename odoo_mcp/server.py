@@ -38,6 +38,7 @@ from . import tools_write  # noqa: F401
 from . import domain_tools  # noqa: F401  (Contacts/CRM/Sales/Purchase/Inventory/Accounting)
 from . import tools_hr  # noqa: F401  (Human Resources)
 from . import tools_projects  # noqa: F401  (Project & Timesheets)
+from . import tools_workflows  # noqa: F401  (composed workflow tools)
 from . import tools_operations  # noqa: F401  (MRP/PoS/Repair/Maintenance/Helpdesk/Fleet)
 from . import tools_engagement  # noqa: F401  (Events/Calendar/Activities/Marketing)
 from . import tools_niche  # noqa: F401  (specialised / Enterprise modules)
