@@ -187,6 +187,14 @@ create_lead(name="ACME deal", email="a@b.com")          # -> preview, no write
 create_lead(name="ACME deal", email="a@b.com", confirm=true)  # -> {"created_id": 42}
 ```
 
+The `create_*` helpers accept an `extra_values` dict for fields they don't model
+directly — useful when an instance adds custom mandatory fields. Keys in
+`extra_values` override the helper's own mapping:
+
+```text
+create_lead(name="ACME deal", extra_values={"presales_id": 5}, confirm=true)
+```
+
 ## Running
 
 ```bash
