@@ -28,6 +28,8 @@ System models and the configured defaults keep the server read-only out of the b
 
 from __future__ import annotations
 
+from dotenv import load_dotenv
+
 from .runtime import mcp
 
 # Importing these modules registers their @mcp.tool() functions as a side effect.
@@ -42,6 +44,7 @@ from . import tools_niche  # noqa: F401  (specialised / Enterprise modules)
 
 
 def main() -> None:
+    load_dotenv()
     mcp.run()
 
 
