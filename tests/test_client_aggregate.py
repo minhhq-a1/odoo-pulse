@@ -1,6 +1,4 @@
 # tests/test_client_aggregate.py
-import pytest
-
 from odoo_mcp.odoo_client import OdooClient, OdooConfig, OdooError
 
 
