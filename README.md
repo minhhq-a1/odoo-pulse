@@ -202,6 +202,16 @@ create_lead(name="ACME deal", extra_values={"presales_id": 5}, confirm=true)
 odoo-mcp
 ```
 
+### MCP Inspector
+
+[MCP Inspector](https://github.com/modelcontextprotocol/inspector) lets you browse and call tools interactively in a web UI — useful for exploring the server or debugging tool calls without a full MCP client.
+
+```bash
+npx @modelcontextprotocol/inspector odoo-mcp
+```
+
+Open `http://localhost:5173`, click **Connect**, then call `odoo_version` to verify the connection. The server loads `.env` automatically from the working directory, so run the command from the project root.
+
 ### Claude Desktop / Claude Code config
 
 Add to your MCP client config (env vars can be passed inline instead of `.env`):
