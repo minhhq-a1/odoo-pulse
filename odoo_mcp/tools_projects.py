@@ -44,26 +44,44 @@ def list_tasks(
     project: str | None = None,
     assignee: str | None = None,
     stage: str | None = None,
+    include_subtasks: bool = False,
     limit: int = 20,
+    offset: int = 0,
 ) -> str:
     """List project tasks (project.task).
+
+    Odoo caps XML-RPC results at 200 per call. Use offset to paginate when a
+    project has more tasks than the limit (e.g. limit=200, offset=200 for page 2).
+
+    user_ids is resolved to [{id, name}] objects via a single batch lookup.
 
     Args:
         query: Free text matched against the task name.
         project: Filter by project name.
         assignee: Filter by an assigned user's name.
         stage: Filter by stage name (e.g. 'To Do', 'In Progress', 'Done').
-        limit: Max results.
+        include_subtasks: When False (default) only top-level tasks are returned.
+            Set to True to include subtasks (parent_id != False) as well.
+        limit: Max results per page (Odoo hard-caps at 200).
+        offset: Number of records to skip; use with limit to paginate.
     """
+    import json as _json
+
+    from .odoo_client import OdooConfigError, OdooError
+
     domain = name_domain(query, ["name"])
+    if not include_subtasks:
+        domain.append(("parent_id", "=", False))
     if project:
         domain.append(("project_id.name", "ilike", project))
     if assignee:
         domain.append(("user_ids.name", "ilike", assignee))
     if stage:
         domain.append(("stage_id.name", "ilike", stage))
-    return safe(
-        lambda: get_client().search_read(
+
+    try:
+        client = get_client()
+        tasks = client.search_read(
             "project.task",
             domain=domain,
             fields=[
@@ -71,14 +89,195 @@ def list_tasks(
                 "project_id",
                 "user_ids",
                 "stage_id",
+                "sprint_id",
                 "date_deadline",
                 "priority",
                 "state",
+                "parent_id",
             ],
             limit=limit,
+            offset=offset,
             order="priority desc, date_deadline",
         )
-    )
+
+        all_user_ids = {uid for t in tasks for uid in t.get("user_ids", [])}
+        if all_user_ids:
+            users = client.execute_kw(
+                "res.users",
+                "search_read",
+                [[("id", "in", list(all_user_ids))]],
+                {"fields": ["id", "name"], "limit": len(all_user_ids), "context": {"active_test": False}},
+            )
+            user_map = {u["id"]: u["name"] for u in users}
+            for task in tasks:
+                task["user_ids"] = [
+                    {"id": uid, "name": user_map.get(uid, str(uid))}
+                    for uid in task.get("user_ids", [])
+                ]
+
+        return _json.dumps(tasks, ensure_ascii=False, indent=2, default=str)
+    except (OdooConfigError, OdooError) as exc:
+        return _json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def standup_digest(
+    project: str,
+    sprint_id: int | None = None,
+    exclude_stages: list[str] | None = None,
+    lookahead_days: int = 7,
+    timezone_offset: int = 7,
+) -> str:
+    """Generate a daily standup digest for a project.
+
+    Fetches all active subtasks (parent_id != False, stage not in exclude_stages,
+    exactly 1 assigned user) and categorises them by deadline into OVERDUE / TODAY /
+    UPCOMING / NO DEADLINE sections.  Returns a plain-text digest ready to paste or
+    send as an email body.
+
+    Args:
+        project: Project name (ilike match, e.g. "The Body Shop").
+        sprint_id: Optional sprint ID to filter tasks by sprint.
+        exclude_stages: Stage names to treat as closed. Defaults to
+            ["Done", "Cancelled", "Delivered"].
+        lookahead_days: Days ahead to include in UPCOMING (default 7).
+        timezone_offset: UTC offset in hours for "today" (default 7 = Asia/Ho_Chi_Minh).
+    """
+    import json as _json
+    from datetime import datetime, timedelta, timezone
+
+    from .odoo_client import OdooConfigError, OdooError
+
+    if exclude_stages is None:
+        exclude_stages = ["Done", "Cancelled", "Delivered"]
+    exclude_lower = {s.lower() for s in exclude_stages}
+
+    tz = timezone(timedelta(hours=timezone_offset))
+    today = datetime.now(tz).date()
+    today_str = today.strftime("%d/%m/%Y")
+    cutoff = today + timedelta(days=lookahead_days)
+
+    try:
+        client = get_client()
+
+        domain = [
+            ("project_id.name", "ilike", project),
+            ("parent_id", "!=", False),
+            ("stage_id.name", "not in", exclude_stages),
+        ]
+        if sprint_id is not None:
+            domain.append(("sprint_id", "=", sprint_id))
+        tasks = client.search_read(
+            "project.task",
+            domain=domain,
+            fields=["id", "name", "user_ids", "stage_id", "date_deadline", "priority"],
+            limit=200,
+            order="date_deadline",
+        )
+
+        # Resolve user names including archived users
+        all_uid = {uid for t in tasks for uid in t.get("user_ids", [])}
+        user_map: dict[int, str] = {}
+        if all_uid:
+            users = client.execute_kw(
+                "res.users",
+                "search_read",
+                [[("id", "in", list(all_uid))]],
+                {"fields": ["id", "name"], "limit": len(all_uid), "context": {"active_test": False}},
+            )
+            user_map = {u["id"]: u["name"] for u in users}
+
+        # Filter: exactly 1 assignee
+        filtered = [t for t in tasks if len(t.get("user_ids", [])) == 1]
+
+        overdue: list[dict] = []
+        today_tasks: list[dict] = []
+        upcoming: list[dict] = []
+        no_deadline: list[dict] = []
+
+        for t in filtered:
+            uid = t["user_ids"][0]
+            entry = {
+                "id": t["id"],
+                "name": t["name"],
+                "assignee": user_map.get(uid, f"User#{uid}"),
+                "priority": "High" if t.get("priority") == "1" else "Normal",
+                "deadline": None,
+            }
+            dd_raw = t.get("date_deadline")
+            if not dd_raw:
+                no_deadline.append(entry)
+                continue
+            dd = datetime.strptime(dd_raw[:10], "%Y-%m-%d").date()
+            entry["deadline"] = dd
+            if dd < today:
+                overdue.append(entry)
+            elif dd == today:
+                today_tasks.append(entry)
+            elif dd <= cutoff:
+                upcoming.append(entry)
+            # beyond lookahead: omitted per spec
+
+        overdue.sort(key=lambda x: x["deadline"])
+        today_tasks.sort(key=lambda x: x["name"])
+        upcoming.sort(key=lambda x: x["deadline"])
+        no_deadline.sort(key=lambda x: x["name"])
+
+        def days_ago(d) -> str:
+            n = (today - d).days
+            return f"{n} ngày trước" if n > 1 else "hôm qua"
+
+        def task_table(rows: list[dict], deadline_col: str, deadline_fn) -> list[str]:
+            out = [
+                f"| # | Task | Assignee | {deadline_col} |",
+                f"|---|------|----------|{''.join(['-'] * len(deadline_col))}--|",
+            ]
+            for t in rows:
+                name = f"🔴 {t['name']}" if t["priority"] == "High" else t["name"]
+                out.append(f"| #{t['id']} | {name} | {t['assignee']} | {deadline_fn(t)} |")
+            return out
+
+        lines = [f"## 🗓️ Daily Standup — {project}", f"**{today_str}**", ""]
+
+        if overdue:
+            lines.append(f"### ❌ Quá hạn ({len(overdue)})")
+            lines += task_table(overdue, "Quá hạn", lambda t: days_ago(t["deadline"]))
+            lines.append("")
+
+        if today_tasks:
+            lines.append(f"### ⏳ Hôm nay ({len(today_tasks)})")
+            lines += task_table(today_tasks, "Deadline", lambda t: "Hôm nay")
+            lines.append("")
+
+        if upcoming:
+            lines.append(f"### ⭕ Sắp đến hạn ({len(upcoming)})")
+            lines += task_table(upcoming, "Deadline", lambda t: t["deadline"].strftime("%d/%m/%Y"))
+            lines.append("")
+
+        if no_deadline:
+            lines.append(f"### ❓ Chưa có deadline ({len(no_deadline)})")
+            lines += task_table(no_deadline, "Deadline", lambda t: "—")
+            lines.append("")
+
+        total = len(overdue) + len(today_tasks) + len(upcoming) + len(no_deadline)
+        if total == 0:
+            lines.append("✅ Không có task pending nào hôm nay.")
+        else:
+            parts = []
+            if overdue:
+                parts.append(f"**{len(overdue)} quá hạn**")
+            if today_tasks:
+                parts.append(f"**{len(today_tasks)} hôm nay**")
+            if upcoming:
+                parts.append(f"{len(upcoming)} sắp đến")
+            if no_deadline:
+                parts.append(f"{len(no_deadline)} chưa có deadline")
+            lines.append(f"---\n📊 Tổng: {' · '.join(parts)}")
+
+        return "\n".join(lines)
+
+    except (OdooConfigError, OdooError) as exc:
+        return _json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
