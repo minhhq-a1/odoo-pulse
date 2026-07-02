@@ -255,6 +255,35 @@ def seed_inventory() -> None:
     })
 
 
+def _posted_invoice(partner_id: int, product_id: int, price: float,
+                    invoice_delta: int, due_delta: int) -> int:
+    """Create a customer invoice with one product line and post it.
+    Using a product line lets Odoo derive the income account automatically."""
+    inv = S.create("account.move", {
+        "move_type": "out_invoice",
+        "partner_id": partner_id,
+        "invoice_date": S.d(invoice_delta),
+        "invoice_date_due": S.d(due_delta),
+        "invoice_line_ids": [(0, 0, {"product_id": product_id,
+                                     "quantity": 1, "price_unit": price})],
+    })
+    S.call("account.move", "action_post", [[inv]])
+    return inv
+
+
+def seed_receivables() -> None:
+    print("[seed] Receivables health...")
+    prod = _service_product("PLAYGROUND Consulting Hours", 150.0)
+    debtor = _partner("PLAYGROUND Late Payer Ltd")
+    good = _partner("PLAYGROUND Big Customer Co")
+    # 90+ days overdue => aged_over_90 risk.
+    _posted_invoice(debtor, prod, 8000.0, invoice_delta=-95, due_delta=-92)
+    # ~60 days overdue.
+    _posted_invoice(debtor, prod, 3500.0, invoice_delta=-65, due_delta=-60)
+    # Not due yet (fills the not_due bucket).
+    _posted_invoice(good, prod, 2000.0, invoice_delta=-2, due_delta=20)
+
+
 def main() -> int:
     S.wait_for_odoo()
     if S.already_seeded():
@@ -266,6 +295,7 @@ def main() -> int:
     seed_crm()
     seed_sales()
     seed_inventory()
+    seed_receivables()
     S.mark_seeded()
     print("[seed] done")
     return 0
