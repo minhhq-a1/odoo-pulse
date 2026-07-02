@@ -24,6 +24,9 @@ class FakeClient:
         self.calls: list[dict] = []
         # model -> list[dict] returned by search_read
         self.search_responses: dict[str, list] = {}
+        # model -> queue of row-lists; when non-empty, search_read pops one
+        # per call (for tools that query the same model twice).
+        self.search_responses_seq: dict[str, list] = {}
         # model -> list[dict] returned by read
         self.read_responses: dict[str, list] = {}
         self.raise_error: str | None = None
@@ -87,6 +90,9 @@ class FakeClient:
             }
         )
         self._maybe_raise()
+        seq = self.search_responses_seq.get(model)
+        if seq:
+            return seq.pop(0)
         return self.search_responses.get(model, [])
 
     def create(self, model, values):

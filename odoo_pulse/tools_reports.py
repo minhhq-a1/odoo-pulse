@@ -474,3 +474,140 @@ def receivables_health(top_n: int = 5, timezone_offset: int = 7) -> str:
         )
 
     return safe(run)
+
+
+@mcp.tool()
+def inventory_risk(
+    dead_stock_days: int = 90,
+    top_n: int = 10,
+    timezone_offset: int = 7,
+) -> str:
+    """Report stock at risk — shortages and dead stock — in one call.
+
+    Shortages are storable products with negative forecasted quantity
+    (demand exceeds supply). Dead stock is on-hand product with no done
+    stock move in dead_stock_days, valued at standard_price. The dead-stock
+    check is a bounded heuristic: when the recently-moved product list hits
+    the 200-group cap, a risk flags that the list may over-count.
+
+    Args:
+        dead_stock_days: No-movement window for dead stock (default 90).
+        top_n: Rows listed per breakdown section (default 10).
+        timezone_offset: UTC offset for "today" (default 7 = Asia/Ho_Chi_Minh).
+    """
+
+    def run() -> dict:
+        client = get_client()
+        today = today_in_tz(timezone_offset)
+
+        short_rows, short_trunc = fetch_with_truncation(
+            client, "product.product",
+            [("type", "=", "product"), ("virtual_available", "<", 0)],
+            fields=["id", "name", "default_code", "qty_available",
+                    "virtual_available"],
+            limit=200, order="virtual_available",
+        )
+        shortages = [
+            {"product": p["name"], "code": p.get("default_code") or None,
+             "on_hand": p.get("qty_available") or 0.0,
+             "forecasted": p.get("virtual_available") or 0.0}
+            for p in short_rows
+        ]
+
+        since = (today - timedelta(days=dead_stock_days)).isoformat()
+        agg = client.aggregate_records(
+            "stock.move", group_by=["product_id"], measures=[],
+            domain=[("state", "=", "done"), ("date", ">=", since)],
+            limit=200,
+        )
+        moved_rows = agg.get("rows", [])
+        moved_ids = {row["product_id"][0] for row in moved_rows
+                     if row.get("product_id")}
+        moved_capped = len(moved_rows) >= 200
+
+        stocked, stocked_trunc = fetch_with_truncation(
+            client, "product.product",
+            [("type", "=", "product"), ("qty_available", ">", 0)],
+            fields=["id", "name", "default_code", "qty_available",
+                    "standard_price"],
+            limit=200, order="qty_available desc",
+        )
+        dead: list[dict] = []
+        dead_value = 0.0
+        for p in stocked:
+            if p["id"] in moved_ids:
+                continue
+            value = (p.get("standard_price") or 0.0) * (p.get("qty_available") or 0.0)
+            dead_value += value
+            dead.append({"product": p["name"], "code": p.get("default_code") or None,
+                         "on_hand": p.get("qty_available") or 0.0,
+                         "value": round(value, 2)})
+        dead.sort(key=lambda r: -r["value"])
+
+        if shortages:
+            verdict = "action_needed"
+        elif dead:
+            verdict = "watch"
+        else:
+            verdict = "healthy"
+
+        summary = {
+            "shortages": len(shortages),
+            "dead_stock_items": len(dead),
+            "dead_stock_value": round(dead_value, 2),
+            "verdict": verdict,
+        }
+        if short_trunc or stocked_trunc:
+            summary["truncated"] = True
+
+        highlights = []
+        if shortages:
+            worst = shortages[0]
+            highlights.append(
+                f"{len(shortages)} product(s) forecasted negative; worst: "
+                f"{worst['product']} ({worst['forecasted']})")
+        if dead:
+            highlights.append(
+                f"{len(dead)} product(s) unmoved for {dead_stock_days}+ days, "
+                f"value {round(dead_value, 2)}")
+        if not highlights:
+            highlights.append("no shortages or dead stock detected")
+
+        risks: list[dict] = []
+        for trunc in (short_trunc, stocked_trunc):
+            if trunc:
+                risks.append({
+                    "code": "truncated_data", "count": trunc["missing"],
+                    "message": (
+                        f"Report covers only {trunc['fetched']} of "
+                        f"{trunc['total_matching']} matching products."
+                    ),
+                })
+        if shortages:
+            risks.append({
+                "code": "negative_forecast", "count": len(shortages),
+                "message": (f"{len(shortages)} product(s) promised beyond "
+                            "available supply"),
+            })
+        if dead:
+            risks.append({
+                "code": "dead_stock", "count": len(dead),
+                "message": (f"{round(dead_value, 2)} tied up in stock unmoved "
+                            f"for {dead_stock_days}+ days"),
+            })
+        if moved_capped:
+            risks.append({
+                "code": "dead_stock_heuristic", "count": len(moved_rows),
+                "message": ("Recently-moved product list hit the 200-group "
+                            "cap; dead stock may be over-counted."),
+            })
+
+        return build_report(
+            "inventory_risk", today,
+            summary=summary,
+            breakdown={"shortages": shortages[:top_n], "dead_stock": dead[:top_n]},
+            highlights=highlights, risks=risks,
+            extra={"dead_stock_days": dead_stock_days},
+        )
+
+    return safe(run)
