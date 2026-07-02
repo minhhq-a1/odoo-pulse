@@ -83,6 +83,59 @@ class Seeder:
 S = Seeder()
 
 
+def seed_crm() -> None:
+    print("[seed] CRM pipeline...")
+    stage_ids = S.search("crm.stage", [], limit=4)
+    if not stage_ids:
+        raise SystemExit("[seed] no crm.stage found — is CRM installed with demo data?")
+    first_stage, mid_stage = stage_ids[0], stage_ids[min(1, len(stage_ids) - 1)]
+
+    # A high-value deal that has not moved stage in 40 days => stalled.
+    stalled = S.create("crm.lead", {
+        "name": "PLAYGROUND: ACME platform rollout",
+        "type": "opportunity",
+        "stage_id": mid_stage,
+        "expected_revenue": 120000.0,
+        "probability": 40.0,
+        "date_deadline": S.d(20),
+    })
+    # date_last_stage_update is a stored computed field; write it after create
+    # so Odoo does not reset it to "now". (Drift note: field name is stable in 18.)
+    S.write("crm.lead", [stalled], {"date_last_stage_update": S.dt(-40)})
+
+    # An open deal already past its expected close date => overdue_close.
+    S.create("crm.lead", {
+        "name": "PLAYGROUND: Globex renewal",
+        "type": "opportunity",
+        "stage_id": first_stage,
+        "expected_revenue": 30000.0,
+        "probability": 20.0,
+        "date_deadline": S.d(-5),
+    })
+    # A couple of healthy open deals for funnel breadth.
+    for name, rev, prob in [("Initech expansion", 45000.0, 60.0),
+                            ("Umbrella pilot", 15000.0, 30.0)]:
+        S.create("crm.lead", {
+            "name": f"PLAYGROUND: {name}", "type": "opportunity",
+            "stage_id": mid_stage, "expected_revenue": rev, "probability": prob,
+            "date_deadline": S.d(25),
+        })
+
+    # Win/loss history in the last 90 days => non-null win_rate_pct.
+    for name in ["Wonka supply won", "Stark contract won"]:
+        won = S.create("crm.lead", {
+            "name": f"PLAYGROUND: {name}", "type": "opportunity",
+            "stage_id": stage_ids[-1], "expected_revenue": 20000.0,
+            "probability": 100.0,
+        })
+        S.write("crm.lead", [won], {"date_closed": S.dt(-10)})
+    lost = S.create("crm.lead", {
+        "name": "PLAYGROUND: Hooli deal lost", "type": "opportunity",
+        "stage_id": first_stage, "expected_revenue": 18000.0, "probability": 0.0,
+    })
+    S.write("crm.lead", [lost], {"date_closed": S.dt(-8), "active": False})
+
+
 def main() -> int:
     S.wait_for_odoo()
     if S.already_seeded():
@@ -91,6 +144,7 @@ def main() -> int:
     # Section functions are appended by later tasks and called here:
     #   seed_crm(); seed_sales(); seed_inventory();
     #   seed_receivables(); seed_hr(); seed_projects()
+    seed_crm()
     S.mark_seeded()
     print("[seed] done")
     return 0
