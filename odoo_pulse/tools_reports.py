@@ -193,3 +193,148 @@ def pipeline_review(
         )
 
     return safe(run)
+
+
+@mcp.tool()
+def sales_snapshot(
+    period_days: int = 7,
+    stale_quote_days: int = 7,
+    top_n: int = 5,
+    timezone_offset: int = 7,
+) -> str:
+    """Report how sales are going versus the previous period, in one call.
+
+    Composes confirmed sale.order records over the last two periods into
+    revenue/order deltas, top customers, top products (server-side
+    aggregate over order lines), a stale-quotation count, and a
+    growing / steady / declining verdict.
+
+    Args:
+        period_days: Length of the comparison window in days (default 7).
+        stale_quote_days: Age in days after which a draft/sent quotation
+            counts as stale (default 7).
+        top_n: Rows in the top-customers / top-products lists (default 5).
+        timezone_offset: UTC offset for "today" (default 7 = Asia/Ho_Chi_Minh).
+    """
+
+    def run() -> dict:
+        client = get_client()
+        today = today_in_tz(timezone_offset)
+        cur_start = today - timedelta(days=period_days)
+        prev_start = today - timedelta(days=2 * period_days)
+
+        orders, truncation = fetch_with_truncation(
+            client, "sale.order",
+            [("state", "in", ["sale", "done"]),
+             ("date_order", ">=", prev_start.isoformat())],
+            fields=["id", "name", "amount_total", "partner_id", "date_order"],
+            limit=200, order="date_order desc",
+        )
+
+        cur_total = prev_total = 0.0
+        cur_count = prev_count = 0
+        customers: dict[str, dict] = {}
+        for o in orders:
+            day = parse_deadline(o.get("date_order"))
+            amount = o.get("amount_total") or 0.0
+            if day is not None and day >= cur_start:
+                cur_count += 1
+                cur_total += amount
+                partner = o["partner_id"][1] if o.get("partner_id") else "(unknown)"
+                rec = customers.setdefault(
+                    partner, {"customer": partner, "orders": 0, "revenue": 0.0})
+                rec["orders"] += 1
+                rec["revenue"] += amount
+            else:
+                prev_count += 1
+                prev_total += amount
+
+        delta_pct = (round((cur_total - prev_total) / prev_total * 100, 1)
+                     if prev_total else None)
+
+        agg = client.aggregate_records(
+            "sale.order.line",
+            group_by=["product_id"],
+            measures=["price_subtotal:sum"],
+            domain=[("order_id.state", "in", ["sale", "done"]),
+                    ("order_id.date_order", ">=", cur_start.isoformat())],
+            limit=top_n,
+        )
+        top_products = [
+            {"product": row["product_id"][1] if row.get("product_id") else "(none)",
+             "revenue": row.get("price_subtotal") or 0.0}
+            for row in agg.get("rows", [])
+        ]
+
+        stale_quotes = client.search_count("sale.order", [
+            ("state", "in", ["draft", "sent"]),
+            ("create_date", "<",
+             (today - timedelta(days=stale_quote_days)).isoformat()),
+        ])
+
+        if delta_pct is None:
+            verdict = "steady"
+        elif delta_pct >= 10:
+            verdict = "growing"
+        elif delta_pct <= -10:
+            verdict = "declining"
+        else:
+            verdict = "steady"
+
+        top_customers = sorted(
+            customers.values(), key=lambda r: -r["revenue"])[:top_n]
+
+        summary = {
+            "period_days": period_days,
+            "orders": cur_count,
+            "revenue": round(cur_total, 2),
+            "prev_orders": prev_count,
+            "prev_revenue": round(prev_total, 2),
+            "delta_pct": delta_pct,
+            "stale_quotations": stale_quotes,
+            "verdict": verdict,
+        }
+        if truncation:
+            summary["truncated"] = True
+            summary["total_matching"] = truncation["total_matching"]
+
+        highlights = [
+            f"revenue {round(cur_total, 2)} over the last {period_days}d "
+            f"vs {round(prev_total, 2)} the {period_days}d before"
+        ]
+        if top_customers:
+            highlights.append(
+                f"top customer: {top_customers[0]['customer']} "
+                f"({top_customers[0]['revenue']})")
+
+        risks: list[dict] = []
+        if truncation:
+            risks.append({
+                "code": "truncated_data", "count": truncation["missing"],
+                "message": (
+                    f"Report covers only {truncation['fetched']} of "
+                    f"{truncation['total_matching']} matching orders."
+                ),
+            })
+        if verdict == "declining":
+            risks.append({
+                "code": "revenue_drop", "count": cur_count,
+                "message": f"Revenue down {abs(delta_pct)}% vs the previous period",
+            })
+        if stale_quotes:
+            risks.append({
+                "code": "stale_quotations", "count": stale_quotes,
+                "message": (f"{stale_quotes} quotation(s) older than "
+                            f"{stale_quote_days} days still not confirmed"),
+            })
+
+        return build_report(
+            "sales_snapshot", today,
+            summary=summary,
+            breakdown={"top_customers": top_customers,
+                       "top_products": top_products},
+            highlights=highlights, risks=risks,
+            extra={"period_days": period_days},
+        )
+
+    return safe(run)
