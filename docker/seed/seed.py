@@ -36,6 +36,18 @@ class Seeder:
                 if uid:
                     self.uid = uid
                     print(f"[seed] connected, uid={uid}")
+                    # Also wait for project.task.type to exist (ensures project module is initialized)
+                    # with a sub-timeout to avoid hanging
+                    stages_deadline = time.time() + 60
+                    while time.time() < stages_deadline:
+                        try:
+                            stages = self.call("project.task.type", "search", [[], {"limit": 1}])
+                            if stages is not None:  # Table exists, can proceed
+                                return
+                        except Exception:  # Still initializing
+                            pass
+                        time.sleep(1)
+                    # If we get here, project.task.type isn't ready but we'll continue anyway
                     return
             except Exception as exc:  # noqa: BLE001 - Odoo not ready yet
                 last = str(exc)
@@ -327,8 +339,32 @@ def seed_projects() -> None:
     users = S.search("res.users", [("share", "=", False)], limit=3) or [S.uid]
 
     # Get the Inbox stage (first non-folded stage).
-    stages = S.search("project.task.type", [("fold", "=", False)], limit=1)
-    stage_id = stages[0] if stages else None
+    # Stages should be demo data, but if missing, create them.
+    stage_id = None
+    for attempt in range(30):  # Retry for up to 30 seconds
+        try:
+            stages = S.search("project.task.type", [("fold", "=", False)], limit=1)
+            if stages:
+                stage_id = stages[0]
+                print(f"[seed] found stage {stage_id}")
+                break
+        except Exception:
+            # Ignore errors during initialization; stages might not be ready yet
+            pass
+        time.sleep(1)
+
+    # If still no stages, create the default ones (project module demo data)
+    if not stage_id:
+        print("[seed] no stages found; creating default project task stages...")
+        try:
+            stage_names = ["Inbox", "Today", "This Week", "This Month", "Later"]
+            for idx, name in enumerate(stage_names):
+                sid = S.create("project.task.type", {"name": name, "fold": (idx >= 4)})
+                if idx == 0:  # Inbox is not folded, use as default
+                    stage_id = sid
+            print(f"[seed] created default stages, using {stage_id} as default")
+        except Exception as e:
+            print(f"[seed] WARNING: could not create stages: {e}")
 
     def task(name: str, deadline_delta: int, assignees: list[int]):
         # Drift note: assignees are user_ids (many2many) on Odoo 17+.

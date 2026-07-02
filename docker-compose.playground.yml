@@ -39,6 +39,21 @@ services:
     volumes:
       - odoo-web-data:/var/lib/odoo
 
+  seed:
+    image: python:3.12-slim
+    depends_on:
+      - odoo
+    environment:
+      ODOO_URL: http://odoo:8069
+      ODOO_DB: playground
+      ODOO_USERNAME: admin
+      ODOO_API_KEY: admin
+    volumes:
+      - ./docker/seed:/seed:ro
+    # One-shot: wait_for_odoo() inside the script handles the install delay.
+    command: ["python3", "/seed/seed.py"]
+    restart: "no"
+
 volumes:
   pgdata:
   odoo-web-data:
