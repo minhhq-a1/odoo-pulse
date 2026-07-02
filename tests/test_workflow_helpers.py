@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from odoo_mcp.workflow_helpers import (
+from odoo_pulse.workflow_helpers import (
     build_report,
     parse_deadline,
     resolve_user_names,

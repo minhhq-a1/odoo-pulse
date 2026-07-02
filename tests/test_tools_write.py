@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from odoo_mcp import tools_write
+from odoo_pulse import tools_write
 
 
 def test_create_record_preview_does_no_write(fake_client):

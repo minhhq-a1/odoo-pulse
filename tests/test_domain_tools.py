@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from odoo_mcp import domain_tools, tools_generic
+from odoo_pulse import domain_tools, tools_generic
 
 
 # --- Generic tools ------------------------------------------------------------

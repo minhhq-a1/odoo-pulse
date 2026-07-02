@@ -57,7 +57,7 @@ def _plain() -> None:
 
 def build_cases():
     """(group, label, callable, kwargs) for every list-style tool."""
-    from odoo_mcp import (
+    from odoo_pulse import (
         domain_tools,
         tools_engagement,
         tools_hr,
@@ -149,8 +149,8 @@ def main() -> int:
     load_env(Path(args.env))
 
     # Import after env is loaded.
-    from odoo_mcp.odoo_client import OdooConfigError
-    from odoo_mcp.runtime import get_client
+    from odoo_pulse.odoo_client import OdooConfigError
+    from odoo_pulse.runtime import get_client
 
     # 1) Connectivity check.
     print(f"{C.BOLD}Connecting to Odoo...{C.RESET}")

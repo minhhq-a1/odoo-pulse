@@ -2,7 +2,7 @@
 import datetime as dt
 import json
 
-from odoo_mcp import tools_workflows
+from odoo_pulse import tools_workflows
 
 
 # today is fixed at 2026-06-30 for every test via monkeypatch.

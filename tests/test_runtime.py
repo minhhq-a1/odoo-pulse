@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from odoo_mcp import runtime
+from odoo_pulse import runtime
 
 
 def test_name_domain_empty_query():
@@ -43,7 +43,7 @@ def test_safe_serialises_result():
 
 
 def test_safe_catches_odoo_error():
-    from odoo_mcp.odoo_client import OdooError
+    from odoo_pulse.odoo_client import OdooError
 
     def boom():
         raise OdooError("kaboom")
@@ -53,7 +53,7 @@ def test_safe_catches_odoo_error():
 
 
 def test_preview_create_echoes_values():
-    from odoo_mcp.runtime import preview
+    from odoo_pulse.runtime import preview
     out = preview("create", "crm.lead", values={"name": "X"})
     assert out["preview"] is True
     assert out["confirm_required"] is True
@@ -64,7 +64,7 @@ def test_preview_create_echoes_values():
 
 
 def test_preview_update_includes_ids_count_affected():
-    from odoo_mcp.runtime import preview
+    from odoo_pulse.runtime import preview
     out = preview("update", "crm.lead", ids=[1, 2], values={"name": "Y"}, affected=["A", "B"])
     assert out["ids"] == [1, 2]
     assert out["count"] == 2

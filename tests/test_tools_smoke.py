@@ -9,7 +9,7 @@ import json
 
 import pytest
 
-from odoo_mcp import (
+from odoo_pulse import (
     domain_tools,
     tools_engagement,
     tools_hr,

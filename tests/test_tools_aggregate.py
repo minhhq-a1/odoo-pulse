@@ -1,7 +1,7 @@
 # tests/test_tools_aggregate.py
 import json
 
-from odoo_mcp.tools_generic import aggregate_records
+from odoo_pulse.tools_generic import aggregate_records
 
 
 def test_aggregate_builds_parsed_measures(fake_client):

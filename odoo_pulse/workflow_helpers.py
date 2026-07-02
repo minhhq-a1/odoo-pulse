@@ -1,4 +1,4 @@
-# odoo_mcp/workflow_helpers.py
+# odoo_pulse/workflow_helpers.py
 """Shared building blocks for composed workflow tools.
 
 These orchestrate reads through an Odoo client (real or fake) and shape the

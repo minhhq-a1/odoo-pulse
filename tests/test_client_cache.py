@@ -1,5 +1,5 @@
 # tests/test_client_cache.py
-from odoo_mcp.odoo_client import OdooClient, OdooConfig
+from odoo_pulse.odoo_client import OdooClient, OdooConfig
 
 
 def _client(ttl=300.0, max_entries=64):

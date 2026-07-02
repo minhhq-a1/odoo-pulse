@@ -1,7 +1,7 @@
 # tests/test_tools_attachment.py
 import json
 
-from odoo_mcp.tools_generic import read_attachment
+from odoo_pulse.tools_generic import read_attachment
 
 
 def test_under_cap_includes_base64(fake_client):

@@ -6,7 +6,7 @@ import xmlrpc.client
 
 import pytest
 
-from odoo_mcp.odoo_client import (
+from odoo_pulse.odoo_client import (
     OdooClient,
     OdooConfig,
     OdooError,

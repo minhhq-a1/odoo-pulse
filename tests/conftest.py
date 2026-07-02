@@ -8,8 +8,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from odoo_mcp import runtime
-from odoo_mcp.odoo_client import OdooError
+from odoo_pulse import runtime
+from odoo_pulse.odoo_client import OdooError
 
 
 class FakeClient:

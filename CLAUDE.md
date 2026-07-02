@@ -23,7 +23,7 @@ python scripts/smoke_live.py
 
 ## Architecture
 
-This is an MCP server that exposes Odoo's XML-RPC external API as MCP tools. The entry point is `odoo_mcp/server.py`, which imports all tool modules as side effects — each import registers `@mcp.tool()` functions with the shared FastMCP instance.
+This is an MCP server that exposes Odoo's XML-RPC external API as MCP tools. The entry point is `odoo_pulse/server.py`, which imports all tool modules as side effects — each import registers `@mcp.tool()` functions with the shared FastMCP instance.
 
 **Module responsibilities:**
 
@@ -45,4 +45,4 @@ System models (`ir.*`, `base*`, `res.users`, `res.groups`, etc.) are permanently
 
 **Testing pattern:** Tests inject a `FakeClient` directly into `runtime._client` (see `conftest.py`). The fake records every call in `fake_client.calls` and returns canned data from `search_responses`/`read_responses` dicts. No real Odoo or network is needed. Tests assert on the model name and domain that a tool built, not on Odoo's actual response.
 
-**Adding a new tool module:** Create `odoo_mcp/tools_foo.py`, import `mcp` and `get_client` from `.runtime`, decorate functions with `@mcp.tool()`, then add `from . import tools_foo  # noqa: F401` in `server.py`.
+**Adding a new tool module:** Create `odoo_pulse/tools_foo.py`, import `mcp` and `get_client` from `.runtime`, decorate functions with `@mcp.tool()`, then add `from . import tools_foo  # noqa: F401` in `server.py`.

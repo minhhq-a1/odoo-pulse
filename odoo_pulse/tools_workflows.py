@@ -1,4 +1,4 @@
-# odoo_mcp/tools_workflows.py
+# odoo_pulse/tools_workflows.py
 """Composed workflow tools: business questions answered in one call.
 
 Each tool composes several reads/aggregates server-side and returns a

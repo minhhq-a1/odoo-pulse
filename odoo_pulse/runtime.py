@@ -12,7 +12,7 @@ from mcp.server.fastmcp import FastMCP
 
 from .odoo_client import OdooClient, OdooConfig, OdooConfigError, OdooError
 
-mcp = FastMCP("odoo-mcp")
+mcp = FastMCP("odoo-pulse")
 
 _client: OdooClient | None = None
 

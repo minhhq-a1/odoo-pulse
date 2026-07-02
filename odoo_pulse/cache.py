@@ -1,4 +1,4 @@
-# odoo_mcp/cache.py
+# odoo_pulse/cache.py
 """Process-local TTL + LRU cache. No background threads; lazy expiry on access."""
 
 from __future__ import annotations
