@@ -260,10 +260,11 @@ def sales_snapshot(
             domain=[("order_id.state", "in", ["sale", "done"]),
                     ("order_id.date_order", ">=", cur_start.isoformat())],
             limit=top_n,
+            order="price_subtotal:sum desc",
         )
         top_products = [
             {"product": row["product_id"][1] if row.get("product_id") else "(none)",
-             "revenue": row.get("price_subtotal") or 0.0}
+             "revenue": row.get("price_subtotal:sum") or 0.0}
             for row in agg.get("rows", [])
         ]
 
@@ -373,7 +374,7 @@ def receivables_health(top_n: int = 5, timezone_offset: int = 7) -> str:
                  "payable": dict.fromkeys(buckets, 0.0)}
         overdue_customers: dict[str, float] = {}
         ar_total = ar_overdue = ap_total = 0.0
-        ar_count = ap_count = 0
+        ar_count = ap_count = ninety_plus_count = 0
 
         for inv in invoices:
             residual = inv.get("amount_residual") or 0.0
@@ -395,6 +396,8 @@ def receivables_health(top_n: int = 5, timezone_offset: int = 7) -> str:
             if side == "receivable":
                 ar_count += 1
                 ar_total += residual
+                if bucket == "90+":
+                    ninety_plus_count += 1
                 if days > 0:
                     ar_overdue += residual
                     partner = (inv["partner_id"][1]
@@ -463,8 +466,9 @@ def receivables_health(top_n: int = 5, timezone_offset: int = 7) -> str:
             })
         if ninety_plus > 0:
             risks.append({
-                "code": "aged_over_90", "count": 1,
-                "message": f"{ninety_plus} receivable is 90+ days overdue",
+                "code": "aged_over_90", "count": ninety_plus_count,
+                "message": (f"{ninety_plus_count} receivable(s) totaling "
+                            f"{ninety_plus} are 90+ days overdue"),
             })
 
         return build_report(
@@ -524,7 +528,7 @@ def inventory_risk(
         moved_rows = agg.get("rows", [])
         moved_ids = {row["product_id"][0] for row in moved_rows
                      if row.get("product_id")}
-        moved_capped = len(moved_rows) >= 200
+        moved_capped = len(moved_rows) >= min(200, client.config.max_records)
 
         stocked, stocked_trunc = fetch_with_truncation(
             client, "product.product",
