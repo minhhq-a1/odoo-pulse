@@ -79,24 +79,33 @@ class Seeder:
         base = datetime.combine(self.today(), datetime.min.time()) + timedelta(hours=9)
         return (base + timedelta(days=delta_days)).strftime("%Y-%m-%d %H:%M:%S")
 
-    def _sql_update_create_date(self, model: str, rec_id: int, delta_days: int) -> None:
-        """Workaround for readonly create_date field (field-drift): update via SQL.
-        Used when Odoo's ORM write() fails to set create_date on readonly fields."""
-        import subprocess
-        sql = (f"UPDATE {model.replace('.', '_')} SET create_date = NOW() - "
-               f"INTERVAL '{-delta_days} days' WHERE id = {rec_id};")
-        try:
-            subprocess.run(
-                ["docker", "exec", "odoo-pulse-playground-db-1", "psql", "-U", "odoo",
-                 "-d", self.db, "-c", sql],
-                check=True, capture_output=True, timeout=10)
-            print(f"[seed] set {model} #{rec_id} create_date via SQL")
-        except (subprocess.CalledProcessError, FileNotFoundError) as e:
-            # Docker not available or psql failed; log but don't fail
-            print(f"[seed] warning: could not update {model} #{rec_id} create_date: {e}")
 
 
 S = Seeder()
+
+
+def _backdate(model: str, rec_id: int, delta_days: int) -> None:
+    """Backdate create_date via a one-shot server action's SQL cursor.
+
+    create_date is a protected log field Odoo's ORM ignores on write()/
+    create(); this uses only the standard XML-RPC surface (ir.actions.server
+    running server-side code, same as any other model call) so it works
+    identically on the host and inside the containerized seed service.
+    """
+    table = model.replace(".", "_")
+    model_id = S.search("ir.model", [("model", "=", model)], limit=1)[0]
+    action_id = S.create("ir.actions.server", {
+        "name": f"PLAYGROUND backdate {model}#{rec_id}",
+        "model_id": model_id,
+        "state": "code",
+        "code": (
+            f"env.cr.execute(\"UPDATE {table} SET create_date = "
+            f"create_date - INTERVAL '{abs(delta_days)} days' WHERE id = {rec_id}\")"
+        ),
+    })
+    S.call("ir.actions.server", "run", [[action_id]])
+    S.call("ir.actions.server", "unlink", [[action_id]])
+    print(f"[seed] backdated {model} #{rec_id} create_date via ir.actions.server")
 
 
 def seed_crm() -> None:
@@ -202,8 +211,8 @@ def seed_sales() -> None:
     })
     S.write("sale.order", [stale], {"state": "draft", "create_date": S.dt(-20)})
     # Field-drift: create_date is readonly in Odoo, so S.write() above doesn't set it.
-    # Workaround: update via SQL through Docker (for playground environment).
-    S._sql_update_create_date("sale.order", stale, -20)
+    # Workaround: update via ir.actions.server server-side SQL (works on host and containerized).
+    _backdate("sale.order", stale, -20)
 
 
 def main() -> int:
