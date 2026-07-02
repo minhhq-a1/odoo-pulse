@@ -79,6 +79,22 @@ class Seeder:
         base = datetime.combine(self.today(), datetime.min.time()) + timedelta(hours=9)
         return (base + timedelta(days=delta_days)).strftime("%Y-%m-%d %H:%M:%S")
 
+    def _sql_update_create_date(self, model: str, rec_id: int, delta_days: int) -> None:
+        """Workaround for readonly create_date field (field-drift): update via SQL.
+        Used when Odoo's ORM write() fails to set create_date on readonly fields."""
+        import subprocess
+        sql = (f"UPDATE {model.replace('.', '_')} SET create_date = NOW() - "
+               f"INTERVAL '{-delta_days} days' WHERE id = {rec_id};")
+        try:
+            subprocess.run(
+                ["docker", "exec", "odoo-pulse-playground-db-1", "psql", "-U", "odoo",
+                 "-d", self.db, "-c", sql],
+                check=True, capture_output=True, timeout=10)
+            print(f"[seed] set {model} #{rec_id} create_date via SQL")
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            # Docker not available or psql failed; log but don't fail
+            print(f"[seed] warning: could not update {model} #{rec_id} create_date: {e}")
+
 
 S = Seeder()
 
@@ -136,6 +152,60 @@ def seed_crm() -> None:
     S.write("crm.lead", [lost], {"date_closed": S.dt(-8), "active": False})
 
 
+def _service_product(name: str, price: float) -> int:
+    """A service product avoids stock plumbing for revenue-only orders."""
+    ids = S.search("product.product", [("name", "=", name)], limit=1)
+    if ids:
+        return ids[0]
+    return S.create("product.product", {
+        "name": name, "type": "service", "list_price": price, "standard_price": price,
+    })
+
+
+def _partner(name: str) -> int:
+    ids = S.search("res.partner", [("name", "=", name)], limit=1)
+    return ids[0] if ids else S.create("res.partner", {"name": name})
+
+
+def _confirmed_order(partner_id: int, product_id: int, qty: float,
+                     price: float, order_date_delta: int) -> int:
+    """Create an order with one line, force it to a confirmed state and
+    backdate date_order. Direct state write avoids stock/invoice side effects
+    for revenue-only demo orders (sales_snapshot only reads state/amount/date)."""
+    oid = S.create("sale.order", {
+        "partner_id": partner_id,
+        "order_line": [(0, 0, {"product_id": product_id,
+                               "product_uom_qty": qty, "price_unit": price})],
+    })
+    S.write("sale.order", [oid], {"state": "sale", "date_order": S.dt(order_date_delta)})
+    return oid
+
+
+def seed_sales() -> None:
+    print("[seed] Sales snapshot...")
+    prod = _service_product("PLAYGROUND Consulting Hours", 150.0)
+    big = _partner("PLAYGROUND Big Customer Co")
+    small = _partner("PLAYGROUND Small Shop")
+
+    # Current window (last 7 days): higher revenue, clear top customer.
+    _confirmed_order(big, prod, 40, 150.0, -2)     # 6000
+    _confirmed_order(big, prod, 20, 150.0, -5)     # 3000
+    _confirmed_order(small, prod, 5, 150.0, -3)    # 750
+    # Previous window (8–14 days ago): lower revenue, so delta_pct is positive.
+    _confirmed_order(small, prod, 8, 150.0, -10)   # 1200
+
+    # A quotation left sitting => stale_quotations.
+    stale = S.create("sale.order", {
+        "partner_id": small,
+        "order_line": [(0, 0, {"product_id": prod, "product_uom_qty": 3,
+                               "price_unit": 150.0})],
+    })
+    S.write("sale.order", [stale], {"state": "draft", "create_date": S.dt(-20)})
+    # Field-drift: create_date is readonly in Odoo, so S.write() above doesn't set it.
+    # Workaround: update via SQL through Docker (for playground environment).
+    S._sql_update_create_date("sale.order", stale, -20)
+
+
 def main() -> int:
     S.wait_for_odoo()
     if S.already_seeded():
@@ -145,6 +215,7 @@ def main() -> int:
     #   seed_crm(); seed_sales(); seed_inventory();
     #   seed_receivables(); seed_hr(); seed_projects()
     seed_crm()
+    seed_sales()
     S.mark_seeded()
     print("[seed] done")
     return 0
