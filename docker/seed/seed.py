@@ -284,6 +284,42 @@ def seed_receivables() -> None:
     _posted_invoice(good, prod, 2000.0, invoice_delta=-2, due_delta=20)
 
 
+def seed_hr() -> None:
+    print("[seed] Absence overview...")
+    dept = S.create("hr.department", {"name": "PLAYGROUND Operations"})
+    emps = [S.create("hr.employee", {"name": f"PLAYGROUND Employee {i}",
+                                     "department_id": dept})
+            for i in range(1, 4)]
+
+    # A leave type that needs no allocation, so leaves validate cleanly.
+    # Drift note: requires_allocation is 'no'/'yes' on Odoo 17+.
+    lt = S.search("hr.leave.type", [("requires_allocation", "=", "no")], limit=1)
+    if not lt:
+        lt = [S.create("hr.leave.type", {
+            "name": "PLAYGROUND Unpaid", "requires_allocation": "no"})]
+    leave_type = lt[0]
+
+    def make_leave(emp_id: int, from_delta: int, to_delta: int, validate: bool):
+        # Set request_date_* (UI dates) and let Odoo compute date_from/to/number.
+        lv = S.create("hr.leave", {
+            "employee_id": emp_id,
+            "holiday_status_id": leave_type,
+            "request_date_from": S.d(from_delta),
+            "request_date_to": S.d(to_delta),
+        })
+        if validate:
+            S.write("hr.leave", [lv], {"state": "validate"})
+        else:
+            S.write("hr.leave", [lv], {"state": "confirm"})
+        return lv
+
+    # Two employees off across today => off_today + thin coverage (2/3 = 66%).
+    make_leave(emps[0], -1, 2, validate=True)
+    make_leave(emps[1], 0, 1, validate=True)
+    # One pending request => pending_approvals.
+    make_leave(emps[2], 5, 7, validate=False)
+
+
 def main() -> int:
     S.wait_for_odoo()
     if S.already_seeded():
@@ -296,6 +332,7 @@ def main() -> int:
     seed_sales()
     seed_inventory()
     seed_receivables()
+    seed_hr()
     S.mark_seeded()
     print("[seed] done")
     return 0
