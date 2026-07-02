@@ -32,8 +32,10 @@ This is an MCP server that exposes Odoo's XML-RPC external API as MCP tools. The
 - `tools_generic.py` — model-agnostic tools: `search_read`, `search_count`, `read_records`, `get_model_fields`, `list_models`, `odoo_version`, `aggregate_records`, `read_attachment`.
 - `tools_write.py` — write tools (`create_record`, `update_records`, `delete_records`) plus domain-specific helpers (`create_lead`, `create_contact`, `create_task`, `confirm_sale_order`). Every tool returns a dry-run preview unless `confirm=True`.
 - `workflow_helpers.py` — shared building blocks for composed workflow tools: `today_in_tz`, `parse_deadline`, archived-aware `resolve_user_names`, and `build_report` (the standard report envelope: `tool`, `as_of`, tool-specific keys, `summary`, `breakdown`, `highlights`, `risks`). Used by `tools_workflows.py` and `standup_digest`.
-- `tools_workflows.py` — composed, opinionated workflow tools that answer a business question in one call (e.g. `sprint_health`, `team_workload`, `project_status_report`). Read-only; compose `search_read`/aggregates server-side and return the `build_report` envelope.
-- `domain_tools.py`, `tools_hr.py`, `tools_projects.py` (where `standup_digest` reuses `workflow_helpers`), `tools_operations.py`, `tools_engagement.py`, `tools_niche.py` — domain-specific read tools wrapping `search_read` with hard-coded fields and domains for common Odoo models.
+- `tools_workflows.py` — composed, opinionated workflow tools that answer a business question in one call (e.g. `sprint_health`, `team_workload`, `project_status_report`, `standup_digest`). Read-only; compose `search_read`/aggregates server-side and return the `build_report` envelope.
+- `tools_reports.py` — cross-department report tools (`pipeline_review`, `sales_snapshot`, `receivables_health`, `inventory_risk`, `absence_overview`, `business_pulse`). Same envelope and composition style as `tools_workflows.py`.
+- `tool_groups.py` — maps `ODOO_TOOL_GROUPS` (default `core,reports`) to the tool modules `server.py` imports; unknown group names fail at startup.
+- `domain_tools.py`, `tools_hr.py`, `tools_projects.py`, `tools_operations.py`, `tools_engagement.py`, `tools_niche.py` — domain-specific read tools wrapping `search_read` with hard-coded fields and domains for common Odoo models.
 
 **Write safety chain** (all four must pass for any write to execute):
 1. `ODOO_READ_ONLY=false` — master switch (default: `true`, blocking all writes)
@@ -45,4 +47,4 @@ System models (`ir.*`, `base*`, `res.users`, `res.groups`, etc.) are permanently
 
 **Testing pattern:** Tests inject a `FakeClient` directly into `runtime._client` (see `conftest.py`). The fake records every call in `fake_client.calls` and returns canned data from `search_responses`/`read_responses` dicts. No real Odoo or network is needed. Tests assert on the model name and domain that a tool built, not on Odoo's actual response.
 
-**Adding a new tool module:** Create `odoo_pulse/tools_foo.py`, import `mcp` and `get_client` from `.runtime`, decorate functions with `@mcp.tool()`, then add `from . import tools_foo  # noqa: F401` in `server.py`.
+**Adding a new tool module:** Create `odoo_pulse/tools_foo.py`, import `mcp` and `get_client` from `.runtime`, decorate functions with `@mcp.tool()`, then add the module to a group in `tool_groups.GROUP_MODULES` (server.py imports modules per enabled group).

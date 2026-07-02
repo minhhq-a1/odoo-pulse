@@ -165,6 +165,7 @@ Generate an API key in Odoo under
 | `ODOO_SCHEMA_CACHE_TTL` | no | `300` | Seconds to cache `fields_get` results. `0` disables. |
 | `ODOO_SCHEMA_CACHE_MAX` | no | `64` | Max cached schema entries (LRU eviction). |
 | `ODOO_MAX_ATTACHMENT_BYTES` | no | `1048576` | Max attachment size returned as base64 by `read_attachment`. |
+| `ODOO_TOOL_GROUPS` | no | `core,reports` | Tool groups to expose: `core`, `reports`, `business`, `hr`, `projects`, `operations`, `engagement`, `niche`, or `all` |
 
 ## Write operations
 
