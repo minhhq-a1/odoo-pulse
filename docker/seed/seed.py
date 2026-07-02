@@ -80,11 +80,10 @@ class Seeder:
         return (base + timedelta(days=delta_days)).strftime("%Y-%m-%d %H:%M:%S")
 
 
-
 S = Seeder()
 
 
-def _backdate(model: str, rec_id: int, delta_days: int) -> None:
+def _backdate(model: str, rec_id: int, days_ago: int) -> None:
     """Backdate create_date via a one-shot server action's SQL cursor.
 
     create_date is a protected log field Odoo's ORM ignores on write()/
@@ -100,7 +99,7 @@ def _backdate(model: str, rec_id: int, delta_days: int) -> None:
         "state": "code",
         "code": (
             f"env.cr.execute(\"UPDATE {table} SET create_date = "
-            f"create_date - INTERVAL '{abs(delta_days)} days' WHERE id = {rec_id}\")"
+            f"create_date - INTERVAL '{abs(days_ago)} days' WHERE id = {rec_id}\")"
         ),
     })
     S.call("ir.actions.server", "run", [[action_id]])
@@ -209,9 +208,8 @@ def seed_sales() -> None:
         "order_line": [(0, 0, {"product_id": prod, "product_uom_qty": 3,
                                "price_unit": 150.0})],
     })
-    S.write("sale.order", [stale], {"state": "draft", "create_date": S.dt(-20)})
-    # Field-drift: create_date is readonly in Odoo, so S.write() above doesn't set it.
-    # Workaround: update via ir.actions.server server-side SQL (works on host and containerized).
+    # Field-drift: create_date is readonly in Odoo, so update via ir.actions.server
+    # server-side SQL (works on host and containerized).
     _backdate("sale.order", stale, -20)
 
 
@@ -410,9 +408,6 @@ def main() -> int:
     if S.already_seeded():
         print("[seed] already seeded — nothing to do")
         return 0
-    # Section functions are appended by later tasks and called here:
-    #   seed_crm(); seed_sales(); seed_inventory();
-    #   seed_receivables(); seed_hr(); seed_projects()
     seed_crm()
     seed_sales()
     seed_inventory()

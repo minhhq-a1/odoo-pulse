@@ -1,5 +1,4 @@
 # odoo-pulse playground: Postgres + Odoo 18 + one-shot seed.
-# The seed service is added in Task 9; db + odoo are defined here.
 name: odoo-pulse-playground
 
 services:

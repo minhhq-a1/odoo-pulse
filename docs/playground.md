@@ -56,7 +56,7 @@ If neither is published yet, install locally with `pip install -e .` and use
 > **Run `business_pulse`.**
 
 You should get a one-call company briefing with an `attention` verdict:
-yesterday's orders, overdue invoices, overdue tasks, and who's off today. Then
+recent order activity, overdue invoices, overdue tasks, and who's off today. Then
 try `pipeline_review`, `receivables_health`, or `inventory_risk`.
 
 ## Reset / tear down
