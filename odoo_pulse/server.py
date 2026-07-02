@@ -1,51 +1,34 @@
-"""MCP server exposing read-only access to an Odoo instance via XML-RPC.
+"""MCP server: an AI business analyst for Odoo over XML-RPC.
 
-Generic tools (model-agnostic):
-  - odoo_version, list_models, get_model_fields
-  - search_read, search_count, read_records
+Tool modules are grouped (see tool_groups.GROUP_MODULES) and selected via
+the ODOO_TOOL_GROUPS env var. The default surface is "core,reports":
+generic model-agnostic tools, gated write tools, and the composed report
+tools that answer a business question in one call. The breadth wrappers
+(business/hr/projects/operations/engagement/niche) are opt-in.
 
-Domain tools (convenience wrappers for common modules):
-  - Contacts:   find_partner
-  - CRM:        list_opportunities
-  - Sales:      list_sale_orders, get_sale_order
-  - Purchase:   list_purchase_orders, get_purchase_order
-  - Inventory:  find_products, check_stock, list_pickings
-  - Accounting: list_invoices, get_invoice, list_payments
-  - HR:         employees, departments, time off, expenses, recruitment, attendance
-  - Project:    projects, tasks, timesheets
-  - Operations: manufacturing, BoM, PoS, repair, maintenance, helpdesk, fleet
-  - Engagement: events, calendar, activities, surveys, email campaigns
-  - Niche:      subscriptions, sign, documents, knowledge, approvals, lunch,
-                quality, planning, eLearning, loyalty, memberships, payroll,
-                appraisals, social, website, PLM, IoT, notes
-  - Write:      create_record, update_records, delete_records, and helpers
-                create_lead, create_contact, create_task, confirm_sale_order
-
-Write tools are gated: they require ODOO_READ_ONLY=false, the target model in
-ODOO_WRITABLE_MODELS, a per-call confirm=true, and (for deletes) ODOO_ALLOW_DELETE.
-System models and the configured defaults keep the server read-only out of the box.
+Write tools stay gated by ODOO_READ_ONLY / ODOO_WRITABLE_MODELS /
+ODOO_ALLOW_DELETE / per-call confirm regardless of tool groups.
 """
 
 from __future__ import annotations
 
+import importlib
+
 from dotenv import load_dotenv
 
-from .runtime import mcp
+# .env must be loaded before tool-group selection and tool registration,
+# both of which happen at import time right below.
+load_dotenv()
 
-# Importing these modules registers their @mcp.tool() functions as a side effect.
-from . import tools_generic  # noqa: F401  (generic CRUD tools)
-from . import tools_write  # noqa: F401
-from . import domain_tools  # noqa: F401  (Contacts/CRM/Sales/Purchase/Inventory/Accounting)
-from . import tools_hr  # noqa: F401  (Human Resources)
-from . import tools_projects  # noqa: F401  (Project & Timesheets)
-from . import tools_workflows  # noqa: F401  (composed workflow tools)
-from . import tools_operations  # noqa: F401  (MRP/PoS/Repair/Maintenance/Helpdesk/Fleet)
-from . import tools_engagement  # noqa: F401  (Events/Calendar/Activities/Marketing)
-from . import tools_niche  # noqa: F401  (specialised / Enterprise modules)
+from .runtime import mcp  # noqa: E402
+from .tool_groups import modules_to_load  # noqa: E402
+
+for _module in modules_to_load():
+    # Importing a tool module registers its @mcp.tool() functions.
+    importlib.import_module(f".{_module}", package=__package__)
 
 
 def main() -> None:
-    load_dotenv()
     mcp.run()
 
 
