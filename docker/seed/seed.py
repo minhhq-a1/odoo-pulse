@@ -215,6 +215,46 @@ def seed_sales() -> None:
     _backdate("sale.order", stale, -20)
 
 
+def _storable_product(name: str, cost: float) -> int:
+    ids = S.search("product.product", [("name", "=", name), ("is_storable", "=", True)], limit=1)
+    if ids:
+        return ids[0]
+    # If an old non-storable product with the same name exists, it has stock moves
+    # that prevent direct updates. Create a fresh storable product instead.
+    # Drift note: Odoo 18 requires is_storable=True to allow stock operations.
+    # type="consu" (Goods) + is_storable=True allows stock.quant creation.
+    return S.create("product.product", {
+        "name": name, "type": "consu", "is_storable": True,
+        "list_price": cost * 1.5, "standard_price": cost,
+    })
+
+
+def seed_inventory() -> None:
+    print("[seed] Inventory risk...")
+    # Shortage: storable product, no stock, a confirmed delivery pulls the
+    # forecast negative.
+    short = _storable_product("PLAYGROUND Widget A (shortage)", 20.0)
+    cust = _partner("PLAYGROUND Big Customer Co")
+    so = S.create("sale.order", {
+        "partner_id": cust,
+        "order_line": [(0, 0, {"product_id": short, "product_uom_qty": 25,
+                               "price_unit": 30.0})],
+    })
+    # Real confirmation so a delivery/outgoing stock.move is created =>
+    # virtual_available goes negative. (Not a direct state write here.)
+    S.call("sale.order", "action_confirm", [[so]])
+
+    # Dead stock: on-hand quantity created directly as a quant (no dated
+    # stock.move), so it counts as unmoved for 90+ days.
+    dead = _storable_product("PLAYGROUND Widget B (dead stock)", 50.0)
+    loc = S.search("stock.location", [("usage", "=", "internal")], limit=1)
+    if not loc:
+        raise SystemExit("[seed] no internal stock.location found")
+    S.create("stock.quant", {
+        "product_id": dead, "location_id": loc[0], "quantity": 100.0,
+    })
+
+
 def main() -> int:
     S.wait_for_odoo()
     if S.already_seeded():
@@ -225,6 +265,7 @@ def main() -> int:
     #   seed_receivables(); seed_hr(); seed_projects()
     seed_crm()
     seed_sales()
+    seed_inventory()
     S.mark_seeded()
     print("[seed] done")
     return 0
