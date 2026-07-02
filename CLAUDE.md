@@ -32,7 +32,7 @@ This is an MCP server that exposes Odoo's XML-RPC external API as MCP tools. The
 - `tools_generic.py` — model-agnostic tools: `search_read`, `search_count`, `read_records`, `get_model_fields`, `list_models`, `odoo_version`, `aggregate_records`, `read_attachment`.
 - `tools_write.py` — write tools (`create_record`, `update_records`, `delete_records`) plus domain-specific helpers (`create_lead`, `create_contact`, `create_task`, `confirm_sale_order`). Every tool returns a dry-run preview unless `confirm=True`.
 - `workflow_helpers.py` — shared building blocks for composed workflow tools: `today_in_tz`, `parse_deadline`, archived-aware `resolve_user_names`, and `build_report` (the standard report envelope: `tool`, `as_of`, tool-specific keys, `summary`, `breakdown`, `highlights`, `risks`). Used by `tools_workflows.py` and `standup_digest`.
-- `tools_workflows.py` — composed, opinionated workflow tools that answer a business question in one call (e.g. `sprint_health`, `team_workload`). Read-only; compose `search_read`/aggregates server-side and return the `build_report` envelope.
+- `tools_workflows.py` — composed, opinionated workflow tools that answer a business question in one call (e.g. `sprint_health`, `team_workload`, `project_status_report`). Read-only; compose `search_read`/aggregates server-side and return the `build_report` envelope.
 - `domain_tools.py`, `tools_hr.py`, `tools_projects.py` (where `standup_digest` reuses `workflow_helpers`), `tools_operations.py`, `tools_engagement.py`, `tools_niche.py` — domain-specific read tools wrapping `search_read` with hard-coded fields and domains for common Odoo models.
 
 **Write safety chain** (all four must pass for any write to execute):
