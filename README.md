@@ -10,6 +10,12 @@ It exposes generic, model-agnostic tools so the LLM can discover schema and
 query any Odoo model — `res.partner`, `sale.order`, `account.move`,
 `stock.quant`, etc. — without a custom Odoo addon.
 
+## Try it in 5 minutes
+
+No Odoo account? `docker compose -f docker-compose.playground.yml up -d` boots a
+demo Odoo pre-seeded with a story to tell, then point Claude at it and ask it to
+`run business_pulse`. Full walkthrough: [docs/playground.md](docs/playground.md).
+
 ## Why XML-RPC
 
 The XML-RPC external API works against any Odoo deployment (Odoo Online/SaaS,
