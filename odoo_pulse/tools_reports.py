@@ -256,7 +256,7 @@ def sales_snapshot(
         agg = client.aggregate_records(
             "sale.order.line",
             group_by=["product_id"],
-            measures=["price_subtotal:sum"],
+            measures=[("price_subtotal", "sum")],
             domain=[("order_id.state", "in", ["sale", "done"]),
                     ("order_id.date_order", ">=", cur_start.isoformat())],
             limit=top_n,

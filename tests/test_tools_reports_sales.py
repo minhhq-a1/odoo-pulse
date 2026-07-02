@@ -64,7 +64,7 @@ def test_sales_snapshot_top_products_via_aggregate(fake_client, monkeypatch):
                     if c["method"] == "aggregate_records")
     assert agg_call["model"] == "sale.order.line"
     assert agg_call["group_by"] == ["product_id"]
-    assert agg_call["measures"] == ["price_subtotal:sum"]
+    assert agg_call["measures"] == [("price_subtotal", "sum")]
     assert ("order_id.date_order", ">=", "2026-06-23") in agg_call["domain"]
     top = out["breakdown"]["top_products"]
     assert top[0] == {"product": "Widget", "revenue": 800.0}
