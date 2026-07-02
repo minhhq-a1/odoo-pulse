@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from odoo_pulse import tools_projects
+from odoo_pulse import tools_projects, tools_workflows
 
 
 def test_list_tasks_default_excludes_subtasks(fake_client):
@@ -65,7 +65,7 @@ def test_standup_digest_renders_markdown_header(fake_client):
     fake_client.execute_kw_responses[("res.users", "search_read")] = [
         {"id": 10, "name": "Alice"},
     ]
-    out = tools_projects.standup_digest("Acme")
+    out = tools_workflows.standup_digest("Acme")
     assert "## 🗓️ Daily Standup — Acme" in out
     assert "Quá hạn" in out          # the overdue section header
     assert "Alice" in out            # resolved assignee name
