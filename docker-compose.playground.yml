@@ -1,0 +1,58 @@
+# odoo-pulse playground: Postgres + Odoo 18 + one-shot seed.
+name: odoo-pulse-playground
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: odoo
+      POSTGRES_PASSWORD: odoo
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "odoo"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  odoo:
+    image: odoo:18
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8069:8069"
+    environment:
+      HOST: db
+      USER: odoo
+      PASSWORD: odoo
+    # First boot: create the `playground` db, install the apps the report
+    # tools compose over, load demo data, then serve (no --stop-after-init).
+    command: >
+      odoo
+      -d playground
+      -i crm,sale_management,account,stock,project,hr_holidays
+      --without-demo=False
+      --db-filter=^playground$
+    volumes:
+      - odoo-web-data:/var/lib/odoo
+
+  seed:
+    image: python:3.12-slim
+    depends_on:
+      - odoo
+    environment:
+      ODOO_URL: http://odoo:8069
+      ODOO_DB: playground
+      ODOO_USERNAME: admin
+      ODOO_API_KEY: admin
+    volumes:
+      - ./docker/seed:/seed:ro
+    # One-shot: wait_for_odoo() inside the script handles the install delay.
+    command: ["python3", "/seed/seed.py"]
+    restart: "no"
+
+volumes:
+  pgdata:
+  odoo-web-data:

@@ -510,10 +510,11 @@ def inventory_risk(
 
         short_rows, short_trunc = fetch_with_truncation(
             client, "product.product",
-            [("type", "=", "product"), ("virtual_available", "<", 0)],
+            [("type", "=", "consu"), ("is_storable", "=", True),
+             ("virtual_available", "<", 0)],
             fields=["id", "name", "default_code", "qty_available",
                     "virtual_available"],
-            limit=200, order="virtual_available",
+            limit=200,
         )
         shortages = [
             {"product": p["name"], "code": p.get("default_code") or None,
@@ -521,6 +522,7 @@ def inventory_risk(
              "forecasted": p.get("virtual_available") or 0.0}
             for p in short_rows
         ]
+        shortages.sort(key=lambda r: r["forecasted"])
 
         since = (today - timedelta(days=dead_stock_days)).isoformat()
         agg = client.aggregate_records(
@@ -535,10 +537,11 @@ def inventory_risk(
 
         stocked, stocked_trunc = fetch_with_truncation(
             client, "product.product",
-            [("type", "=", "product"), ("qty_available", ">", 0)],
+            [("type", "=", "consu"), ("is_storable", "=", True),
+             ("qty_available", ">", 0)],
             fields=["id", "name", "default_code", "qty_available",
                     "standard_price"],
-            limit=200, order="qty_available desc",
+            limit=200,
         )
         dead: list[dict] = []
         dead_value = 0.0

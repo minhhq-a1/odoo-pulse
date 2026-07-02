@@ -1,0 +1,21 @@
+name: playground-smoke
+
+# Manual + nightly only — never on PRs, so normal CI stays fast.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *"  # 03:00 UTC daily
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install odoo-pulse
+        run: pip install -e .
+      - name: Run playground smoke
+        run: ./scripts/playground_smoke.sh
