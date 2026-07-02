@@ -543,7 +543,6 @@ def inventory_risk(
                     "standard_price"],
             limit=200,
         )
-        stocked.sort(key=lambda r: -(r.get("qty_available") or 0.0))
         dead: list[dict] = []
         dead_value = 0.0
         for p in stocked:
