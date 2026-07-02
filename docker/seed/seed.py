@@ -320,6 +320,36 @@ def seed_hr() -> None:
     make_leave(emps[2], 5, 7, validate=False)
 
 
+def seed_projects() -> None:
+    print("[seed] Project / sprint...")
+    project = S.create("project.project", {"name": "PLAYGROUND Sprint 12"})
+    # A couple of internal users to spread load across (admin + any demo user).
+    users = S.search("res.users", [("share", "=", False)], limit=3) or [S.uid]
+
+    # Get the Inbox stage (first non-folded stage).
+    stages = S.search("project.task.type", [("fold", "=", False)], limit=1)
+    stage_id = stages[0] if stages else None
+
+    def task(name: str, deadline_delta: int, assignees: list[int]):
+        # Drift note: assignees are user_ids (many2many) on Odoo 17+.
+        vals = {
+            "name": f"PLAYGROUND: {name}",
+            "project_id": project,
+            "date_deadline": S.d(deadline_delta),
+            "user_ids": [(6, 0, assignees)],
+        }
+        if stage_id:
+            vals["stage_id"] = stage_id
+        S.create("project.task", vals)
+
+    # Overdue task in the default (non-folded) stage => overdue_tasks.
+    task("Ship auth service", -3, [users[0]])
+    task("Fix billing bug", -1, [users[0]])
+    # Upcoming tasks, piled on one assignee => uneven load for team_workload.
+    task("Write API docs", 4, [users[0]])
+    task("Design review", 6, [users[min(1, len(users) - 1)]])
+
+
 def main() -> int:
     S.wait_for_odoo()
     if S.already_seeded():
@@ -333,6 +363,7 @@ def main() -> int:
     seed_inventory()
     seed_receivables()
     seed_hr()
+    seed_projects()
     S.mark_seeded()
     print("[seed] done")
     return 0
