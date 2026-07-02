@@ -28,6 +28,8 @@ needs to be installed inside Odoo.
 | `search_read` | Query records with an Odoo domain filter |
 | `search_count` | Count records matching a domain |
 | `read_records` | Fetch specific records by id |
+| `aggregate_records` | Group and aggregate records server-side (`read_group` on <=18, `formatted_read_group` on 19+) |
+| `read_attachment` | Read an `ir.attachment` metadata and base64 data under size cap |
 
 ### Domain (convenience wrappers)
 
@@ -76,6 +78,9 @@ installed return a friendly error instead of failing.
 | `list_projects` | Projects |
 | `list_tasks` | Tasks by project / assignee / stage |
 | `list_timesheets` | Timesheet entries |
+| `sprint_health` | One-call sprint status: completion %, overdue/upcoming buckets, per-stage & per-assignee breakdown, risks, and an on-track / at-risk / off-track verdict. |
+| `team_workload` | One-call load picture: open tasks per assignee with overdue / due-soon / high-priority / no-deadline tallies, overloaded-member and unassigned-work flags, and a balanced / action-needed verdict. |
+| `project_status_report` | One-call portfolio health: each project's derived verdict (off-track / at-risk / on-track) from overdue milestones and end date, shown against the PM's declared status with a divergence flag, ranked by risk. |
 
 **Operations**
 
@@ -155,6 +160,9 @@ Generate an API key in Odoo under
 | `ODOO_MAX_RECORDS` | no | `200` | Cap on records per query |
 | `ODOO_WRITABLE_MODELS` | no | *(empty)* | Comma-separated list of models allowed for writes |
 | `ODOO_ALLOW_DELETE` | no | `false` | Set to true to allow record deletion |
+| `ODOO_SCHEMA_CACHE_TTL` | no | `300` | Seconds to cache `fields_get` results. `0` disables. |
+| `ODOO_SCHEMA_CACHE_MAX` | no | `64` | Max cached schema entries (LRU eviction). |
+| `ODOO_MAX_ATTACHMENT_BYTES` | no | `1048576` | Max attachment size returned as base64 by `read_attachment`. |
 
 ## Write operations
 

@@ -9,6 +9,7 @@ Covered models:
 from __future__ import annotations
 
 from .runtime import date_domain, get_client, mcp, name_domain, safe
+from .workflow_helpers import parse_deadline, resolve_user_names, today_in_tz
 
 
 @mcp.tool()
@@ -102,13 +103,7 @@ def list_tasks(
 
         all_user_ids = {uid for t in tasks for uid in t.get("user_ids", [])}
         if all_user_ids:
-            users = client.execute_kw(
-                "res.users",
-                "search_read",
-                [[("id", "in", list(all_user_ids))]],
-                {"fields": ["id", "name"], "limit": len(all_user_ids), "context": {"active_test": False}},
-            )
-            user_map = {u["id"]: u["name"] for u in users}
+            user_map = resolve_user_names(client, all_user_ids)
             for task in tasks:
                 task["user_ids"] = [
                     {"id": uid, "name": user_map.get(uid, str(uid))}
@@ -144,16 +139,14 @@ def standup_digest(
         timezone_offset: UTC offset in hours for "today" (default 7 = Asia/Ho_Chi_Minh).
     """
     import json as _json
-    from datetime import datetime, timedelta, timezone
+    from datetime import timedelta
 
     from .odoo_client import OdooConfigError, OdooError
 
     if exclude_stages is None:
         exclude_stages = ["Done", "Cancelled", "Delivered"]
-    exclude_lower = {s.lower() for s in exclude_stages}
 
-    tz = timezone(timedelta(hours=timezone_offset))
-    today = datetime.now(tz).date()
+    today = today_in_tz(timezone_offset)
     today_str = today.strftime("%d/%m/%Y")
     cutoff = today + timedelta(days=lookahead_days)
 
@@ -175,17 +168,9 @@ def standup_digest(
             order="date_deadline",
         )
 
-        # Resolve user names including archived users
+        # Resolve user names including archived users (shared helper).
         all_uid = {uid for t in tasks for uid in t.get("user_ids", [])}
-        user_map: dict[int, str] = {}
-        if all_uid:
-            users = client.execute_kw(
-                "res.users",
-                "search_read",
-                [[("id", "in", list(all_uid))]],
-                {"fields": ["id", "name"], "limit": len(all_uid), "context": {"active_test": False}},
-            )
-            user_map = {u["id"]: u["name"] for u in users}
+        user_map = resolve_user_names(client, all_uid)
 
         # Filter: exactly 1 assignee
         filtered = [t for t in tasks if len(t.get("user_ids", [])) == 1]
@@ -204,11 +189,10 @@ def standup_digest(
                 "priority": "High" if t.get("priority") == "1" else "Normal",
                 "deadline": None,
             }
-            dd_raw = t.get("date_deadline")
-            if not dd_raw:
+            dd = parse_deadline(t.get("date_deadline"))
+            if dd is None:
                 no_deadline.append(entry)
                 continue
-            dd = datetime.strptime(dd_raw[:10], "%Y-%m-%d").date()
             entry["deadline"] = dd
             if dd < today:
                 overdue.append(entry)

@@ -4,6 +4,8 @@ domain tools can be exercised without a real Odoo / network connection.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from odoo_mcp import runtime
@@ -25,6 +27,9 @@ class FakeClient:
         # model -> list[dict] returned by read
         self.read_responses: dict[str, list] = {}
         self.raise_error: str | None = None
+        self.config = SimpleNamespace(max_attachment_bytes=1048576)
+        # (model, method) -> canned return value for execute_kw; falls back to True.
+        self.execute_kw_responses: dict[tuple[str, str], object] = {}
 
     # -- helpers for tests --------------------------------------------------
     def last(self, method: str) -> dict:
@@ -104,7 +109,37 @@ class FakeClient:
             {"method": method, "model": model, "args": args, "kwargs": kwargs}
         )
         self._maybe_raise()
+        key = (model, method)
+        if key in self.execute_kw_responses:
+            return self.execute_kw_responses[key]
         return True
+
+    def major_version(self):
+        self.calls.append({"method": "major_version"})
+        self._maybe_raise()
+        return 18
+
+    def aggregate_records(
+        self, model, group_by, measures, domain=None, limit=None, offset=0, order=None
+    ):
+        self.calls.append(
+            {
+                "method": "aggregate_records",
+                "model": model,
+                "group_by": group_by,
+                "measures": measures,
+                "domain": domain,
+                "limit": limit,
+                "offset": offset,
+                "order": order,
+            }
+        )
+        self._maybe_raise()
+        return {
+            "method": "read_group",
+            "major_version": 18,
+            "rows": self.search_responses.get(model, []),
+        }
 
 
 @pytest.fixture

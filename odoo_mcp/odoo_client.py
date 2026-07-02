@@ -13,11 +13,14 @@ safe by default.
 from __future__ import annotations
 
 import os
+import re
 import ssl
 import xmlrpc.client
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Any
+
+from .cache import TTLCache
 
 # Methods that mutate data. Blocked while the server runs in read-only mode.
 WRITE_METHODS = frozenset(
@@ -40,6 +43,12 @@ BLOCKED_MODELS = frozenset(
 )
 BLOCKED_PREFIXES = ("ir.", "base")
 
+# Default attribute set requested from Odoo's fields_get.
+DEFAULT_FIELD_ATTRS = ["string", "type", "help", "required", "relation"]
+
+# Sentinel distinguishing "not yet looked up" from a real None major version.
+_UNSET = object()
+
 
 class OdooConfigError(RuntimeError):
     """Raised when required connection settings are missing."""
@@ -60,6 +69,9 @@ class OdooConfig:
     verify_ssl: bool = True
     writable_models: frozenset[str] = frozenset()
     allow_delete: bool = False
+    schema_cache_ttl: float = 300.0
+    schema_cache_max: int = 64
+    max_attachment_bytes: int = 1048576
 
     @classmethod
     def from_env(cls) -> "OdooConfig":
@@ -109,6 +121,20 @@ class OdooConfig:
             "no",
             "",
         )
+        try:
+            schema_cache_ttl = float(os.environ.get("ODOO_SCHEMA_CACHE_TTL", "300"))
+        except ValueError:
+            schema_cache_ttl = 300.0
+        try:
+            schema_cache_max = int(os.environ.get("ODOO_SCHEMA_CACHE_MAX", "64"))
+        except ValueError:
+            schema_cache_max = 64
+        try:
+            max_attachment_bytes = int(
+                os.environ.get("ODOO_MAX_ATTACHMENT_BYTES", "1048576")
+            )
+        except ValueError:
+            max_attachment_bytes = 1048576
 
         return cls(
             url=url,
@@ -120,12 +146,17 @@ class OdooConfig:
             verify_ssl=verify_ssl,
             writable_models=writable_models,
             allow_delete=allow_delete,
+            schema_cache_ttl=schema_cache_ttl,
+            schema_cache_max=schema_cache_max,
+            max_attachment_bytes=max_attachment_bytes,
         )
 
 
 class OdooClient:
     def __init__(self, config: OdooConfig):
         self.config = config
+        self._schema_cache = TTLCache(config.schema_cache_ttl, config.schema_cache_max)
+        self._major_version: Any = _UNSET
 
     @cached_property
     def _ssl_context(self) -> ssl.SSLContext | None:
@@ -167,6 +198,79 @@ class OdooClient:
 
     def version(self) -> dict[str, Any]:
         return self._common.version()
+
+    @staticmethod
+    def _parse_major(server_version: Any) -> int | None:
+        if not server_version:
+            return None
+        match = re.search(r"(\d+)", str(server_version))
+        return int(match.group(1)) if match else None
+
+    def major_version(self) -> int | None:
+        """Major Odoo version (e.g. 18), cached on the instance. None if unknown."""
+        if self._major_version is _UNSET:
+            self._major_version = self._parse_major(self.version().get("server_version"))
+        return self._major_version
+
+    def _read_group(self, model, domain, group_by, specs, limit, offset, order):
+        kwargs: dict[str, Any] = {
+            "fields": specs,
+            "groupby": group_by,
+            "lazy": False,
+            "offset": offset,
+        }
+        if limit:
+            kwargs["limit"] = limit
+        if order:
+            kwargs["orderby"] = order
+        return self.execute_kw(model, "read_group", [domain or []], kwargs)
+
+    def _formatted_read_group(self, model, domain, group_by, specs, limit, offset, order):
+        kwargs: dict[str, Any] = {
+            "groupby": group_by,
+            "aggregates": specs,
+            "offset": offset,
+        }
+        if limit:
+            kwargs["limit"] = limit
+        if order:
+            kwargs["order"] = order
+        return self.execute_kw(model, "formatted_read_group", [domain or []], kwargs)
+
+    def aggregate_records(
+        self,
+        model: str,
+        group_by: list[str],
+        measures: list[tuple[str, str]],
+        domain: list | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+        order: str | None = None,
+    ) -> dict:
+        """Server-side grouping. ``measures`` is a list of (field, aggregator).
+
+        Dispatches between Odoo 19+ ``formatted_read_group`` and the legacy
+        ``read_group`` used on Odoo <= 18. Both methods are read-only.
+        """
+        specs = [f"{field}:{agg}" for field, agg in measures]
+        capped = self._cap_limit(limit) if limit else None
+        major = self.major_version()
+        if major is not None and major >= 19:
+            rows = self._formatted_read_group(
+                model, domain, group_by, specs, capped, offset, order
+            )
+            return {"method": "formatted_read_group", "major_version": major, "rows": rows}
+        if major is not None:
+            rows = self._read_group(model, domain, group_by, specs, capped, offset, order)
+            return {"method": "read_group", "major_version": major, "rows": rows}
+        try:
+            rows = self._formatted_read_group(
+                model, domain, group_by, specs, capped, offset, order
+            )
+            return {"method": "formatted_read_group", "major_version": None, "rows": rows}
+        except OdooError:
+            rows = self._read_group(model, domain, group_by, specs, capped, offset, order)
+            return {"method": "read_group", "major_version": None, "rows": rows}
 
     def _check_write(self, model: str, method: str) -> None:
         if self.config.read_only:
@@ -251,13 +355,18 @@ class OdooClient:
     def unlink(self, model: str, ids: list[int]) -> bool:
         return self.execute_kw(model, "unlink", [ids])
 
-    def fields_get(self, model: str, attributes: list[str] | None = None) -> dict:
-        return self.execute_kw(
-            model,
-            "fields_get",
-            [],
-            {"attributes": attributes or ["string", "type", "help", "required", "relation"]},
-        )
+    def fields_get(
+        self, model: str, attributes: list[str] | None = None, *, refresh: bool = False
+    ) -> dict:
+        attrs = attributes or DEFAULT_FIELD_ATTRS
+        key = (model, tuple(attrs))
+        if not refresh:
+            hit = self._schema_cache.get(key)
+            if hit is not None:
+                return hit
+        value = self.execute_kw(model, "fields_get", [], {"attributes": attrs})
+        self._schema_cache.set(key, value)
+        return value
 
     def list_models(self, name_filter: str | None = None) -> list[dict]:
         domain = []

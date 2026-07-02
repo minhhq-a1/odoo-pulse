@@ -55,3 +55,17 @@ def test_list_tasks_other_filters_still_apply_with_subtasks(fake_client):
     assert ("stage_id.name", "ilike", "In Progress") in domain
     # No parent filter when include_subtasks=True
     assert not any(isinstance(t, tuple) and t[0] == "parent_id" for t in domain)
+
+
+def test_standup_digest_renders_markdown_header(fake_client):
+    fake_client.search_responses["project.task"] = [
+        {"id": 1, "name": "Late task", "user_ids": [10], "stage_id": [2, "In Progress"],
+         "date_deadline": "2000-01-01", "priority": "1"},
+    ]
+    fake_client.execute_kw_responses[("res.users", "search_read")] = [
+        {"id": 10, "name": "Alice"},
+    ]
+    out = tools_projects.standup_digest("Acme")
+    assert "## 🗓️ Daily Standup — Acme" in out
+    assert "Quá hạn" in out          # the overdue section header
+    assert "Alice" in out            # resolved assignee name

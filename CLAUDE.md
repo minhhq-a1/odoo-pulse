@@ -28,10 +28,12 @@ This is an MCP server that exposes Odoo's XML-RPC external API as MCP tools. The
 **Module responsibilities:**
 
 - `runtime.py` — shared singleton: holds the `mcp` (FastMCP) instance, the lazy `OdooClient` (created on first tool call), and shared helpers used by every tool: `safe()` (runs a lambda and serialises result/error to JSON), `name_domain()`, `date_domain()`, `preview()` (dry-run struct).
-- `odoo_client.py` — thin XML-RPC wrapper. `OdooConfig.from_env()` reads all env vars. `OdooClient._check_write()` enforces the four-layer write safety guard. All XML-RPC faults become `OdooError`.
-- `tools_generic.py` — model-agnostic tools: `search_read`, `search_count`, `read_records`, `get_model_fields`, `list_models`, `odoo_version`.
+- `odoo_client.py` — thin XML-RPC wrapper. `OdooConfig.from_env()` reads all env vars. `OdooClient._check_write()` enforces the four-layer write safety guard. All XML-RPC faults become `OdooError`. `fields_get` results are cached via a process-local TTL+LRU cache (`cache.py`); `aggregate_records` dispatches between `read_group` (Odoo ≤18) and `formatted_read_group` (19+) based on `major_version()`.
+- `tools_generic.py` — model-agnostic tools: `search_read`, `search_count`, `read_records`, `get_model_fields`, `list_models`, `odoo_version`, `aggregate_records`, `read_attachment`.
 - `tools_write.py` — write tools (`create_record`, `update_records`, `delete_records`) plus domain-specific helpers (`create_lead`, `create_contact`, `create_task`, `confirm_sale_order`). Every tool returns a dry-run preview unless `confirm=True`.
-- `domain_tools.py`, `tools_hr.py`, `tools_projects.py`, `tools_operations.py`, `tools_engagement.py`, `tools_niche.py` — domain-specific read tools wrapping `search_read` with hard-coded fields and domains for common Odoo models.
+- `workflow_helpers.py` — shared building blocks for composed workflow tools: `today_in_tz`, `parse_deadline`, archived-aware `resolve_user_names`, and `build_report` (the standard report envelope: `tool`, `as_of`, tool-specific keys, `summary`, `breakdown`, `highlights`, `risks`). Used by `tools_workflows.py` and `standup_digest`.
+- `tools_workflows.py` — composed, opinionated workflow tools that answer a business question in one call (e.g. `sprint_health`, `team_workload`, `project_status_report`). Read-only; compose `search_read`/aggregates server-side and return the `build_report` envelope.
+- `domain_tools.py`, `tools_hr.py`, `tools_projects.py` (where `standup_digest` reuses `workflow_helpers`), `tools_operations.py`, `tools_engagement.py`, `tools_niche.py` — domain-specific read tools wrapping `search_read` with hard-coded fields and domains for common Odoo models.
 
 **Write safety chain** (all four must pass for any write to execute):
 1. `ODOO_READ_ONLY=false` — master switch (default: `true`, blocking all writes)
