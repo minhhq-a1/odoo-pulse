@@ -36,18 +36,6 @@ class Seeder:
                 if uid:
                     self.uid = uid
                     print(f"[seed] connected, uid={uid}")
-                    # Also wait for project.task.type to exist (ensures project module is initialized)
-                    # with a sub-timeout to avoid hanging
-                    stages_deadline = time.time() + 60
-                    while time.time() < stages_deadline:
-                        try:
-                            stages = self.call("project.task.type", "search", [[], {"limit": 1}])
-                            if stages is not None:  # Table exists, can proceed
-                                return
-                        except Exception:  # Still initializing
-                            pass
-                        time.sleep(1)
-                    # If we get here, project.task.type isn't ready but we'll continue anyway
                     return
             except Exception as exc:  # noqa: BLE001 - Odoo not ready yet
                 last = str(exc)
@@ -339,23 +327,54 @@ def seed_projects() -> None:
     users = S.search("res.users", [("share", "=", False)], limit=3) or [S.uid]
 
     # Get the Inbox stage (first non-folded stage).
-    # Stages should be demo data, but if missing, create them.
+    # Stages should be demo data; retry to ensure demo data has initialized.
     stage_id = None
+    stages_exist = False
+
+    # First phase: retry searching for ANY stages (no fold filter) to confirm
+    # the project module's demo data has loaded. This is the real signal that
+    # module initialization finished (not just "waiting for a non-folded one").
     for attempt in range(30):  # Retry for up to 30 seconds
         try:
-            stages = S.search("project.task.type", [("fold", "=", False)], limit=1)
-            if stages:
-                stage_id = stages[0]
-                print(f"[seed] found stage {stage_id}")
+            any_stages = S.search("project.task.type", [], limit=1)
+            if any_stages:
+                stages_exist = True
+                print(f"[seed] found existing stages after {attempt} attempt(s)")
                 break
-        except Exception:
-            # Ignore errors during initialization; stages might not be ready yet
-            pass
+        except Exception as exc:
+            # Swallow initialization errors but log them
+            print(f"[seed] waiting for project module (attempt {attempt}): {exc}")
         time.sleep(1)
 
-    # If still no stages, create the default ones (project module demo data)
-    if not stage_id:
-        print("[seed] no stages found; creating default project task stages...")
+    # Second phase: if stages exist, search for a non-folded one to use as default
+    if stages_exist:
+        try:
+            non_folded = S.search("project.task.type", [("fold", "=", False)], limit=1)
+            if non_folded:
+                stage_id = non_folded[0]
+                print(f"[seed] using existing non-folded stage {stage_id}")
+            else:
+                # Stages exist but all are folded; retry a bit longer for a non-folded one
+                print("[seed] existing stages are all folded, waiting for non-folded stage...")
+                for attempt in range(10):
+                    try:
+                        non_folded = S.search("project.task.type", [("fold", "=", False)], limit=1)
+                        if non_folded:
+                            stage_id = non_folded[0]
+                            print(f"[seed] found non-folded stage {stage_id} after {attempt + 1} attempts")
+                            break
+                    except Exception as exc:
+                        print(f"[seed] waiting for non-folded stage (attempt {attempt}): {exc}")
+                    time.sleep(1)
+                if not stage_id:
+                    # All demo stages are folded, pick the first one (will work but is not ideal)
+                    stage_id = S.search("project.task.type", [], limit=1)[0]
+                    print(f"[seed] no non-folded stages available, using folded stage {stage_id}")
+        except Exception as exc:
+            print(f"[seed] error searching for stage among existing stages: {exc}")
+    else:
+        # Only create defaults if the retry timed out with literally ZERO stages found
+        print("[seed] no stages found after retries; creating default project task stages...")
         try:
             stage_names = ["Inbox", "Today", "This Week", "This Month", "Later"]
             for idx, name in enumerate(stage_names):
@@ -363,8 +382,8 @@ def seed_projects() -> None:
                 if idx == 0:  # Inbox is not folded, use as default
                     stage_id = sid
             print(f"[seed] created default stages, using {stage_id} as default")
-        except Exception as e:
-            print(f"[seed] WARNING: could not create stages: {e}")
+        except Exception as exc:
+            print(f"[seed] WARNING: could not create stages: {exc}")
 
     def task(name: str, deadline_delta: int, assignees: list[int]):
         # Drift note: assignees are user_ids (many2many) on Odoo 17+.
