@@ -35,6 +35,9 @@ class FakeClient:
         self.execute_kw_responses: dict[tuple[str, str], object] = {}
         # model -> canned return value for search_count; falls back to 7.
         self.search_count_responses: dict[str, int] = {}
+        # models whose search_read/search_count raise OdooError (to simulate
+        # an app that is not installed).
+        self.error_models: set[str] = set()
 
     # -- helpers for tests --------------------------------------------------
     def last(self, method: str) -> dict:
@@ -66,6 +69,8 @@ class FakeClient:
     def search_count(self, model, domain=None):
         self.calls.append({"method": "search_count", "model": model, "domain": domain})
         self._maybe_raise()
+        if model in self.error_models:
+            raise OdooError(f"Object {model} doesn't exist")
         return self.search_count_responses.get(model, 7)
 
     def read(self, model, ids, fields=None):
@@ -90,6 +95,8 @@ class FakeClient:
             }
         )
         self._maybe_raise()
+        if model in self.error_models:
+            raise OdooError(f"Object {model} doesn't exist")
         seq = self.search_responses_seq.get(model)
         if seq:
             return seq.pop(0)
