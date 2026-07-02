@@ -93,3 +93,41 @@ def test_from_env_writable_models_defaults_empty(monkeypatch):
     assert cfg.writable_models == frozenset()
     assert cfg.allow_delete is False
 
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("true", True),
+        ("True", True),
+        ("1", True),
+        ("yes", True),
+        ("YES", True),
+        ("false", False),
+        ("0", False),
+        ("no", False),
+        ("", False),
+        # Fail-safe: anything not explicitly truthy (including typos) stays
+        # disabled, unlike the old "not in (false, 0, no, '')" logic that
+        # would have enabled deletes here.
+        ("flase", False),
+        ("anything", False),
+    ],
+)
+def test_allow_delete_only_true_for_explicit_values(monkeypatch, value, expected):
+    _set_env(monkeypatch, ODOO_ALLOW_DELETE=value)
+    assert OdooConfig.from_env().allow_delete is expected
+
+
+def test_timeout_default(monkeypatch):
+    _set_env(monkeypatch)
+    monkeypatch.delenv("ODOO_TIMEOUT", raising=False)
+    assert OdooConfig.from_env().timeout == 30.0
+
+
+def test_timeout_parsing_and_fallback(monkeypatch):
+    _set_env(monkeypatch, ODOO_TIMEOUT="5.5")
+    assert OdooConfig.from_env().timeout == 5.5
+
+    _set_env(monkeypatch, ODOO_TIMEOUT="not-a-number")
+    assert OdooConfig.from_env().timeout == 30.0
+

@@ -27,9 +27,11 @@ class FakeClient:
         # model -> list[dict] returned by read
         self.read_responses: dict[str, list] = {}
         self.raise_error: str | None = None
-        self.config = SimpleNamespace(max_attachment_bytes=1048576)
+        self.config = SimpleNamespace(max_attachment_bytes=1048576, max_records=200)
         # (model, method) -> canned return value for execute_kw; falls back to True.
         self.execute_kw_responses: dict[tuple[str, str], object] = {}
+        # model -> canned return value for search_count; falls back to 7.
+        self.search_count_responses: dict[str, int] = {}
 
     # -- helpers for tests --------------------------------------------------
     def last(self, method: str) -> dict:
@@ -61,7 +63,7 @@ class FakeClient:
     def search_count(self, model, domain=None):
         self.calls.append({"method": "search_count", "model": model, "domain": domain})
         self._maybe_raise()
-        return 7
+        return self.search_count_responses.get(model, 7)
 
     def read(self, model, ids, fields=None):
         self.calls.append(

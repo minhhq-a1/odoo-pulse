@@ -58,6 +58,39 @@ class OdooError(RuntimeError):
     """Raised when Odoo returns a fault or authentication fails."""
 
 
+class _TimeoutTransport(xmlrpc.client.Transport):
+    """Plain-HTTP transport that enforces a socket timeout.
+
+    ``xmlrpc.client.ServerProxy`` has no built-in timeout, so a hung/unreachable
+    Odoo would otherwise block a tool call forever. Overriding
+    ``make_connection`` lets us set ``timeout`` on the underlying
+    ``http.client.HTTPConnection`` before it's used.
+    """
+
+    def __init__(self, timeout: float, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._timeout = timeout
+
+    def make_connection(self, host):
+        conn = super().make_connection(host)
+        conn.timeout = self._timeout
+        return conn
+
+
+class _TimeoutSafeTransport(xmlrpc.client.SafeTransport):
+    """HTTPS variant of :class:`_TimeoutTransport`; still honours ``context=``
+    so ``ODOO_VERIFY_SSL=false`` (self-signed certs) keeps working."""
+
+    def __init__(self, timeout: float, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._timeout = timeout
+
+    def make_connection(self, host):
+        conn = super().make_connection(host)
+        conn.timeout = self._timeout
+        return conn
+
+
 @dataclass(frozen=True)
 class OdooConfig:
     url: str
@@ -72,6 +105,7 @@ class OdooConfig:
     schema_cache_ttl: float = 300.0
     schema_cache_max: int = 64
     max_attachment_bytes: int = 1048576
+    timeout: float = 30.0
 
     @classmethod
     def from_env(cls) -> "OdooConfig":
@@ -115,11 +149,10 @@ class OdooConfig:
             for m in os.environ.get("ODOO_WRITABLE_MODELS", "").split(",")
             if m.strip()
         )
-        allow_delete = os.environ.get("ODOO_ALLOW_DELETE", "false").lower() not in (
-            "false",
-            "0",
-            "no",
-            "",
+        allow_delete = os.environ.get("ODOO_ALLOW_DELETE", "false").lower() in (
+            "true",
+            "1",
+            "yes",
         )
         try:
             schema_cache_ttl = float(os.environ.get("ODOO_SCHEMA_CACHE_TTL", "300"))
@@ -135,6 +168,10 @@ class OdooConfig:
             )
         except ValueError:
             max_attachment_bytes = 1048576
+        try:
+            timeout = float(os.environ.get("ODOO_TIMEOUT", "30"))
+        except ValueError:
+            timeout = 30.0
 
         return cls(
             url=url,
@@ -149,6 +186,7 @@ class OdooConfig:
             schema_cache_ttl=schema_cache_ttl,
             schema_cache_max=schema_cache_max,
             max_attachment_bytes=max_attachment_bytes,
+            timeout=timeout,
         )
 
 
@@ -166,12 +204,20 @@ class OdooClient:
             return None
         return ssl._create_unverified_context()
 
+    def _make_transport(self) -> xmlrpc.client.Transport:
+        # ServerProxy only wires up `context=` when it builds its own default
+        # transport; since we need a custom Transport for the timeout, we
+        # build it ourselves and forward the SSL context through it.
+        if self.config.url.lower().startswith("https"):
+            return _TimeoutSafeTransport(self.config.timeout, context=self._ssl_context)
+        return _TimeoutTransport(self.config.timeout)
+
     @cached_property
     def _common(self) -> xmlrpc.client.ServerProxy:
         return xmlrpc.client.ServerProxy(
             f"{self.config.url}/xmlrpc/2/common",
             allow_none=True,
-            context=self._ssl_context,
+            transport=self._make_transport(),
         )
 
     @cached_property
@@ -179,7 +225,7 @@ class OdooClient:
         return xmlrpc.client.ServerProxy(
             f"{self.config.url}/xmlrpc/2/object",
             allow_none=True,
-            context=self._ssl_context,
+            transport=self._make_transport(),
         )
 
     @cached_property
@@ -190,6 +236,8 @@ class OdooClient:
             )
         except xmlrpc.client.Fault as exc:  # pragma: no cover - network dependent
             raise OdooError(f"Authentication failed: {exc.faultString}") from exc
+        except (OSError, xmlrpc.client.ProtocolError) as exc:
+            raise OdooError(f"Cannot reach Odoo at {self.config.url}: {exc}") from exc
         if not uid:
             raise OdooError(
                 "Authentication failed: invalid credentials or database name."
@@ -197,7 +245,10 @@ class OdooClient:
         return uid
 
     def version(self) -> dict[str, Any]:
-        return self._common.version()
+        try:
+            return self._common.version()
+        except (OSError, xmlrpc.client.ProtocolError) as exc:
+            raise OdooError(f"Cannot reach Odoo at {self.config.url}: {exc}") from exc
 
     @staticmethod
     def _parse_major(server_version: Any) -> int | None:
@@ -312,6 +363,8 @@ class OdooClient:
             )
         except xmlrpc.client.Fault as exc:
             raise OdooError(exc.faultString) from exc
+        except (OSError, xmlrpc.client.ProtocolError) as exc:
+            raise OdooError(f"Cannot reach Odoo at {self.config.url}: {exc}") from exc
 
     # --- Convenience read helpers -------------------------------------------------
 

@@ -158,6 +158,8 @@ Generate an API key in Odoo under
 | `ODOO_API_KEY` | yes | — | API key (used as password) |
 | `ODOO_READ_ONLY` | no | `true` | Block write methods when true |
 | `ODOO_MAX_RECORDS` | no | `200` | Cap on records per query |
+| `ODOO_VERIFY_SSL` | no | `true` | Set to false for self-signed / private-CA certificates |
+| `ODOO_TIMEOUT` | no | `30` | Socket timeout (seconds) per XML-RPC call |
 | `ODOO_WRITABLE_MODELS` | no | *(empty)* | Comma-separated list of models allowed for writes |
 | `ODOO_ALLOW_DELETE` | no | `false` | Set to true to allow record deletion |
 | `ODOO_SCHEMA_CACHE_TTL` | no | `300` | Seconds to cache `fields_get` results. `0` disables. |

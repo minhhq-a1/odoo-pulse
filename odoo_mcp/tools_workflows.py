@@ -11,7 +11,13 @@ from __future__ import annotations
 from datetime import timedelta
 
 from .runtime import get_client, mcp, safe
-from .workflow_helpers import build_report, parse_deadline, resolve_user_names, today_in_tz
+from .workflow_helpers import (
+    build_report,
+    fetch_with_truncation,
+    parse_deadline,
+    resolve_user_names,
+    today_in_tz,
+)
 
 
 @mcp.tool()
@@ -56,9 +62,10 @@ def sprint_health(
         if ex:
             domain.append(("stage_id.name", "not in", ex))
 
-        tasks = client.search_read(
+        tasks, truncation = fetch_with_truncation(
+            client,
             "project.task",
-            domain=domain,
+            domain,
             fields=[
                 "id", "name", "user_ids", "stage_id",
                 "date_deadline", "priority", "parent_id",
@@ -139,6 +146,9 @@ def sprint_health(
             "over_assigned": over_assigned,
             "verdict": verdict,
         }
+        if truncation:
+            summary["truncated"] = True
+            summary["total_matching"] = truncation["total_matching"]
 
         highlights = [f"{pct_done}% done ({done}/{total})"]
         if due_today:
@@ -147,6 +157,15 @@ def sprint_health(
             highlights.append(f"{upcoming} due within {lookahead_days} days")
 
         risks: list[dict] = []
+        if truncation:
+            risks.append({
+                "code": "truncated_data", "count": truncation["missing"],
+                "message": (
+                    f"Report covers only {truncation['fetched']} of "
+                    f"{truncation['total_matching']} matching task(s); "
+                    "the verdict may not reflect the full sprint."
+                ),
+            })
         if overdue:
             risks.append({"code": "overdue_open_tasks", "count": overdue,
                           "message": f"{overdue} open task(s) past deadline"})
@@ -221,9 +240,10 @@ def team_workload(
         if ex:
             domain.append(("stage_id.name", "not in", ex))
 
-        tasks = client.search_read(
+        tasks, truncation = fetch_with_truncation(
+            client,
             "project.task",
-            domain=domain,
+            domain,
             fields=[
                 "id", "name", "user_ids", "stage_id",
                 "date_deadline", "priority", "parent_id",
@@ -314,6 +334,9 @@ def team_workload(
             "avg_open_per_member": avg_open_per_member,
             "verdict": verdict,
         }
+        if truncation:
+            summary["truncated"] = True
+            summary["total_matching"] = truncation["total_matching"]
 
         highlights = [f"{open_tasks} open task(s) across {members} member(s)"]
         if busiest:
@@ -322,6 +345,15 @@ def team_workload(
             highlights.append(f"{overloaded_members} member(s) over {overload_threshold} open")
 
         risks: list[dict] = []
+        if truncation:
+            risks.append({
+                "code": "truncated_data", "count": truncation["missing"],
+                "message": (
+                    f"Report covers only {truncation['fetched']} of "
+                    f"{truncation['total_matching']} matching task(s); "
+                    "workload figures may not reflect everyone in scope."
+                ),
+            })
         if overloaded_members:
             risks.append({"code": "overloaded_members", "count": overloaded_members,
                           "message": f"{overloaded_members} member(s) above {overload_threshold} open tasks"})
@@ -385,9 +417,10 @@ def project_status_report(
         if not include_on_hold:
             domain.append(("last_update_status", "!=", "on_hold"))
 
-        projects = client.search_read(
+        projects, projects_truncation = fetch_with_truncation(
+            client,
             "project.project",
-            domain=domain,
+            domain,
             fields=[
                 "id", "name", "user_id", "partner_id",
                 "date_start", "date", "last_update_status", "task_count",
@@ -400,17 +433,17 @@ def project_status_report(
         cutoff = today + timedelta(days=lookahead_days)
 
         ids = [p["id"] for p in projects]
-        milestones = (
-            client.search_read(
+        if ids:
+            milestones, milestones_truncation = fetch_with_truncation(
+                client,
                 "project.milestone",
-                domain=[("project_id", "in", ids)],
+                [("project_id", "in", ids)],
                 fields=["id", "name", "deadline", "is_reached", "project_id"],
                 limit=200,
                 order="deadline",
             )
-            if ids
-            else []
-        )
+        else:
+            milestones, milestones_truncation = [], None
 
         ms_by_project: dict[int, list] = {}
         for m in milestones:
@@ -506,6 +539,12 @@ def project_status_report(
             "divergent": divergent,
             "verdict": verdict,
         }
+        if projects_truncation:
+            summary["projects_truncated"] = True
+            summary["total_projects_matching"] = projects_truncation["total_matching"]
+        if milestones_truncation:
+            summary["milestones_truncated"] = True
+            summary["total_milestones_matching"] = milestones_truncation["total_matching"]
 
         highlights = [f"{off_track} of {len(projects)} project(s) off track"]
         if rows and rows[0]["overdue_milestones"] > 0:
@@ -517,6 +556,24 @@ def project_status_report(
             highlights.append(f"{divergent} project(s) declared healthier than actual")
 
         risks: list[dict] = []
+        if projects_truncation:
+            risks.append({
+                "code": "truncated_data", "count": projects_truncation["missing"],
+                "message": (
+                    f"Report covers only {projects_truncation['fetched']} of "
+                    f"{projects_truncation['total_matching']} matching project(s); "
+                    "the portfolio verdict may not reflect the full set."
+                ),
+            })
+        if milestones_truncation:
+            risks.append({
+                "code": "truncated_milestone_data", "count": milestones_truncation["missing"],
+                "message": (
+                    f"Report covers only {milestones_truncation['fetched']} of "
+                    f"{milestones_truncation['total_matching']} matching milestone(s); "
+                    "per-project milestone counts may be incomplete."
+                ),
+            })
         if off_track:
             risks.append({"code": "off_track_projects", "count": off_track,
                           "message": f"{off_track} project(s) off track"})

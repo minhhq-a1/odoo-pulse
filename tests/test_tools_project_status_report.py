@@ -162,6 +162,72 @@ def test_healthy_verdict_when_clean(fake_client, monkeypatch):
     assert out["summary"]["at_risk"] == 0
 
 
+def _clean_project(i):
+    return {"id": i, "name": f"Proj{i}", "user_id": [5, "PM One"], "partner_id": False,
+            "date_start": "2026-01-01", "date": "2026-12-31",
+            "last_update_status": "on_track", "task_count": 1}
+
+
+def test_project_status_report_flags_truncation_on_projects(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    capped_projects = [_clean_project(i) for i in range(200)]
+    _setup(fake_client, capped_projects, [])
+    fake_client.search_count_responses["project.project"] = 240
+
+    out = json.loads(tools_workflows.project_status_report())
+
+    assert out["summary"]["projects_truncated"] is True
+    assert out["summary"]["total_projects_matching"] == 240
+    assert "milestones_truncated" not in out["summary"]
+    codes = {r["code"]: r for r in out["risks"]}
+    assert "truncated_data" in codes
+    assert codes["truncated_data"]["count"] == 40
+    assert "truncated_milestone_data" not in codes
+
+
+def test_project_status_report_flags_truncation_on_milestones(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    projects = [
+        {"id": 1, "name": "Alpha", "user_id": [5, "PM One"], "partner_id": False,
+         "date_start": "2026-01-01", "date": "2026-12-31",
+         "last_update_status": "on_track", "task_count": 1},
+    ]
+    capped_milestones = [
+        {"id": 100 + i, "name": f"M{i}", "deadline": "2026-12-01", "is_reached": True,
+         "project_id": [1, "Alpha"]}
+        for i in range(200)
+    ]
+    _setup(fake_client, projects, capped_milestones)
+    fake_client.search_count_responses["project.milestone"] = 205
+
+    out = json.loads(tools_workflows.project_status_report())
+
+    assert "projects_truncated" not in out["summary"]
+    assert out["summary"]["milestones_truncated"] is True
+    assert out["summary"]["total_milestones_matching"] == 205
+    codes = {r["code"]: r for r in out["risks"]}
+    assert "truncated_milestone_data" in codes
+    assert codes["truncated_milestone_data"]["count"] == 5
+    assert "truncated_data" not in codes
+
+
+def test_project_status_report_no_truncation_when_under_cap(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    _setup(fake_client)  # default fixtures: 4 projects, 4 milestones
+    fake_client.search_count_responses["project.project"] = 999
+    fake_client.search_count_responses["project.milestone"] = 999
+
+    out = json.loads(tools_workflows.project_status_report())
+
+    assert "projects_truncated" not in out["summary"]
+    assert "milestones_truncated" not in out["summary"]
+    assert all(
+        r["code"] not in ("truncated_data", "truncated_milestone_data")
+        for r in out["risks"]
+    )
+    assert all(c["method"] != "search_count" for c in fake_client.calls)
+
+
 def test_watch_verdict_when_only_at_risk(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     watch_projects = [
