@@ -1,4 +1,4 @@
-# odoo-mcp
+# odoo-pulse
 
 [![CI](https://github.com/minhhq-a1/odoo-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/minhhq-a1/odoo-mcp/actions/workflows/ci.yml)
 
@@ -210,7 +210,7 @@ create_lead(name="ACME deal", extra_values={"presales_id": 5}, confirm=true)
 
 ```bash
 # stdio transport (for MCP clients)
-odoo-mcp
+odoo-pulse
 ```
 
 ### MCP Inspector
@@ -218,7 +218,7 @@ odoo-mcp
 [MCP Inspector](https://github.com/modelcontextprotocol/inspector) lets you browse and call tools interactively in a web UI — useful for exploring the server or debugging tool calls without a full MCP client.
 
 ```bash
-npx @modelcontextprotocol/inspector odoo-mcp
+npx @modelcontextprotocol/inspector odoo-pulse
 ```
 
 Open `http://localhost:5173`, click **Connect**, then call `odoo_version` to verify the connection. The server loads `.env` automatically from the working directory, so run the command from the project root.
@@ -231,7 +231,7 @@ Add to your MCP client config (env vars can be passed inline instead of `.env`):
 {
   "mcpServers": {
     "odoo": {
-      "command": "odoo-mcp",
+      "command": "odoo-pulse",
       "env": {
         "ODOO_URL": "https://acme.odoo.com",
         "ODOO_DB": "acme",
