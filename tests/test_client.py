@@ -6,7 +6,13 @@ import xmlrpc.client
 
 import pytest
 
-from odoo_mcp.odoo_client import OdooClient, OdooConfig, OdooError
+from odoo_mcp.odoo_client import (
+    OdooClient,
+    OdooConfig,
+    OdooError,
+    _TimeoutSafeTransport,
+    _TimeoutTransport,
+)
 
 
 class FakeProxy:
@@ -162,6 +168,68 @@ def test_unlink_gated_by_allow_delete():
     assert proxy.calls[0][4] == "unlink"
 
 
+class _RaisingProxy:
+    """Stands in for a ServerProxy whose transport can't reach the server."""
+
+    def __init__(self, exc: Exception):
+        self._exc = exc
+
+    def execute_kw(self, *args, **kwargs):
+        raise self._exc
+
+    def authenticate(self, *args, **kwargs):
+        raise self._exc
+
+    def version(self):
+        raise self._exc
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        ConnectionError("connection refused"),
+        TimeoutError("timed out"),
+        OSError("network unreachable"),
+        xmlrpc.client.ProtocolError("https://acme.odoo.com", 502, "Bad Gateway", {}),
+    ],
+)
+def test_execute_kw_wraps_network_errors_as_odoo_error(exc):
+    client, _ = make_client()
+    client.__dict__["_models"] = _RaisingProxy(exc)
+    with pytest.raises(OdooError, match="Cannot reach Odoo"):
+        client.execute_kw("res.partner", "search_read", [[]])
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [ConnectionError("connection refused"), OSError("network unreachable")],
+)
+def test_uid_wraps_network_errors_as_odoo_error(exc):
+    cfg = OdooConfig(
+        url="https://acme.odoo.com",
+        db="acme",
+        username="me@acme.com",
+        api_key="secret",
+    )
+    client = OdooClient(cfg)
+    client.__dict__["_common"] = _RaisingProxy(exc)
+    with pytest.raises(OdooError, match="Cannot reach Odoo"):
+        client.uid  # noqa: B018 - property access is the thing under test
+
+
+def test_version_wraps_network_errors_as_odoo_error():
+    cfg = OdooConfig(
+        url="https://acme.odoo.com",
+        db="acme",
+        username="me@acme.com",
+        api_key="secret",
+    )
+    client = OdooClient(cfg)
+    client.__dict__["_common"] = _RaisingProxy(OSError("network unreachable"))
+    with pytest.raises(OdooError, match="Cannot reach Odoo"):
+        client.version()
+
+
 def test_create_write_unlink_forward_to_execute_kw():
     client, proxy = make_client(
         return_value=55, read_only=False, writable_models=["crm.lead"], allow_delete=True
@@ -177,3 +245,52 @@ def test_create_write_unlink_forward_to_execute_kw():
     client.unlink("crm.lead", [3])
     assert proxy.calls[-1][4] == "unlink"
     assert proxy.calls[-1][5] == [[3]]
+
+
+def test_make_transport_uses_timeout_safe_transport_for_https():
+    cfg = OdooConfig(
+        url="https://acme.odoo.com",
+        db="acme",
+        username="me@acme.com",
+        api_key="secret",
+        timeout=12.5,
+    )
+    client = OdooClient(cfg)
+    transport = client._make_transport()
+    assert isinstance(transport, _TimeoutSafeTransport)
+    # No real connection is made; make_connection just builds the
+    # (unconnected) HTTPSConnection and stamps the timeout on it.
+    conn = transport.make_connection("acme.odoo.com")
+    assert conn.timeout == 12.5
+
+
+def test_make_transport_uses_plain_timeout_transport_for_http():
+    cfg = OdooConfig(
+        url="http://acme.local",
+        db="acme",
+        username="me@acme.com",
+        api_key="secret",
+        timeout=8,
+    )
+    client = OdooClient(cfg)
+    transport = client._make_transport()
+    assert isinstance(transport, _TimeoutTransport)
+    assert not isinstance(transport, _TimeoutSafeTransport)
+    conn = transport.make_connection("acme.local")
+    assert conn.timeout == 8
+
+
+def test_make_transport_honours_verify_ssl_false():
+    cfg = OdooConfig(
+        url="https://acme.odoo.com",
+        db="acme",
+        username="me@acme.com",
+        api_key="secret",
+        verify_ssl=False,
+    )
+    client = OdooClient(cfg)
+    transport = client._make_transport()
+    # SafeTransport stores the context passed at construction time; here it
+    # must be the unverified context built from verify_ssl=False.
+    assert transport.context is client._ssl_context
+    assert transport.context.verify_mode.name == "CERT_NONE"

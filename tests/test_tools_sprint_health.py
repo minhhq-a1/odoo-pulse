@@ -107,3 +107,55 @@ def test_sprint_health_on_track_when_clean(fake_client, monkeypatch):
     assert out["tool"] == "sprint_health"
     assert out["as_of"] == "2026-06-30"
     assert out["sprint_id"] == 12
+
+
+def _clean_task(i):
+    return {"id": i, "name": f"T{i}", "user_ids": [10], "stage_id": [1, "Done"],
+            "date_deadline": "2026-06-20", "priority": "0", "parent_id": [99, "P"]}
+
+
+def test_sprint_health_flags_truncation_when_row_cap_hit(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    # Exactly 200 rows: the row count that search_read (capped at
+    # config.max_records=200) hits, so the tool should notice more rows
+    # exist server-side and issue a search_count to confirm.
+    capped = [_clean_task(i) for i in range(200)]
+    _setup(fake_client, capped)
+    fake_client.search_count_responses["project.task"] = 250
+
+    out = json.loads(tools_workflows.sprint_health(12))
+
+    assert out["summary"]["truncated"] is True
+    assert out["summary"]["total_matching"] == 250
+    codes = {r["code"]: r for r in out["risks"]}
+    assert "truncated_data" in codes
+    assert codes["truncated_data"]["count"] == 50
+
+    count_calls = [c for c in fake_client.calls if c["method"] == "search_count"]
+    assert len(count_calls) == 1
+    assert count_calls[0]["model"] == "project.task"
+
+
+def test_sprint_health_no_truncation_when_under_cap(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    _setup(fake_client)  # only 5 tasks, well under the 200 cap
+    fake_client.search_count_responses["project.task"] = 999  # would be wrong if used
+
+    out = json.loads(tools_workflows.sprint_health(12))
+
+    assert "truncated" not in out["summary"]
+    assert "total_matching" not in out["summary"]
+    assert all(r["code"] != "truncated_data" for r in out["risks"])
+    assert all(c["method"] != "search_count" for c in fake_client.calls)
+
+
+def test_sprint_health_no_truncation_when_count_matches_fetched(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    capped = [_clean_task(i) for i in range(200)]
+    _setup(fake_client, capped)
+    fake_client.search_count_responses["project.task"] = 200  # exactly what we fetched
+
+    out = json.loads(tools_workflows.sprint_health(12))
+
+    assert "truncated" not in out["summary"]
+    assert all(r["code"] != "truncated_data" for r in out["risks"])

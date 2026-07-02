@@ -120,3 +120,36 @@ def test_team_workload_balanced_when_clean(fake_client, monkeypatch):
     assert out["tool"] == "team_workload"
     assert out["as_of"] == "2026-06-30"
     assert out["sprint_id"] == 12
+
+
+def test_team_workload_flags_truncation_when_row_cap_hit(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    capped = [
+        {"id": i, "name": f"T{i}", "user_ids": [10], "stage_id": [1, "Done"],
+         "date_deadline": "2026-06-20", "priority": "0", "parent_id": [99, "P"]}
+        for i in range(200)
+    ]
+    _setup(fake_client, capped)
+    fake_client.search_count_responses["project.task"] = 300
+
+    out = json.loads(tools_workflows.team_workload(sprint_id=12))
+
+    assert out["summary"]["truncated"] is True
+    assert out["summary"]["total_matching"] == 300
+    codes = {r["code"]: r for r in out["risks"]}
+    assert "truncated_data" in codes
+    assert codes["truncated_data"]["count"] == 100
+    count_calls = [c for c in fake_client.calls if c["method"] == "search_count"]
+    assert len(count_calls) == 1
+
+
+def test_team_workload_no_truncation_when_under_cap(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    _setup(fake_client)  # only 7 tasks
+    fake_client.search_count_responses["project.task"] = 999
+
+    out = json.loads(tools_workflows.team_workload(sprint_id=12))
+
+    assert "truncated" not in out["summary"]
+    assert all(r["code"] != "truncated_data" for r in out["risks"])
+    assert all(c["method"] != "search_count" for c in fake_client.calls)
