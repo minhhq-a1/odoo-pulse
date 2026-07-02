@@ -341,3 +341,204 @@ def team_workload(
 
     return safe(run)
 
+
+@mcp.tool()
+def project_status_report(
+    manager: str | None = None,
+    customer: str | None = None,
+    project: str | None = None,
+    include_on_hold: bool = True,
+    include_done: bool = False,
+    lookahead_days: int = 7,
+    timezone_offset: int = 7,
+) -> str:
+    """Report which projects are in trouble, across a portfolio, in one call.
+
+    Composes project.project records (filtered by manager / customer / name)
+    with their project.milestone rows into a per-project derived health verdict
+    (off_track / at_risk / on_track) driven by overdue-or-unreached milestones
+    and the project end date. Surfaces the PM's declared status alongside, flags
+    projects declared healthier than the data (divergence), and ranks by risk.
+
+    Args:
+        manager: Optional project-manager filter (user_id.name ilike).
+        customer: Optional customer filter (partner_id.name ilike).
+        project: Optional project-name filter (name ilike) to narrow the set.
+        include_on_hold: Keep projects whose declared status is on_hold (default True).
+        include_done: Keep projects whose declared status is done (default False).
+        lookahead_days: Days ahead that count as "due soon" for at_risk (default 7).
+        timezone_offset: UTC offset for "today" (default 7 = Asia/Ho_Chi_Minh).
+    """
+
+    def run() -> dict:
+        client = get_client()
+
+        domain: list = [("active", "=", True)]
+        if manager:
+            domain.append(("user_id.name", "ilike", manager))
+        if customer:
+            domain.append(("partner_id.name", "ilike", customer))
+        if project:
+            domain.append(("name", "ilike", project))
+        if not include_done:
+            domain.append(("last_update_status", "!=", "done"))
+        if not include_on_hold:
+            domain.append(("last_update_status", "!=", "on_hold"))
+
+        projects = client.search_read(
+            "project.project",
+            domain=domain,
+            fields=[
+                "id", "name", "user_id", "partner_id",
+                "date_start", "date", "last_update_status", "task_count",
+            ],
+            limit=200,
+            order="name",
+        )
+
+        today = today_in_tz(timezone_offset)
+        cutoff = today + timedelta(days=lookahead_days)
+
+        ids = [p["id"] for p in projects]
+        milestones = (
+            client.search_read(
+                "project.milestone",
+                domain=[("project_id", "in", ids)],
+                fields=["id", "name", "deadline", "is_reached", "project_id"],
+                limit=200,
+                order="deadline",
+            )
+            if ids
+            else []
+        )
+
+        ms_by_project: dict[int, list] = {}
+        for m in milestones:
+            pid = m["project_id"][0] if m.get("project_id") else None
+            if pid is not None:
+                ms_by_project.setdefault(pid, []).append(m)
+
+        rank = {"off_track": 0, "at_risk": 1, "on_track": 2}
+        rows: list[dict] = []
+        off_track = at_risk = on_track = 0
+        total_overdue_ms = 0
+        past_end_projects = 0
+        divergent = 0
+
+        for p in projects:
+            native = p.get("last_update_status") or "to_define"
+            ms = ms_by_project.get(p["id"], [])
+            total_ms = len(ms)
+            reached_ms = sum(1 for m in ms if m.get("is_reached"))
+
+            overdue_ms = 0
+            soon_ms = 0
+            next_milestone = None
+            for m in ms:  # ordered by deadline asc from the query
+                if m.get("is_reached"):
+                    continue
+                dd = parse_deadline(m.get("deadline"))
+                if dd is None:
+                    continue
+                if next_milestone is None:
+                    next_milestone = {"name": m["name"], "deadline": m["deadline"]}
+                if dd < today:
+                    overdue_ms += 1
+                elif dd <= cutoff:
+                    soon_ms += 1
+
+            end = parse_deadline(p.get("date"))
+            past_end = end is not None and end < today and native != "done"
+            end_soon = end is not None and today <= end <= cutoff
+
+            if overdue_ms > 0 or past_end:
+                derived = "off_track"
+                off_track += 1
+            elif soon_ms > 0 or end_soon:
+                derived = "at_risk"
+                at_risk += 1
+            else:
+                derived = "on_track"
+                on_track += 1
+
+            total_overdue_ms += overdue_ms
+            if past_end:
+                past_end_projects += 1
+
+            is_div = (
+                (native in ("on_track", "on_hold") and derived == "off_track")
+                or (native == "on_track" and derived == "at_risk")
+            )
+            if is_div:
+                divergent += 1
+
+            rows.append({
+                "project": p["name"],
+                "manager": p["user_id"][1] if p.get("user_id") else None,
+                "customer": p["partner_id"][1] if p.get("partner_id") else None,
+                "end_date": p.get("date") or None,
+                "task_count": p.get("task_count", 0),
+                "milestones": {"reached": reached_ms, "total": total_ms},
+                "overdue_milestones": overdue_ms,
+                "next_milestone": next_milestone,
+                "native_status": native,
+                "derived_health": derived,
+                "divergent": is_div,
+            })
+
+        rows.sort(key=lambda r: (rank[r["derived_health"]],
+                                 -r["overdue_milestones"], r["project"]))
+
+        if off_track > 0 or divergent > 0:
+            verdict = "action_needed"
+        elif at_risk > 0:
+            verdict = "watch"
+        else:
+            verdict = "healthy"
+
+        summary = {
+            "projects": len(projects),
+            "off_track": off_track,
+            "at_risk": at_risk,
+            "on_track": on_track,
+            "overdue_milestones": total_overdue_ms,
+            "past_end_projects": past_end_projects,
+            "divergent": divergent,
+            "verdict": verdict,
+        }
+
+        highlights = [f"{off_track} of {len(projects)} project(s) off track"]
+        if rows and rows[0]["overdue_milestones"] > 0:
+            top = rows[0]
+            highlights.append(
+                f"{top['project']}: {top['overdue_milestones']} milestone(s) overdue"
+            )
+        if divergent:
+            highlights.append(f"{divergent} project(s) declared healthier than actual")
+
+        risks: list[dict] = []
+        if off_track:
+            risks.append({"code": "off_track_projects", "count": off_track,
+                          "message": f"{off_track} project(s) off track"})
+        if total_overdue_ms:
+            risks.append({"code": "overdue_milestones", "count": total_overdue_ms,
+                          "message": f"{total_overdue_ms} milestone(s) overdue and unreached"})
+        if past_end_projects:
+            risks.append({"code": "past_end_projects", "count": past_end_projects,
+                          "message": f"{past_end_projects} project(s) past their end date"})
+        if divergent:
+            risks.append({"code": "health_divergence", "count": divergent,
+                          "message": f"{divergent} project(s) declared healthier than the data"})
+
+        return build_report(
+            "project_status_report",
+            today,
+            summary=summary,
+            breakdown={"by_project": rows},
+            highlights=highlights,
+            risks=risks,
+            extra={"manager": manager, "customer": customer, "project": project},
+        )
+
+    return safe(run)
+
