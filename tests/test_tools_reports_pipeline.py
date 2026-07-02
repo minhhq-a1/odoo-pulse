@@ -66,6 +66,18 @@ def test_pipeline_review_win_rate_count_domains(fake_client, monkeypatch):
     assert ("probability", "=", 0) in lost["domain"]
 
 
+def test_pipeline_review_win_rate_respects_owner_filter(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    fake_client.search_responses["crm.lead"] = LEADS
+    tools_reports.pipeline_review(salesperson="Alice", team="Direct")
+    won, lost = [c for c in fake_client.calls if c["method"] == "search_count"]
+    # A filtered report must scope the win/lost counts to the same owner,
+    # not report a company-wide rate against one person's pipeline.
+    for call in (won, lost):
+        assert ("user_id.name", "ilike", "Alice") in call["domain"]
+        assert ("team_id.name", "ilike", "Direct") in call["domain"]
+
+
 def test_pipeline_review_breakdown_and_risks(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     fake_client.search_responses["crm.lead"] = LEADS

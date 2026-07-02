@@ -51,11 +51,12 @@ def pipeline_review(
         client = get_client()
         today = today_in_tz(timezone_offset)
 
-        domain: list = [("type", "=", "opportunity")]
+        owner_filter: list = []
         if salesperson:
-            domain.append(("user_id.name", "ilike", salesperson))
+            owner_filter.append(("user_id.name", "ilike", salesperson))
         if team:
-            domain.append(("team_id.name", "ilike", team))
+            owner_filter.append(("team_id.name", "ilike", team))
+        domain: list = [("type", "=", "opportunity"), *owner_filter]
 
         leads, truncation = fetch_with_truncation(
             client, "crm.lead", domain,
@@ -64,13 +65,15 @@ def pipeline_review(
             limit=200, order="expected_revenue desc",
         )
 
+        # Win rate honours the same salesperson/team scope as the funnel, so a
+        # filtered report never pairs a person's pipeline with a company-wide rate.
         since = (today - timedelta(days=win_rate_days)).isoformat()
         won = client.search_count("crm.lead", [
             ("type", "=", "opportunity"), ("probability", "=", 100),
-            ("date_closed", ">=", since)])
+            ("date_closed", ">=", since), *owner_filter])
         lost = client.search_count("crm.lead", [
             ("type", "=", "opportunity"), ("active", "=", False),
-            ("probability", "=", 0), ("date_closed", ">=", since)])
+            ("probability", "=", 0), ("date_closed", ">=", since), *owner_filter])
         win_rate = round(won / (won + lost) * 100, 1) if (won + lost) else None
 
         stalled_cutoff = today - timedelta(days=stalled_days)
