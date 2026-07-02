@@ -1,6 +1,6 @@
 # odoo-pulse
 
-[![CI](https://github.com/minhhq-a1/odoo-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/minhhq-a1/odoo-mcp/actions/workflows/ci.yml)
+[![CI](https://github.com/minhhq-a1/odoo-pulse/actions/workflows/ci.yml/badge.svg)](https://github.com/minhhq-a1/odoo-pulse/actions/workflows/ci.yml)
 
 An [MCP](https://modelcontextprotocol.io) server that gives an MCP client
 (e.g. Claude) **read-only** access to an [Odoo](https://www.odoo.com) instance
