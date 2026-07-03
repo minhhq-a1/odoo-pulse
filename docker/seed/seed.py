@@ -128,7 +128,8 @@ def seed_crm() -> None:
     S.write("crm.lead", [stalled], {"date_last_stage_update": S.dt(-40)})
 
     # An open deal already past its expected close date => overdue_close.
-    S.create("crm.lead", {
+    # Backdate its create_date to yesterday so business_pulse counts a new lead.
+    globex = S.create("crm.lead", {
         "name": "PLAYGROUND: Globex renewal",
         "type": "opportunity",
         "stage_id": first_stage,
@@ -136,6 +137,7 @@ def seed_crm() -> None:
         "probability": 20.0,
         "date_deadline": S.d(-5),
     })
+    _backdate("crm.lead", globex, -1)
     # A couple of healthy open deals for funnel breadth.
     for name, rev, prob in [("Initech expansion", 45000.0, 60.0),
                             ("Umbrella pilot", 15000.0, 30.0)]:
@@ -196,7 +198,8 @@ def seed_sales() -> None:
     small = _partner("PLAYGROUND Small Shop")
 
     # Current window (last 7 days): higher revenue, clear top customer.
-    _confirmed_order(big, prod, 40, 150.0, -2)     # 6000
+    # One order dated yesterday so business_pulse shows yesterday's revenue.
+    _confirmed_order(big, prod, 40, 150.0, -1)     # 6000, yesterday
     _confirmed_order(big, prod, 20, 150.0, -5)     # 3000
     _confirmed_order(small, prod, 5, 150.0, -3)    # 750
     # Previous window (8–14 days ago): lower revenue, so delta_pct is positive.
