@@ -2,8 +2,10 @@
 
 `odoo-pulse` exposes tools in groups, selected via `ODOO_TOOL_GROUPS`
 (default `core,reports`). The **analyst report tools** — the reason to use this
-server — are documented in the [README](../README.md#the-analyst-tools). This
-page is the full reference for everything else.
+server — are listed with one-line summaries in the
+[README](../README.md#the-analyst-tools); full parameters are in
+[Analyst reports](#analyst-reports) below. This page is the full reference for
+everything else too.
 
 ## Tool groups
 
@@ -23,6 +25,124 @@ Set `ODOO_TOOL_GROUPS` (comma-separated) to choose what the server exposes:
 
 Default (`core,reports`) is ~20 tools — reports are the front door, the domain
 wrappers below are "power user mode".
+
+## Analyst reports
+
+Full parameter reference for the `reports` group. Every tool is read-only,
+takes `timezone_offset` (default `7` = Asia/Ho_Chi_Minh) to anchor "today",
+and returns the standard report envelope (`summary`, `breakdown`,
+`highlights`, `risks`) described in the README.
+
+### `business_pulse`
+
+One-call company briefing: sales, leads, receivables, tasks, absences.
+
+- `timezone_offset` (default `7`): UTC offset for "today".
+- `company`: Optional company name (ilike) or id; scopes every section.
+
+### `pipeline_review`
+
+Report the health of the CRM pipeline, in one call.
+
+- `salesperson`: Optional filter on `user_id.name` (ilike).
+- `team`: Optional filter on `team_id.name` (ilike).
+- `stalled_days` (default `14`): Days without a stage change before a deal
+  counts as stalled.
+- `lookahead_days` (default `30`): Days ahead that count as "closing soon".
+- `win_rate_days` (default `90`): Look-back window for the won/lost ratio.
+- `top_n` (default `5`): Max stalled deals listed in the breakdown.
+- `timezone_offset` (default `7`): UTC offset for "today".
+- `company`: Optional company name (ilike) or id; scopes every count and
+  total to that company.
+- `stalled_pct_at_risk` (default `25`): Stalled share (%) at which the
+  verdict drops to `at_risk`.
+- `stalled_pct_off_track` (default `50`): Stalled share (%) at which the
+  verdict drops to `off_track`.
+
+### `sales_snapshot`
+
+Report how sales are going versus the previous period, in one call.
+
+- `period_days` (default `7`): Length of the comparison window in days.
+- `stale_quote_days` (default `7`): Age in days after which a draft/sent
+  quotation counts as stale.
+- `top_n` (default `5`): Rows in the top-customers / top-products lists.
+- `timezone_offset` (default `7`): UTC offset for "today".
+- `growth_threshold_pct` (default `10`): Delta (%) beyond which the verdict
+  is growing / declining.
+- `company`: Optional company name (ilike) or id to scope the report.
+- `trend_weeks` (default `8`): Weeks of history bucketed into the
+  `weekly_revenue` trend series; `0` disables the extra query.
+
+### `receivables_health`
+
+Report AR/AP aging and who owes what, in one call.
+
+- `top_n` (default `5`): Rows in the top-overdue-customers list.
+- `timezone_offset` (default `7`): UTC offset for "today".
+- `company`: Optional company name (ilike) or id to scope the report.
+- `overdue_pct_at_risk` (default `25`): Overdue AR share (%) that drops the
+  verdict to `at_risk`.
+- `overdue_pct_off_track` (default `50`): Overdue AR share (%) that drops the
+  verdict to `off_track`.
+
+### `inventory_risk`
+
+Report stock at risk — shortages and dead stock — in one call.
+
+- `dead_stock_days` (default `90`): No-movement window for dead stock.
+- `top_n` (default `10`): Rows listed per breakdown section.
+- `timezone_offset` (default `7`): UTC offset for "today".
+
+Not company-scoped — see [Multi-company / multi-currency](#multi-company--multi-currency).
+
+### `absence_overview`
+
+Report who is off and where coverage is thin, in one call.
+
+- `days` (default `14`): Look-ahead window in days.
+- `coverage_threshold` (default `0.3`): Department share off in the window
+  that counts as a coverage risk.
+- `timezone_offset` (default `7`): UTC offset for "today".
+
+### `procurement_watch`
+
+Report purchasing health — late receipts and stale RFQs — in one call.
+
+- `late_grace_days` (default `0`): Days past `date_planned` before a receipt
+  counts as late.
+- `rfq_stale_days` (default `7`): Age in days after which a draft/sent RFQ
+  counts as stale.
+- `top_n` (default `5`): Rows in the late-receipts / top-vendors lists.
+- `timezone_offset` (default `7`): UTC offset for "today".
+- `company`: Optional company name (ilike) or id to scope the report.
+
+### `production_health`
+
+Report manufacturing health — late starts and stuck orders — in one call.
+
+- `stuck_days` (default `14`): Days an order may run (progress/to_close)
+  before it counts as stuck.
+- `top_n` (default `5`): Rows in the behind-start / stuck lists.
+- `timezone_offset` (default `7`): UTC offset for "today".
+- `company`: Optional company name (ilike) or id to scope the report.
+
+### `sprint_health` · `team_workload` · `project_status_report`
+
+Project delivery reports — sprint completion, per-assignee workload, and
+portfolio-wide project health. Same composition style as the reports above
+(filters, thresholds, `timezone_offset`); see the docstrings in
+`odoo_pulse/tools_workflows.py` for the full argument list.
+
+### Multi-company / multi-currency
+
+Reports never convert currencies. When the rows behind a total span more
+than one currency, the report adds a `by_currency` breakdown to `summary`
+and a `mixed_currencies` (or `mixed_companies` / `multi_company_totals`)
+entry to `risks`. Pass `company=<name or id>` to scope a report to one
+company. `inventory_risk` cannot be company-scoped yet (stock quantities
+are context-dependent in Odoo); on multi-company instances read it as a
+whole-instance view.
 
 ## Generic (model-agnostic)
 

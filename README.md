@@ -27,7 +27,14 @@ structured report with a verdict — not a raw dump you have to interpret.
 | `receivables_health` | AR/AP aging buckets, % overdue, top debtors |
 | `inventory_risk` | Shortages (negative forecast) and dead stock |
 | `absence_overview` | Who's off this week, pending approvals, thin-coverage departments |
+| `procurement_watch` | Purchasing: late receipts, stale RFQs, open spend per vendor |
+| `production_health` | Manufacturing: orders behind their planned start, stuck WIP |
 | `sprint_health` · `team_workload` · `project_status_report` | Project delivery: completion, overloaded members, at-risk projects |
+
+Every money-reporting tool takes an optional `company=` filter and flags
+mixed-currency totals instead of silently summing them; verdict cut-offs
+(stalled %, overdue %, growth %) are parameters, so you can calibrate them
+to your business.
 
 Under the hood it's the standard Odoo XML-RPC external API — nothing to install
 inside Odoo, works on Odoo Online, Odoo.sh, and on-premise.
