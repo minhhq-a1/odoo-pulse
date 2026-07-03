@@ -1,0 +1,33 @@
+name: Publish to MCP Registry
+
+# Publishes server.json to the official MCP registry via GitHub OIDC (no secrets).
+# Run this AFTER the PyPI release for the same version is live (release.yml), so
+# the registry's ownership check finds the `mcp-name` marker in the published
+# package description. Trigger manually from the Actions tab (workflow_dispatch),
+# or automatically on a version tag.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # required for OIDC authentication to the MCP registry
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+
+      - name: Authenticate to MCP Registry (GitHub OIDC)
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish server to MCP Registry
+        run: ./mcp-publisher publish

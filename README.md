@@ -4,6 +4,8 @@
 [![PyPI](https://img.shields.io/pypi/v/odoo-pulse)](https://pypi.org/project/odoo-pulse/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+<!-- mcp-name: io.github.minhhq-a1/odoo-pulse -->
+
 **An AI business analyst for your [Odoo](https://www.odoo.com) ERP.** Ask one
 question, get one answer — numbers, highlights, risks, and a verdict
 (on-track / at-risk / off-track) — over the [Model Context
