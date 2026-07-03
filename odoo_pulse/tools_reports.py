@@ -237,6 +237,7 @@ def sales_snapshot(
     timezone_offset: int = 7,
     growth_threshold_pct: float = 10.0,
     company: str | int | None = None,
+    trend_weeks: int = 8,
 ) -> str:
     """Report how sales are going versus the previous period, in one call.
 
@@ -254,6 +255,8 @@ def sales_snapshot(
         growth_threshold_pct: Delta (%) beyond which the verdict is
             growing / declining (default 10).
         company: Optional company name (ilike) or id to scope the report.
+        trend_weeks: Weeks of history bucketed into the weekly_revenue
+            trend series; 0 disables the extra query (default 8).
     """
 
     def run() -> dict:
@@ -321,6 +324,34 @@ def sales_snapshot(
             *company_domain,
         ])
 
+        trend = None
+        weekly: list[dict] = []
+        trend_trunc = None
+        if trend_weeks > 0:
+            trend_start = today - timedelta(days=7 * trend_weeks)
+            trend_rows, trend_trunc = fetch_with_truncation(
+                client, "sale.order",
+                [("state", "in", ["sale", "done"]),
+                 ("date_order", ">=", trend_start.isoformat()),
+                 *company_domain],
+                fields=["id", "amount_total", "date_order"],
+                limit=200,
+            )
+            buckets = [0.0] * trend_weeks
+            for o in trend_rows:
+                day = parse_deadline(o.get("date_order"))
+                if day is None:
+                    continue
+                idx = min((day - trend_start).days // 7, trend_weeks - 1)
+                buckets[idx] += o.get("amount_total") or 0.0
+            weekly = [
+                {"week_start": (trend_start + timedelta(days=7 * i)).isoformat(),
+                 "revenue": round(v, 2)}
+                for i, v in enumerate(buckets)
+            ]
+            trend = trend_direction(
+                [w["revenue"] for w in weekly], threshold_pct=growth_threshold_pct)
+
         if delta_pct is None:
             verdict = "steady"
         elif delta_pct >= growth_threshold_pct:
@@ -342,6 +373,7 @@ def sales_snapshot(
             "delta_pct": delta_pct,
             "stale_quotations": stale_quotes,
             "verdict": verdict,
+            "trend": trend,
         }
         by_currency = totals_by_currency(cur_rows, "amount_total")
         if len(by_currency) == 1:
@@ -360,6 +392,10 @@ def sales_snapshot(
             highlights.append(
                 f"top customer: {top_customers[0]['customer']} "
                 f"({top_customers[0]['revenue']})")
+        if trend == "declining" and verdict != "declining":
+            highlights.append(
+                f"note: {trend_weeks}-week revenue trend is declining despite "
+                "the current period holding up")
 
         risks: list[dict] = []
         if truncation:
@@ -369,6 +405,13 @@ def sales_snapshot(
                     f"Report covers only {truncation['fetched']} of "
                     f"{truncation['total_matching']} matching orders."
                 ),
+            })
+        if trend_trunc:
+            risks.append({
+                "code": "truncated_data", "count": trend_trunc["missing"],
+                "message": (
+                    f"Trend series covers only {trend_trunc['fetched']} of "
+                    f"{trend_trunc['total_matching']} orders in the window."),
             })
         if verdict == "declining":
             risks.append({
@@ -394,7 +437,8 @@ def sales_snapshot(
             "sales_snapshot", today,
             summary=summary,
             breakdown={"top_customers": top_customers,
-                       "top_products": top_products},
+                       "top_products": top_products,
+                       "weekly_revenue": weekly},
             highlights=highlights, risks=risks,
             extra={"period_days": period_days, "company": company,
                    "thresholds": {"growth_threshold_pct": growth_threshold_pct}},

@@ -141,3 +141,35 @@ def test_sales_snapshot_mixed_currencies_flagged(fake_client, monkeypatch):
     assert out["summary"]["by_currency"] == {"USD": 1000.0, "VND": 500.0}
     codes = [r["code"] for r in out["risks"]]
     assert "mixed_currencies" in codes
+
+
+def test_sales_snapshot_weekly_trend(fake_client, monkeypatch):
+    _fix_today(monkeypatch)  # today = 2026-06-30
+    # trend fetch is the 2nd sale.order search_read -> use the seq queue
+    recent = [  # weeks 6-7 of an 8-week window, big revenue
+        {"id": 10, "amount_total": 900.0, "date_order": "2026-06-25 09:00:00"},
+        {"id": 11, "amount_total": 900.0, "date_order": "2026-06-18 09:00:00"},
+    ]
+    old = [    # weeks 0-1, small revenue
+        {"id": 12, "amount_total": 10.0, "date_order": "2026-05-07 09:00:00"},
+    ]
+    fake_client.search_responses_seq["sale.order"] = [ORDERS, old + recent]
+    fake_client.search_responses["sale.order.line"] = []
+    out = json.loads(tools_reports.sales_snapshot())
+    assert out["summary"]["trend"] == "improving"
+    weeks = out["breakdown"]["weekly_revenue"]
+    assert len(weeks) == 8
+    assert weeks[0]["week_start"] == "2026-05-05"   # today - 8*7 days
+    assert sum(w["revenue"] for w in weeks) == 1810.0
+
+
+def test_sales_snapshot_trend_disabled(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    _setup(fake_client)
+    out = json.loads(tools_reports.sales_snapshot(trend_weeks=0))
+    assert out["summary"]["trend"] is None
+    assert out["breakdown"]["weekly_revenue"] == []
+    # only one sale.order search_read happened (no trend fetch)
+    reads = [c for c in fake_client.calls
+             if c["method"] == "search_read" and c["model"] == "sale.order"]
+    assert len(reads) == 1
