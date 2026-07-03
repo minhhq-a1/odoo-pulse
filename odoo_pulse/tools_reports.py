@@ -235,6 +235,8 @@ def sales_snapshot(
     stale_quote_days: int = 7,
     top_n: int = 5,
     timezone_offset: int = 7,
+    growth_threshold_pct: float = 10.0,
+    company: str | int | None = None,
 ) -> str:
     """Report how sales are going versus the previous period, in one call.
 
@@ -249,6 +251,9 @@ def sales_snapshot(
             counts as stale (default 7).
         top_n: Rows in the top-customers / top-products lists (default 5).
         timezone_offset: UTC offset for "today" (default 7 = Asia/Ho_Chi_Minh).
+        growth_threshold_pct: Delta (%) beyond which the verdict is
+            growing / declining (default 10).
+        company: Optional company name (ilike) or id to scope the report.
     """
 
     def run() -> dict:
@@ -256,23 +261,29 @@ def sales_snapshot(
         today = today_in_tz(timezone_offset)
         cur_start = today - timedelta(days=period_days)
         prev_start = today - timedelta(days=2 * period_days)
+        company_id = resolve_company_id(client, company)
+        company_domain: list = (
+            [("company_id", "=", company_id)] if company_id else [])
 
         orders, truncation = fetch_with_truncation(
             client, "sale.order",
             [("state", "in", ["sale", "done"]),
-             ("date_order", ">=", prev_start.isoformat())],
-            fields=["id", "name", "amount_total", "partner_id", "date_order"],
+             ("date_order", ">=", prev_start.isoformat()), *company_domain],
+            fields=["id", "name", "amount_total", "partner_id", "date_order",
+                    "currency_id"],
             limit=200, order="date_order desc",
         )
 
         cur_total = prev_total = 0.0
         cur_count = prev_count = 0
         customers: dict[str, dict] = {}
+        cur_rows: list[dict] = []
         for o in orders:
             day = parse_deadline(o.get("date_order"))
             amount = o.get("amount_total") or 0.0
             if day is not None and day >= cur_start:
                 cur_count += 1
+                cur_rows.append(o)
                 cur_total += amount
                 partner = o["partner_id"][1] if o.get("partner_id") else "(unknown)"
                 rec = customers.setdefault(
@@ -291,7 +302,9 @@ def sales_snapshot(
             group_by=["product_id"],
             measures=[("price_subtotal", "sum")],
             domain=[("order_id.state", "in", ["sale", "done"]),
-                    ("order_id.date_order", ">=", cur_start.isoformat())],
+                    ("order_id.date_order", ">=", cur_start.isoformat()),
+                    *([("order_id.company_id", "=", company_id)]
+                      if company_id else [])],
             limit=top_n,
             order="price_subtotal:sum desc",
         )
@@ -305,13 +318,14 @@ def sales_snapshot(
             ("state", "in", ["draft", "sent"]),
             ("create_date", "<",
              (today - timedelta(days=stale_quote_days)).isoformat()),
+            *company_domain,
         ])
 
         if delta_pct is None:
             verdict = "steady"
-        elif delta_pct >= 10:
+        elif delta_pct >= growth_threshold_pct:
             verdict = "growing"
-        elif delta_pct <= -10:
+        elif delta_pct <= -growth_threshold_pct:
             verdict = "declining"
         else:
             verdict = "steady"
@@ -329,6 +343,11 @@ def sales_snapshot(
             "stale_quotations": stale_quotes,
             "verdict": verdict,
         }
+        by_currency = totals_by_currency(cur_rows, "amount_total")
+        if len(by_currency) == 1:
+            summary["currency"] = next(iter(by_currency))
+        elif len(by_currency) > 1:
+            summary["by_currency"] = by_currency
         if truncation:
             summary["truncated"] = True
             summary["total_matching"] = truncation["total_matching"]
@@ -362,6 +381,14 @@ def sales_snapshot(
                 "message": (f"{stale_quotes} quotation(s) older than "
                             f"{stale_quote_days} days still not confirmed"),
             })
+        if len(by_currency) > 1:
+            risks.append({
+                "code": "mixed_currencies", "count": len(by_currency),
+                "message": (
+                    "Revenue sums mix currencies "
+                    f"({', '.join(sorted(by_currency))}); the headline totals "
+                    "are raw sums — read by_currency instead."),
+            })
 
         return build_report(
             "sales_snapshot", today,
@@ -369,7 +396,8 @@ def sales_snapshot(
             breakdown={"top_customers": top_customers,
                        "top_products": top_products},
             highlights=highlights, risks=risks,
-            extra={"period_days": period_days},
+            extra={"period_days": period_days, "company": company,
+                   "thresholds": {"growth_threshold_pct": growth_threshold_pct}},
         )
 
     return safe(run)

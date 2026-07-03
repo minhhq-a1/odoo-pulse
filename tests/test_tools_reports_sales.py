@@ -96,3 +96,48 @@ def test_sales_snapshot_steady_when_no_previous(fake_client, monkeypatch):
     out = json.loads(tools_reports.sales_snapshot())
     assert out["summary"]["delta_pct"] is None
     assert out["summary"]["verdict"] == "steady"
+
+
+def test_sales_snapshot_growth_threshold_param(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    _setup(fake_client)  # delta_pct is -25 with the canned ORDERS
+    out = json.loads(tools_reports.sales_snapshot(growth_threshold_pct=30.0))
+    assert out["summary"]["verdict"] == "steady"   # -25 within +/-30
+
+
+def test_sales_snapshot_company_filter(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    _setup(fake_client)
+    fake_client.search_responses["res.company"] = [{"id": 5, "name": "Acme VN"}]
+    tools_reports.sales_snapshot(company="acme")
+    order_call = next(c for c in fake_client.calls
+                      if c["method"] == "search_read" and c["model"] == "sale.order")
+    assert ("company_id", "=", 5) in order_call["domain"]
+    agg_call = next(c for c in fake_client.calls if c["method"] == "aggregate_records")
+    assert ("order_id.company_id", "=", 5) in agg_call["domain"]
+    quote_call = next(c for c in fake_client.calls
+                      if c["method"] == "search_count" and c["model"] == "sale.order")
+    assert ("company_id", "=", 5) in quote_call["domain"]
+
+
+def test_sales_snapshot_single_currency_labelled(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    orders = [dict(o, currency_id=[1, "USD"]) for o in ORDERS]
+    fake_client.search_responses["sale.order"] = orders
+    fake_client.search_responses["sale.order.line"] = []
+    out = json.loads(tools_reports.sales_snapshot())
+    assert out["summary"]["currency"] == "USD"
+    assert "by_currency" not in out["summary"]
+
+
+def test_sales_snapshot_mixed_currencies_flagged(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    orders = [dict(o) for o in ORDERS]
+    orders[0]["currency_id"] = [1, "USD"]   # current period
+    orders[1]["currency_id"] = [2, "VND"]   # current period
+    fake_client.search_responses["sale.order"] = orders
+    fake_client.search_responses["sale.order.line"] = []
+    out = json.loads(tools_reports.sales_snapshot())
+    assert out["summary"]["by_currency"] == {"USD": 1000.0, "VND": 500.0}
+    codes = [r["code"] for r in out["risks"]]
+    assert "mixed_currencies" in codes
