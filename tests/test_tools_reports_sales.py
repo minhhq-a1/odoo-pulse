@@ -173,3 +173,18 @@ def test_sales_snapshot_trend_disabled(fake_client, monkeypatch):
     reads = [c for c in fake_client.calls
              if c["method"] == "search_read" and c["model"] == "sale.order"]
     assert len(reads) == 1
+
+
+def test_sales_snapshot_trend_truncated_reports_no_direction(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    # trend fetch is the 2nd sale.order search_read -> use the seq queue
+    truncated_trend_rows = [
+        {"id": 1000 + i, "amount_total": 10.0, "date_order": "2026-06-25 09:00:00"}
+        for i in range(200)
+    ]
+    fake_client.search_responses_seq["sale.order"] = [ORDERS, truncated_trend_rows]
+    fake_client.search_responses["sale.order.line"] = []
+    fake_client.search_count_responses["sale.order"] = 500
+    out = json.loads(tools_reports.sales_snapshot())
+    assert out["summary"]["trend"] is None
+    assert "truncated_trend" in [r["code"] for r in out["risks"]]

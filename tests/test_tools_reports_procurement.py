@@ -77,6 +77,17 @@ def test_procurement_watch_top_vendors(fake_client, monkeypatch):
     assert vendors[0] == {"vendor": "VendorB", "orders": 1, "open_value": 900.0}
 
 
+def test_procurement_watch_mixed_currencies(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    pos = [dict(POS[0], currency_id=[1, "USD"]), dict(POS[1], currency_id=[2, "VND"])]
+    fake_client.search_responses["purchase.order"] = pos
+    fake_client.search_count_responses["purchase.order"] = 0
+    out = json.loads(tools_reports_ops.procurement_watch())
+    assert out["summary"]["by_currency"] == {"USD": 500.0, "VND": 900.0}
+    assert "currency" not in out["summary"]
+    assert "mixed_currencies" in [r["code"] for r in out["risks"]]
+
+
 def test_procurement_watch_company_filter(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     fake_client.search_responses["res.company"] = [{"id": 5, "name": "Acme VN"}]

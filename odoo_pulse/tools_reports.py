@@ -349,8 +349,11 @@ def sales_snapshot(
                  "revenue": round(v, 2)}
                 for i, v in enumerate(buckets)
             ]
-            trend = trend_direction(
-                [w["revenue"] for w in weekly], threshold_pct=growth_threshold_pct)
+            if trend_trunc:
+                trend = None
+            else:
+                trend = trend_direction(
+                    [w["revenue"] for w in weekly], threshold_pct=growth_threshold_pct)
 
         if delta_pct is None:
             verdict = "steady"
@@ -408,7 +411,7 @@ def sales_snapshot(
             })
         if trend_trunc:
             risks.append({
-                "code": "truncated_data", "count": trend_trunc["missing"],
+                "code": "truncated_trend", "count": trend_trunc["missing"],
                 "message": (
                     f"Trend series covers only {trend_trunc['fetched']} of "
                     f"{trend_trunc['total_matching']} orders in the window."),
