@@ -13,7 +13,7 @@ import os
 # group name -> module names inside the odoo_pulse package
 GROUP_MODULES: dict[str, tuple[str, ...]] = {
     "core": ("tools_generic", "tools_write"),
-    "reports": ("tools_workflows", "tools_reports"),
+    "reports": ("tools_workflows", "tools_reports", "tools_reports_ops"),
     "business": ("domain_tools",),
     "hr": ("tools_hr",),
     "projects": ("tools_projects",),
