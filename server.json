@@ -1,0 +1,55 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.minhhq-a1/odoo-pulse",
+  "description": "An AI business analyst for Odoo ERP — one-call reports with verdicts, over MCP",
+  "version": "1.0.0",
+  "repository": {
+    "url": "https://github.com/minhhq-a1/odoo-pulse",
+    "source": "github"
+  },
+  "websiteUrl": "https://github.com/minhhq-a1/odoo-pulse",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "odoo-pulse",
+      "version": "1.0.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "ODOO_URL",
+          "description": "Base URL of the Odoo instance, e.g. https://acme.odoo.com",
+          "isRequired": true,
+          "isSecret": false
+        },
+        {
+          "name": "ODOO_DB",
+          "description": "Odoo database name",
+          "isRequired": true,
+          "isSecret": false
+        },
+        {
+          "name": "ODOO_USERNAME",
+          "description": "Odoo login / email",
+          "isRequired": true,
+          "isSecret": false
+        },
+        {
+          "name": "ODOO_API_KEY",
+          "description": "Odoo API key (used as the password)",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "ODOO_READ_ONLY",
+          "description": "Block all write methods when true (default true)",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}
