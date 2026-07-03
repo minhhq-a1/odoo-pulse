@@ -3,14 +3,15 @@ name: Publish to MCP Registry
 # Publishes server.json to the official MCP registry via GitHub OIDC (no secrets).
 # Run this AFTER the PyPI release for the same version is live (release.yml), so
 # the registry's ownership check finds the `mcp-name` marker in the published
-# package description. Trigger manually from the Actions tab (workflow_dispatch),
-# or automatically on a version tag.
+# package description.
+#
+# Manual (workflow_dispatch) on purpose: a `push: tags` trigger races with
+# release.yml on the same tag and the registry 404s on the not-yet-published
+# package. Release flow: push the tag -> wait for release.yml to finish -> run
+# this workflow from the Actions tab.
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "v*"
 
 jobs:
   publish:
