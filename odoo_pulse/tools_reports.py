@@ -448,7 +448,13 @@ def sales_snapshot(
 
 
 @mcp.tool()
-def receivables_health(top_n: int = 5, timezone_offset: int = 7) -> str:
+def receivables_health(
+    top_n: int = 5,
+    timezone_offset: int = 7,
+    company: str | int | None = None,
+    overdue_pct_at_risk: float = 25.0,
+    overdue_pct_off_track: float = 50.0,
+) -> str:
     """Report AR/AP aging and who owes what, in one call.
 
     Composes open posted invoices and vendor bills into standard aging
@@ -458,19 +464,29 @@ def receivables_health(top_n: int = 5, timezone_offset: int = 7) -> str:
     Args:
         top_n: Rows in the top-overdue-customers list (default 5).
         timezone_offset: UTC offset for "today" (default 7 = Asia/Ho_Chi_Minh).
+        company: Optional company name (ilike) or id to scope the report.
+        overdue_pct_at_risk: Overdue AR share (%) that drops the verdict
+            to at_risk (default 25).
+        overdue_pct_off_track: Overdue AR share (%) that drops the verdict
+            to off_track (default 50).
     """
 
     def run() -> dict:
         client = get_client()
         today = today_in_tz(timezone_offset)
 
+        company_id = resolve_company_id(client, company)
+        company_domain: list = (
+            [("company_id", "=", company_id)] if company_id else [])
+
         invoices, truncation = fetch_with_truncation(
             client, "account.move",
             [("move_type", "in", ["out_invoice", "in_invoice"]),
              ("state", "=", "posted"),
-             ("payment_state", "in", ["not_paid", "partial"])],
+             ("payment_state", "in", ["not_paid", "partial"]),
+             *company_domain],
             fields=["id", "name", "partner_id", "amount_residual",
-                    "invoice_date_due", "move_type"],
+                    "invoice_date_due", "move_type", "currency_id"],
             limit=200, order="invoice_date_due",
         )
 
@@ -478,6 +494,7 @@ def receivables_health(top_n: int = 5, timezone_offset: int = 7) -> str:
         aging = {"receivable": dict.fromkeys(buckets, 0.0),
                  "payable": dict.fromkeys(buckets, 0.0)}
         overdue_customers: dict[str, float] = {}
+        ar_rows: list[dict] = []
         ar_total = ar_overdue = ap_total = 0.0
         ar_count = ap_count = ninety_plus_count = 0
 
@@ -501,6 +518,7 @@ def receivables_health(top_n: int = 5, timezone_offset: int = 7) -> str:
             if side == "receivable":
                 ar_count += 1
                 ar_total += residual
+                ar_rows.append(inv)
                 if bucket == "90+":
                     ninety_plus_count += 1
                 if days > 0:
@@ -519,9 +537,9 @@ def receivables_health(top_n: int = 5, timezone_offset: int = 7) -> str:
         pct_overdue = round(ar_overdue / ar_total * 100, 1) if ar_total else 0.0
         ninety_plus = aging["receivable"]["90+"]
 
-        if pct_overdue >= 50:
+        if pct_overdue >= overdue_pct_off_track:
             verdict = "off_track"
-        elif pct_overdue >= 25 or ninety_plus > 0:
+        elif pct_overdue >= overdue_pct_at_risk or ninety_plus > 0:
             verdict = "at_risk"
         else:
             verdict = "on_track"
@@ -544,6 +562,12 @@ def receivables_health(top_n: int = 5, timezone_offset: int = 7) -> str:
         if truncation:
             summary["truncated"] = True
             summary["total_matching"] = truncation["total_matching"]
+
+        by_currency = totals_by_currency(ar_rows, "amount_residual")
+        if len(by_currency) == 1:
+            summary["currency"] = next(iter(by_currency))
+        elif len(by_currency) > 1:
+            summary["by_currency"] = by_currency
 
         highlights = [
             f"{round(ar_total, 2)} receivable across {ar_count} invoice(s), "
@@ -575,12 +599,23 @@ def receivables_health(top_n: int = 5, timezone_offset: int = 7) -> str:
                 "message": (f"{ninety_plus_count} receivable(s) totaling "
                             f"{ninety_plus} are 90+ days overdue"),
             })
+        if len(by_currency) > 1:
+            risks.append({
+                "code": "mixed_currencies", "count": len(by_currency),
+                "message": (
+                    "Receivable totals and aging buckets mix currencies "
+                    f"({', '.join(sorted(by_currency))}); read by_currency "
+                    "or pass company= to scope."),
+            })
 
         return build_report(
             "receivables_health", today,
             summary=summary,
             breakdown={"aging": aging, "top_overdue_customers": top_debtors},
             highlights=highlights, risks=risks,
+            extra={"company": company,
+                   "thresholds": {"overdue_pct_at_risk": overdue_pct_at_risk,
+                                  "overdue_pct_off_track": overdue_pct_off_track}},
         )
 
     return safe(run)

@@ -76,3 +76,43 @@ def test_receivables_health_on_track_when_nothing_overdue(fake_client, monkeypat
     out = json.loads(tools_reports.receivables_health())
     assert out["summary"]["verdict"] == "on_track"
     assert out["risks"] == []
+
+
+def test_receivables_custom_thresholds(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    fake_client.search_responses["account.move"] = INVOICES
+    out_default = json.loads(tools_reports.receivables_health())
+    # loosen both cut-offs so the same data reads on_track... except 90+
+    out_loose = json.loads(tools_reports.receivables_health(
+        overdue_pct_at_risk=99.0, overdue_pct_off_track=100.0))
+    assert out_loose["thresholds"] == {
+        "overdue_pct_at_risk": 99.0, "overdue_pct_off_track": 100.0}
+    # 83.3% < 99 so pct no longer trips off_track, but the 90+ invoice
+    # still forces at_risk; defaults read the same data as off_track.
+    assert out_loose["summary"]["verdict"] == "at_risk"
+    assert out_default["summary"]["verdict"] == "off_track"
+
+
+def test_receivables_company_filter(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    fake_client.search_responses["res.company"] = [{"id": 5, "name": "Acme VN"}]
+    fake_client.search_responses["account.move"] = []
+    tools_reports.receivables_health(company="acme")
+    call = next(c for c in fake_client.calls
+                if c["method"] == "search_read" and c["model"] == "account.move")
+    assert ("company_id", "=", 5) in call["domain"]
+
+
+def test_receivables_mixed_currencies_flagged(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    fake_client.search_responses["account.move"] = [
+        {"id": 1, "name": "INV/1", "partner_id": [1, "Acme"],
+         "amount_residual": 100.0, "invoice_date_due": "2026-06-01",
+         "move_type": "out_invoice", "currency_id": [1, "USD"]},
+        {"id": 2, "name": "INV/2", "partner_id": [2, "Beta"],
+         "amount_residual": 5000.0, "invoice_date_due": "2026-06-01",
+         "move_type": "out_invoice", "currency_id": [2, "VND"]},
+    ]
+    out = json.loads(tools_reports.receivables_health())
+    assert out["summary"]["by_currency"] == {"USD": 100.0, "VND": 5000.0}
+    assert "mixed_currencies" in [r["code"] for r in out["risks"]]
