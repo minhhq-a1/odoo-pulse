@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "odoo-pulse",
   "display_name": "odoo-pulse",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "AI business analyst for Odoo ERP — one-call reports with verdicts, over MCP",
   "icon": "icon.png",
   "long_description": "odoo-pulse exposes Odoo's XML-RPC external API as MCP tools and adds composed, opinionated report tools (business_pulse, pipeline_review, receivables_health, inventory_risk, sales_snapshot, absence_overview) that return numbers, highlights, risks, and a verdict (on-track / at-risk / off-track) in a single call. Read-only by default; works on any Odoo (Online, Odoo.sh, on-premise) via the XML-RPC external API.",
