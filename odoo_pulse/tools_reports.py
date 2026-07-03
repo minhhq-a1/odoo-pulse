@@ -898,7 +898,10 @@ def absence_overview(
 
 
 @mcp.tool()
-def business_pulse(timezone_offset: int = 7) -> str:
+def business_pulse(
+    timezone_offset: int = 7,
+    company: str | int | None = None,
+) -> str:
     """One-call company briefing: sales, leads, receivables, tasks, absences.
 
     The morning-standup view of the whole company: yesterday's confirmed
@@ -909,12 +912,16 @@ def business_pulse(timezone_offset: int = 7) -> str:
 
     Args:
         timezone_offset: UTC offset for "today" (default 7 = Asia/Ho_Chi_Minh).
+        company: Optional company name (ilike) or id; scopes every section.
     """
 
     def run() -> dict:
         client = get_client()
         today = today_in_tz(timezone_offset)
         yesterday = today - timedelta(days=1)
+        company_id = resolve_company_id(client, company)
+        company_domain: list = (
+            [("company_id", "=", company_id)] if company_id else [])
         sections: dict[str, dict] = {}
 
         def section(name, fn):
@@ -928,7 +935,8 @@ def business_pulse(timezone_offset: int = 7) -> str:
                 "sale.order",
                 domain=[("state", "in", ["sale", "done"]),
                         ("date_order", ">=", yesterday.isoformat()),
-                        ("date_order", "<", today.isoformat())],
+                        ("date_order", "<", today.isoformat()),
+                        *company_domain],
                 fields=["id", "amount_total"], limit=200,
             )
             return {"orders": len(rows),
@@ -938,7 +946,8 @@ def business_pulse(timezone_offset: int = 7) -> str:
         def new_leads() -> dict:
             n = client.search_count("crm.lead", [
                 ("create_date", ">=", yesterday.isoformat()),
-                ("create_date", "<", today.isoformat())])
+                ("create_date", "<", today.isoformat()),
+                *company_domain])
             return {"new_leads": n}
 
         def overdue_invoices() -> dict:
@@ -947,7 +956,8 @@ def business_pulse(timezone_offset: int = 7) -> str:
                 domain=[("move_type", "=", "out_invoice"),
                         ("state", "=", "posted"),
                         ("payment_state", "in", ["not_paid", "partial"]),
-                        ("invoice_date_due", "<", today.isoformat())],
+                        ("invoice_date_due", "<", today.isoformat()),
+                        *company_domain],
                 fields=["id", "amount_residual"], limit=200,
             )
             return {"overdue_invoices": len(rows),
@@ -957,14 +967,16 @@ def business_pulse(timezone_offset: int = 7) -> str:
         def overdue_tasks() -> dict:
             n = client.search_count("project.task", [
                 ("date_deadline", "<", today.isoformat()),
-                ("stage_id.fold", "=", False)])
+                ("stage_id.fold", "=", False),
+                *company_domain])
             return {"overdue_tasks": n}
 
         def people_off() -> dict:
             n = client.search_count("hr.leave", [
                 ("state", "=", "validate"),
                 ("date_from", "<=", today.isoformat()),
-                ("date_to", ">=", today.isoformat())])
+                ("date_to", ">=", today.isoformat()),
+                *company_domain])
             return {"off_today": n}
 
         section("sales", sales_yesterday)
@@ -979,6 +991,13 @@ def business_pulse(timezone_offset: int = 7) -> str:
         )
         verdict = "attention" if attention else "all_clear"
         unavailable = [k for k, v in sections.items() if not v["available"]]
+
+        n_companies = 0
+        if company_id is None:
+            try:
+                n_companies = client.search_count("res.company", [])
+            except OdooError:
+                n_companies = 0
 
         summary = {
             "verdict": verdict,
@@ -1013,6 +1032,13 @@ def business_pulse(timezone_offset: int = 7) -> str:
                 "message": (f"{sections['projects']['overdue_tasks']} task(s) "
                             "past deadline"),
             })
+        if n_companies > 1:
+            risks.append({
+                "code": "multi_company_totals", "count": n_companies,
+                "message": (
+                    f"Instance has {n_companies} companies; section totals mix "
+                    "them (and their currencies). Pass company= to scope."),
+            })
         for name in unavailable:
             risks.append({
                 "code": "section_unavailable", "count": 1,
@@ -1024,6 +1050,7 @@ def business_pulse(timezone_offset: int = 7) -> str:
             summary=summary,
             breakdown={"sections": sections},
             highlights=highlights, risks=risks,
+            extra={"company": company},
         )
 
     return safe(run)

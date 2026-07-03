@@ -22,6 +22,7 @@ def _setup(fake_client):
     fake_client.search_count_responses["crm.lead"] = 4
     fake_client.search_count_responses["project.task"] = 2
     fake_client.search_count_responses["hr.leave"] = 1
+    fake_client.search_count_responses["res.company"] = 1
 
 
 def test_business_pulse_sections_and_verdict(fake_client, monkeypatch):
@@ -77,3 +78,33 @@ def test_business_pulse_survives_missing_apps(fake_client, monkeypatch):
     assert out["summary"]["verdict"] == "attention"  # receivables still overdue
     unavailable_risks = [r for r in out["risks"] if r["code"] == "section_unavailable"]
     assert len(unavailable_risks) == 2
+
+
+def test_business_pulse_company_filter(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    fake_client.search_responses["res.company"] = [{"id": 5, "name": "Acme VN"}]
+    fake_client.search_count_responses["res.company"] = 2
+    tools_reports.business_pulse(company="acme")
+    for model in ("sale.order", "account.move"):
+        call = next(c for c in fake_client.calls
+                    if c["method"] == "search_read" and c["model"] == model)
+        assert ("company_id", "=", 5) in call["domain"], model
+    for model in ("crm.lead", "project.task", "hr.leave"):
+        call = next(c for c in fake_client.calls
+                    if c["method"] == "search_count" and c["model"] == model)
+        assert ("company_id", "=", 5) in call["domain"], model
+
+
+def test_business_pulse_multi_company_caveat(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    fake_client.search_count_responses["res.company"] = 3
+    out = json.loads(tools_reports.business_pulse())
+    risk = next(r for r in out["risks"] if r["code"] == "multi_company_totals")
+    assert risk["count"] == 3
+
+
+def test_business_pulse_single_company_no_caveat(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    fake_client.search_count_responses["res.company"] = 1
+    out = json.loads(tools_reports.business_pulse())
+    assert "multi_company_totals" not in [r["code"] for r in out["risks"]]
