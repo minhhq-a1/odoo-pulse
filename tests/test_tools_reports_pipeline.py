@@ -109,3 +109,43 @@ def test_pipeline_review_empty_pipeline_is_at_risk(fake_client, monkeypatch):
     out = json.loads(tools_reports.pipeline_review())
     assert out["summary"]["verdict"] == "at_risk"
     assert any(r["code"] == "empty_pipeline" for r in out["risks"])
+
+
+def test_pipeline_review_custom_thresholds(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    # 1 of 3 deals stalled = 33.3% -> at_risk under defaults,
+    # off_track when the off_track cut-off is lowered to 30.
+    fake_client.search_responses["crm.lead"] = LEADS  # existing canned rows
+    fake_client.search_count_responses["crm.lead"] = 0
+    out = json.loads(tools_reports.pipeline_review(
+        stalled_pct_off_track=30.0, stalled_pct_at_risk=10.0))
+    assert out["summary"]["verdict"] == "off_track"
+    assert out["thresholds"] == {
+        "stalled_pct_at_risk": 10.0, "stalled_pct_off_track": 30.0}
+
+
+def test_pipeline_review_company_filter(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    fake_client.search_responses["res.company"] = [{"id": 5, "name": "Acme VN"}]
+    fake_client.search_responses["crm.lead"] = []
+    fake_client.search_count_responses["crm.lead"] = 0
+    tools_reports.pipeline_review(company="acme")
+    lead_call = next(c for c in fake_client.calls
+                     if c["method"] == "search_read" and c["model"] == "crm.lead")
+    assert ("company_id", "=", 5) in lead_call["domain"]
+    # win-rate counts share the company scope
+    count_call = next(c for c in fake_client.calls
+                      if c["method"] == "search_count" and c["model"] == "crm.lead")
+    assert ("company_id", "=", 5) in count_call["domain"]
+
+
+def test_pipeline_review_flags_mixed_companies(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    leads = [dict(l) for l in LEADS]
+    leads[0]["company_id"] = [1, "Acme VN"]
+    leads[1]["company_id"] = [2, "Acme US"]
+    fake_client.search_responses["crm.lead"] = leads
+    fake_client.search_count_responses["crm.lead"] = 0
+    out = json.loads(tools_reports.pipeline_review())
+    codes = [r["code"] for r in out["risks"]]
+    assert "mixed_companies" in codes

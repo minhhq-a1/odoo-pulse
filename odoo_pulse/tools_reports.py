@@ -13,9 +13,13 @@ from .odoo_client import OdooError
 from .runtime import get_client, mcp, safe
 from .workflow_helpers import (
     build_report,
+    distinct_companies,
     fetch_with_truncation,
     parse_deadline,
+    resolve_company_id,
     today_in_tz,
+    totals_by_currency,
+    trend_direction,
 )
 
 
@@ -28,6 +32,9 @@ def pipeline_review(
     win_rate_days: int = 90,
     top_n: int = 5,
     timezone_offset: int = 7,
+    company: str | int | None = None,
+    stalled_pct_at_risk: float = 25.0,
+    stalled_pct_off_track: float = 50.0,
 ) -> str:
     """Report the health of the CRM pipeline, in one call.
 
@@ -45,23 +52,34 @@ def pipeline_review(
         win_rate_days: Look-back window for the won/lost ratio (default 90).
         top_n: Max stalled deals listed in the breakdown (default 5).
         timezone_offset: UTC offset for "today" (default 7 = Asia/Ho_Chi_Minh).
+        company: Optional company name (ilike) or id; scopes every count
+            and total to that company.
+        stalled_pct_at_risk: Stalled share (%) at which the verdict drops
+            to at_risk (default 25).
+        stalled_pct_off_track: Stalled share (%) at which the verdict drops
+            to off_track (default 50).
     """
 
     def run() -> dict:
         client = get_client()
         today = today_in_tz(timezone_offset)
 
+        company_id = resolve_company_id(client, company)
+
         owner_filter: list = []
         if salesperson:
             owner_filter.append(("user_id.name", "ilike", salesperson))
         if team:
             owner_filter.append(("team_id.name", "ilike", team))
+        if company_id:
+            owner_filter.append(("company_id", "=", company_id))
         domain: list = [("type", "=", "opportunity"), *owner_filter]
 
         leads, truncation = fetch_with_truncation(
             client, "crm.lead", domain,
             fields=["id", "name", "stage_id", "user_id", "expected_revenue",
-                    "probability", "date_deadline", "date_last_stage_update"],
+                    "probability", "date_deadline", "date_last_stage_update",
+                    "company_id"],
             limit=200, order="expected_revenue desc",
         )
 
@@ -125,9 +143,9 @@ def pipeline_review(
 
         if total == 0:
             verdict = "at_risk"
-        elif stalled_pct >= 50:
+        elif stalled_pct >= stalled_pct_off_track:
             verdict = "off_track"
-        elif stalled_pct >= 25 or overdue_close > 0:
+        elif stalled_pct >= stalled_pct_at_risk or overdue_close > 0:
             verdict = "at_risk"
         else:
             verdict = "on_track"
@@ -187,13 +205,25 @@ def pipeline_review(
                 "message": f"{overdue_close} deal(s) past their expected close date",
             })
 
+        companies = distinct_companies(leads)
+        if len(companies) > 1:
+            risks.append({
+                "code": "mixed_companies", "count": len(companies),
+                "message": (
+                    f"Revenue totals mix {len(companies)} companies "
+                    f"({', '.join(companies)}) and therefore their currencies; "
+                    "pass company= to scope."),
+            })
+
         return build_report(
             "pipeline_review", today,
             summary=summary,
             breakdown={"by_stage": stages, "by_salesperson": reps,
                        "stalled_deals": stalled[:top_n]},
             highlights=highlights, risks=risks,
-            extra={"salesperson": salesperson, "team": team},
+            extra={"salesperson": salesperson, "team": team, "company": company,
+                   "thresholds": {"stalled_pct_at_risk": stalled_pct_at_risk,
+                                  "stalled_pct_off_track": stalled_pct_off_track}},
         )
 
     return safe(run)
