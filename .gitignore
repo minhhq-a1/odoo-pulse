@@ -20,6 +20,8 @@ env/
 .mypy_cache/
 .ruff_cache/
 
-# Local design docs / plans
-docs/
+# Local design docs / plans (internal); shipped docs are re-included below
+docs/*
 !docs/playground.md
+!docs/install.md
+!docs/tools.md
