@@ -1,4 +1,6 @@
 # tests/test_cache.py
+import threading
+
 import odoo_pulse.cache as cache_mod
 from odoo_pulse.cache import TTLCache
 
@@ -39,3 +41,25 @@ def test_lru_evicts_oldest_past_max_entries():
     assert c.get("a") == 1
     assert c.get("b") is None
     assert c.get("c") == 3
+
+
+def test_cache_survives_concurrent_get_set():
+    cache = TTLCache(ttl=60, max_entries=8)
+    errors: list[BaseException] = []
+
+    def hammer(seed: int) -> None:
+        try:
+            for i in range(2000):
+                key = (seed + i) % 16
+                cache.set(key, i)
+                cache.get(key)
+        except BaseException as exc:  # noqa: BLE001 - we want any crash
+            errors.append(exc)
+
+    threads = [threading.Thread(target=hammer, args=(n,)) for n in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert not errors
+    assert len(cache._store) <= 8
