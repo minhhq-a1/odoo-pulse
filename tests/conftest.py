@@ -27,6 +27,9 @@ class FakeClient:
         # model -> queue of row-lists; when non-empty, search_read pops one
         # per call (for tools that query the same model twice).
         self.search_responses_seq: dict[str, list] = {}
+        # model -> queue of row-lists; when non-empty, aggregate_records pops
+        # one per call (for tools that aggregate the same model twice).
+        self.aggregate_responses_seq: dict[str, list] = {}
         # model -> list[dict] returned by read
         self.read_responses: dict[str, list] = {}
         self.raise_error: str | None = None
@@ -158,11 +161,12 @@ class FakeClient:
             if self.major is not None and self.major >= 19
             else "read_group"
         )
-        return {
-            "method": method,
-            "major_version": self.major,
-            "rows": self.search_responses.get(model, []),
-        }
+        seq = self.aggregate_responses_seq.get(model)
+        if seq:
+            rows = seq.pop(0)
+        else:
+            rows = self.search_responses.get(model, [])
+        return {"method": method, "major_version": self.major, "rows": rows}
 
 
 @pytest.fixture

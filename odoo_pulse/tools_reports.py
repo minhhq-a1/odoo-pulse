@@ -16,6 +16,7 @@ from .workflow_helpers import (
     distinct_companies,
     fetch_with_truncation,
     parse_deadline,
+    parse_when,
     resolve_company_id,
     today_in_tz,
     totals_by_currency,
@@ -269,44 +270,56 @@ def sales_snapshot(
         company_domain: list = (
             [("company_id", "=", company_id)] if company_id else [])
 
-        orders, truncation = fetch_with_truncation(
-            client, "sale.order",
-            [("state", "in", ["sale", "done"]),
-             ("date_order", ">=", prev_start.isoformat()), *company_domain],
-            fields=["id", "name", "amount_total", "partner_id", "date_order",
-                    "currency_id"],
-            limit=200, order="date_order desc",
-        )
+        cur_lo = utc_bound(cur_start, timezone_offset)
+        cur_hi = utc_bound(today + timedelta(days=1), timezone_offset)
+        prev_lo = utc_bound(prev_start, timezone_offset)
 
-        cur_total = prev_total = 0.0
-        cur_count = prev_count = 0
-        customers: dict[str, dict] = {}
-        cur_rows: list[dict] = []
-        for o in orders:
-            day = parse_deadline(o.get("date_order"))
-            amount = o.get("amount_total") or 0.0
-            if day is not None and day >= cur_start:
-                cur_count += 1
-                cur_rows.append(o)
-                cur_total += amount
-                partner = o["partner_id"][1] if o.get("partner_id") else "(unknown)"
-                rec = customers.setdefault(
-                    partner, {"customer": partner, "orders": 0, "revenue": 0.0})
-                rec["orders"] += 1
-                rec["revenue"] += amount
-            else:
-                prev_count += 1
-                prev_total += amount
+        base = [("state", "in", ["sale", "done"]), *company_domain]
+
+        def period_totals(lo: str, hi: str):
+            agg = client.aggregate_records(
+                "sale.order", group_by=["currency_id"],
+                measures=[("amount_total", "sum")],
+                domain=[*base, ("date_order", ">=", lo),
+                        ("date_order", "<", hi)],
+                limit=200,
+            )
+            count, total, by_cur = 0, 0.0, {}
+            for row in agg.get("rows", []):
+                cur = row.get("currency_id")
+                name = cur[1] if cur else "(unknown)"
+                amt = row.get("amount_total:sum") or 0.0
+                by_cur[name] = round(by_cur.get(name, 0.0) + amt, 2)
+                total += amt
+                count += row.get("__count") or 0
+            return count, round(total, 2), by_cur
+
+        cur_count, cur_total, by_currency = period_totals(cur_lo, cur_hi)
+        prev_count, prev_total, _ = period_totals(prev_lo, cur_lo)
 
         delta_pct = (round((cur_total - prev_total) / prev_total * 100, 1)
                      if prev_total else None)
+
+        cust_agg = client.aggregate_records(
+            "sale.order", group_by=["partner_id"],
+            measures=[("amount_total", "sum")],
+            domain=[*base, ("date_order", ">=", cur_lo),
+                    ("date_order", "<", cur_hi)],
+            limit=top_n, order="amount_total:sum desc",
+        )
+        top_customers = [
+            {"customer": r["partner_id"][1] if r.get("partner_id") else "(unknown)",
+             "orders": r.get("__count") or 0,
+             "revenue": round(r.get("amount_total:sum") or 0.0, 2)}
+            for r in cust_agg.get("rows", [])
+        ]
 
         agg = client.aggregate_records(
             "sale.order.line",
             group_by=["product_id"],
             measures=[("price_subtotal", "sum")],
             domain=[("order_id.state", "in", ["sale", "done"]),
-                    ("order_id.date_order", ">=", cur_start.isoformat()),
+                    ("order_id.date_order", ">=", cur_lo),
                     *([("order_id.company_id", "=", company_id)]
                       if company_id else [])],
             limit=top_n,
@@ -321,7 +334,7 @@ def sales_snapshot(
         stale_quotes = client.search_count("sale.order", [
             ("state", "in", ["draft", "sent"]),
             ("create_date", "<",
-             (today - timedelta(days=stale_quote_days)).isoformat()),
+             utc_bound(today - timedelta(days=stale_quote_days), timezone_offset)),
             *company_domain,
         ])
 
@@ -333,14 +346,14 @@ def sales_snapshot(
             trend_rows, trend_trunc = fetch_with_truncation(
                 client, "sale.order",
                 [("state", "in", ["sale", "done"]),
-                 ("date_order", ">=", trend_start.isoformat()),
+                 ("date_order", ">=", utc_bound(trend_start, timezone_offset)),
                  *company_domain],
                 fields=["id", "amount_total", "date_order"],
                 limit=200,
             )
             buckets = [0.0] * trend_weeks
             for o in trend_rows:
-                day = parse_deadline(o.get("date_order"))
+                day = parse_when(o.get("date_order"), timezone_offset)
                 if day is None:
                     continue
                 idx = min((day - trend_start).days // 7, trend_weeks - 1)
@@ -365,9 +378,6 @@ def sales_snapshot(
         else:
             verdict = "steady"
 
-        top_customers = sorted(
-            customers.values(), key=lambda r: -r["revenue"])[:top_n]
-
         summary = {
             "period_days": period_days,
             "orders": cur_count,
@@ -379,14 +389,10 @@ def sales_snapshot(
             "verdict": verdict,
             "trend": trend,
         }
-        by_currency = totals_by_currency(cur_rows, "amount_total")
         if len(by_currency) == 1:
             summary["currency"] = next(iter(by_currency))
         elif len(by_currency) > 1:
             summary["by_currency"] = by_currency
-        if truncation:
-            summary["truncated"] = True
-            summary["total_matching"] = truncation["total_matching"]
 
         highlights = [
             f"revenue {round(cur_total, 2)} over the last {period_days}d "
@@ -402,14 +408,6 @@ def sales_snapshot(
                 "the current period holding up")
 
         risks: list[dict] = []
-        if truncation:
-            risks.append({
-                "code": "truncated_data", "count": truncation["missing"],
-                "message": (
-                    f"Report covers only {truncation['fetched']} of "
-                    f"{truncation['total_matching']} matching orders."
-                ),
-            })
         if trend_trunc:
             risks.append({
                 "code": "truncated_trend", "count": trend_trunc["missing"],
