@@ -36,6 +36,21 @@ mixed-currency totals instead of silently summing them; verdict cut-offs
 (stalled %, overdue %, growth %) are parameters, so you can calibrate them
 to your business.
 
+### Timezone semantics
+
+All report tools take `timezone_offset` (default `7`). Odoo stores datetime
+fields in UTC; the tools shift them by `timezone_offset` hours before
+bucketing by calendar day, and day windows in domains are expressed as UTC
+datetime boundaries. Date-only fields (e.g. `project.milestone.deadline`,
+`invoice_date_due`) are compared as-is.
+
+### Custom `sprint_id` field
+
+`sprint_health`, and the `sprint_id` filter on `team_workload` /
+`standup_digest`, require a custom `sprint_id` many2one on `project.task`
+(not standard Odoo). On instances without it the tools return a clear
+error instead of an Odoo fault.
+
 Under the hood it's the standard Odoo XML-RPC external API — nothing to install
 inside Odoo, works on Odoo Online, Odoo.sh, and on-premise. **Requires
 Odoo 18+**: the generic tools (`search_read`, `read_records`, …) still run on
