@@ -73,6 +73,14 @@ def test_preview_update_includes_ids_count_affected():
     assert out["values"] == {"name": "Y"}
 
 
+def test_safe_serialises_unexpected_exceptions():
+    def boom():
+        raise KeyError("company_id")
+
+    out = json.loads(runtime.safe(boom))
+    assert out["error"].startswith("internal error: KeyError")
+
+
 def test_get_client_is_singleton_under_concurrency(monkeypatch):
     created = []
 
