@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 
 from odoo_pulse import runtime
 
@@ -70,3 +71,36 @@ def test_preview_update_includes_ids_count_affected():
     assert out["count"] == 2
     assert out["affected"] == ["A", "B"]
     assert out["values"] == {"name": "Y"}
+
+
+def test_get_client_is_singleton_under_concurrency(monkeypatch):
+    created = []
+
+    class _Cfg:
+        @staticmethod
+        def from_env():
+            return object()
+
+    class _Client:
+        def __init__(self, cfg):
+            created.append(self)
+
+    monkeypatch.setattr(runtime, "OdooConfig", _Cfg)
+    monkeypatch.setattr(runtime, "OdooClient", _Client)
+    runtime._client = None
+
+    barrier = threading.Barrier(8)
+    results = []
+
+    def grab():
+        barrier.wait()
+        results.append(runtime.get_client())
+
+    threads = [threading.Thread(target=grab) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    runtime._client = None
+    assert len(created) == 1
+    assert len(set(map(id, results))) == 1

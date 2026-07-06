@@ -7,6 +7,7 @@ import these without creating an import cycle through ``server``.
 from __future__ import annotations
 
 import json
+import threading
 
 from mcp.server.fastmcp import FastMCP
 
@@ -15,14 +16,17 @@ from .odoo_client import OdooClient, OdooConfig, OdooConfigError, OdooError
 mcp = FastMCP("odoo-pulse")
 
 _client: OdooClient | None = None
+_client_lock = threading.Lock()
 
 
 def get_client() -> OdooClient:
     """Lazily build the Odoo client so the server can start without creds
-    being validated until the first tool call."""
+    being validated until the first tool call. Safe under concurrent calls."""
     global _client
     if _client is None:
-        _client = OdooClient(OdooConfig.from_env())
+        with _client_lock:
+            if _client is None:
+                _client = OdooClient(OdooConfig.from_env())
     return _client
 
 
