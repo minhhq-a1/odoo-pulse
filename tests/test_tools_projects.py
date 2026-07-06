@@ -69,3 +69,23 @@ def test_standup_digest_renders_markdown_header(fake_client):
     assert "## 🗓️ Daily Standup — Acme" in out
     assert "Quá hạn" in out          # the overdue section header
     assert "Alice" in out            # resolved assignee name
+
+
+def test_standup_digest_warns_on_truncation(fake_client):
+    from odoo_pulse import tools_workflows
+
+    # exactly max_records rows returned + a larger search_count => truncated
+    fake_client.config.max_records = 2
+    fake_client.search_responses["project.task"] = [
+        {"id": 1, "name": "T1", "user_ids": [5], "stage_id": [1, "Doing"],
+         "date_deadline": False, "priority": "0"},
+        {"id": 2, "name": "T2", "user_ids": [5], "stage_id": [1, "Doing"],
+         "date_deadline": False, "priority": "0"},
+    ]
+    fake_client.search_count_responses["project.task"] = 10
+    fake_client.execute_kw_responses[("res.users", "search_read")] = [
+        {"id": 5, "name": "An"}]
+
+    out = tools_workflows.standup_digest("Acme")
+    assert "⚠️" in out
+    assert "10" in out

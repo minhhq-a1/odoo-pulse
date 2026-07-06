@@ -8,8 +8,10 @@ Read-only; no new write surface.
 
 from __future__ import annotations
 
+import json
 from datetime import timedelta
 
+from .odoo_client import OdooConfigError, OdooError
 from .runtime import get_client, mcp, safe
 from .workflow_helpers import (
     build_report,
@@ -642,11 +644,6 @@ def standup_digest(
     Note: sprint_id is a custom field, not standard Odoo; the tool degrades
         with a clear error when absent.
     """
-    import json as _json
-    from datetime import timedelta
-
-    from .odoo_client import OdooConfigError, OdooError
-
     if exclude_stages is None:
         exclude_stages = ["Done", "Cancelled", "Delivered"]
 
@@ -669,12 +666,11 @@ def standup_digest(
         ]
         if sprint_id is not None:
             domain.append(("sprint_id", "=", sprint_id))
-        tasks = client.search_read(
-            "project.task",
-            domain=domain,
-            fields=["id", "name", "user_ids", "stage_id", "date_deadline", "priority"],
-            limit=200,
-            order="date_deadline",
+        tasks, truncation = fetch_with_truncation(
+            client, "project.task", domain,
+            fields=["id", "name", "user_ids", "stage_id",
+                    "date_deadline", "priority"],
+            limit=200, order="date_deadline",
         )
 
         # Resolve user names including archived users (shared helper).
@@ -733,6 +729,12 @@ def standup_digest(
 
         lines = [f"## 🗓️ Daily Standup — {project}", f"**{today_str}**", ""]
 
+        if truncation:
+            lines.append(
+                f"⚠️ Chỉ hiển thị {truncation['fetched']}/"
+                f"{truncation['total_matching']} task — dữ liệu bị cắt bớt.")
+            lines.append("")
+
         if overdue:
             lines.append(f"### ❌ Quá hạn ({len(overdue)})")
             lines += task_table(overdue, "Quá hạn", lambda t: days_ago(t["deadline"]))
@@ -770,6 +772,9 @@ def standup_digest(
 
         return "\n".join(lines)
 
+    # This tool's success contract is markdown, not JSON, so `safe()` (which
+    # always serialises to JSON) is unsuitable here; keep a local try/except
+    # that still returns a JSON error string on failure.
     except (OdooConfigError, OdooError) as exc:
-        return _json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2)
+        return json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2)
 
