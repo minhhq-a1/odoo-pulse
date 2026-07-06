@@ -159,3 +159,10 @@ def test_sprint_health_no_truncation_when_count_matches_fetched(fake_client, mon
 
     assert "truncated" not in out["summary"]
     assert all(r["code"] != "truncated_data" for r in out["risks"])
+
+
+def test_sprint_health_friendly_error_without_sprint_field(fake_client):
+    fake_client.fields_responses["project.task"] = {"name": {"type": "char"}}
+    out = json.loads(tools_workflows.sprint_health(sprint_id=5))
+    assert "sprint_id" in out["error"]
+    assert "custom" in out["error"]

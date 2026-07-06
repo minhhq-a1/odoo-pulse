@@ -11,6 +11,11 @@ import pytest
 from odoo_pulse import runtime
 from odoo_pulse.odoo_client import OdooError
 
+_DEFAULT_FIELDS = {
+    "name": {"type": "char", "string": "Name"},
+    "sprint_id": {"type": "many2one", "string": "Sprint"},
+}
+
 
 class FakeClient:
     """Records the calls made by the tools and returns canned data.
@@ -41,6 +46,8 @@ class FakeClient:
         # models whose search_read/search_count raise OdooError (to simulate
         # an app that is not installed).
         self.error_models: set[str] = set()
+        # model -> fields_get schema dict; falls back to _DEFAULT_FIELDS.
+        self.fields_responses: dict[str, dict] = {}
         # Major Odoo version reported by major_version()/aggregate_records;
         # tests override it to exercise the 18 vs 19 code paths.
         self.major: int | None = 18
@@ -70,7 +77,7 @@ class FakeClient:
     def fields_get(self, model, attributes=None):
         self.calls.append({"method": "fields_get", "model": model})
         self._maybe_raise()
-        return {"name": {"type": "char", "string": "Name"}}
+        return self.fields_responses.get(model, dict(_DEFAULT_FIELDS))
 
     def search_count(self, model, domain=None):
         self.calls.append({"method": "search_count", "model": model, "domain": domain})

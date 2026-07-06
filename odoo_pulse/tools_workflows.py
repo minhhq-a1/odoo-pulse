@@ -13,6 +13,7 @@ from datetime import timedelta
 from .runtime import get_client, mcp, safe
 from .workflow_helpers import (
     build_report,
+    ensure_field,
     fetch_with_truncation,
     parse_when,
     resolve_user_names,
@@ -45,10 +46,17 @@ def sprint_health(
         timezone_offset: UTC offset for "today" (default 7 = Asia/Ho_Chi_Minh).
         subtasks_only: Count only subtasks (parent_id != False), the team's unit
             of work. Default True.
+
+    Note: sprint_id is a custom field, not standard Odoo; the tool degrades
+        with a clear error when absent.
     """
 
     def run() -> dict:
         client = get_client()
+        ensure_field(
+            client, "project.task", "sprint_id",
+            hint="sprint_id is a custom field; this instance does not have "
+                 "it. Use team_workload or project_status_report instead.")
         ex = exclude_stages if exclude_stages is not None else ["Cancelled"]
         done_set = {
             s.lower() for s in (done_stages if done_stages is not None else ["Done", "Delivered"])
@@ -221,10 +229,18 @@ def team_workload(
         timezone_offset: UTC offset for "today" (default 7 = Asia/Ho_Chi_Minh).
         subtasks_only: Count only subtasks (parent_id != False), the team's unit
             of work. Default True.
+
+    Note: sprint_id is a custom field, not standard Odoo; the tool degrades
+        with a clear error when absent.
     """
 
     def run() -> dict:
         client = get_client()
+        if sprint_id is not None:
+            ensure_field(
+                client, "project.task", "sprint_id",
+                hint="sprint_id is a custom field; this instance does not "
+                     "have it. Omit sprint_id to run without the filter.")
         ex = exclude_stages if exclude_stages is not None else ["Cancelled"]
         done_set = {
             s.lower() for s in (done_stages if done_stages is not None else ["Done", "Delivered"])
@@ -622,6 +638,9 @@ def standup_digest(
             ["Done", "Cancelled", "Delivered"].
         lookahead_days: Days ahead to include in UPCOMING (default 7).
         timezone_offset: UTC offset in hours for "today" (default 7 = Asia/Ho_Chi_Minh).
+
+    Note: sprint_id is a custom field, not standard Odoo; the tool degrades
+        with a clear error when absent.
     """
     import json as _json
     from datetime import timedelta
@@ -637,6 +656,11 @@ def standup_digest(
 
     try:
         client = get_client()
+        if sprint_id is not None:
+            ensure_field(
+                client, "project.task", "sprint_id",
+                hint="sprint_id is a custom field; this instance does not "
+                     "have it. Omit sprint_id to run without the filter.")
 
         domain = [
             ("project_id.name", "ilike", project),

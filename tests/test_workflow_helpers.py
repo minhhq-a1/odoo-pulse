@@ -142,3 +142,26 @@ def test_utc_bound_is_local_midnight_expressed_in_utc():
     assert utc_bound(dt.date(2026, 7, 6), 7) == "2026-07-05 17:00:00"
     assert utc_bound(dt.date(2026, 7, 6), 0) == "2026-07-06 00:00:00"
     assert utc_bound(dt.date(2026, 7, 6), -5) == "2026-07-06 05:00:00"
+
+
+from odoo_pulse.workflow_helpers import ensure_field
+
+
+class _SchemaClient:
+    def fields_get(self, model, attributes=None):
+        return {"name": {"type": "char"}}
+
+
+def test_ensure_field_raises_with_hint_when_missing():
+    with pytest.raises(OdooError, match="sprint_id.*custom"):
+        ensure_field(_SchemaClient(), "project.task", "sprint_id",
+                     hint="sprint_id is a custom field; this instance "
+                          "does not have it.")
+
+
+def test_ensure_field_passes_when_present():
+    class _C:
+        def fields_get(self, model, attributes=None):
+            return {"sprint_id": {"type": "many2one"}}
+
+    ensure_field(_C(), "project.task", "sprint_id")  # no raise

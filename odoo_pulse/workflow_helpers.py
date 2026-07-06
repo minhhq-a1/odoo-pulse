@@ -82,6 +82,20 @@ def fetch_with_truncation(
     }
 
 
+def ensure_field(client: Any, model: str, field: str, hint: str = "") -> None:
+    """Raise OdooError when `field` is absent from `model`'s schema.
+
+    Uses the client's cached fields_get, so the check costs nothing after
+    the first call. Lets instance-specific fields (e.g. sprint_id) fail
+    with guidance instead of a raw Odoo fault.
+    """
+    if field not in client.fields_get(model):
+        message = f"Field '{field}' does not exist on {model}."
+        if hint:
+            message += f" {hint}"
+        raise OdooError(message)
+
+
 def resolve_user_names(client: Any, user_ids: Any) -> dict[int, str]:
     """Map res.users ids to names, including archived users.
 
