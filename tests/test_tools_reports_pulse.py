@@ -45,14 +45,14 @@ def test_business_pulse_sections_and_verdict(fake_client, monkeypatch):
 def test_business_pulse_domains_use_yesterday(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _setup(fake_client)
-    tools_reports.business_pulse()
+    tools_reports.business_pulse(timezone_offset=7)
     sales = next(c for c in fake_client.calls
                  if c["method"] == "search_read" and c["model"] == "sale.order")
-    assert ("date_order", ">=", "2026-06-29") in sales["domain"]
-    assert ("date_order", "<", "2026-06-30") in sales["domain"]
+    assert ("date_order", ">=", "2026-06-28 17:00:00") in sales["domain"]
+    assert ("date_order", "<", "2026-06-29 17:00:00") in sales["domain"]
     leads = next(c for c in fake_client.calls
                  if c["method"] == "search_count" and c["model"] == "crm.lead")
-    assert ("create_date", ">=", "2026-06-29") in leads["domain"]
+    assert ("create_date", ">=", "2026-06-28 17:00:00") in leads["domain"]
 
 
 def test_business_pulse_all_clear(fake_client, monkeypatch):
@@ -108,3 +108,29 @@ def test_business_pulse_single_company_no_caveat(fake_client, monkeypatch):
     fake_client.search_count_responses["res.company"] = 1
     out = json.loads(tools_reports.business_pulse())
     assert "multi_company_totals" not in [r["code"] for r in out["risks"]]
+
+
+def test_business_pulse_day_windows_are_utc_shifted(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    _setup(fake_client)
+    out = json.loads(tools_reports.business_pulse(timezone_offset=7))
+    assert out["tool"] == "business_pulse"
+
+    sale_call = next(c for c in fake_client.calls
+                     if c["method"] == "search_read"
+                     and c["model"] == "sale.order")
+    domain = sale_call["domain"]
+    lo = next(t for t in domain if t[0] == "date_order" and t[1] == ">=")
+    hi = next(t for t in domain if t[0] == "date_order" and t[1] == "<")
+    # local midnight at +7 == 17:00 UTC the previous day
+    assert lo[2].endswith("17:00:00")
+    assert hi[2].endswith("17:00:00")
+
+    leave_call = next(c for c in fake_client.calls
+                      if c["method"] == "search_count"
+                      and c["model"] == "hr.leave")
+    lv = leave_call["domain"]
+    assert any(t[0] == "date_from" and t[1] == "<" and t[2].endswith("17:00:00")
+               for t in lv)
+    assert any(t[0] == "date_to" and t[1] == ">=" and t[2].endswith("17:00:00")
+               for t in lv)

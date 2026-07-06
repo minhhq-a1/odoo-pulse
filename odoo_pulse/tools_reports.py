@@ -20,6 +20,7 @@ from .workflow_helpers import (
     today_in_tz,
     totals_by_currency,
     trend_direction,
+    utc_bound,
 )
 
 
@@ -922,6 +923,9 @@ def business_pulse(
         client = get_client()
         today = today_in_tz(timezone_offset)
         yesterday = today - timedelta(days=1)
+        y_lo = utc_bound(yesterday, timezone_offset)
+        y_hi = utc_bound(today, timezone_offset)
+        t_hi = utc_bound(today + timedelta(days=1), timezone_offset)
         company_id = resolve_company_id(client, company)
         company_domain: list = (
             [("company_id", "=", company_id)] if company_id else [])
@@ -937,8 +941,8 @@ def business_pulse(
             rows = client.search_read(
                 "sale.order",
                 domain=[("state", "in", ["sale", "done"]),
-                        ("date_order", ">=", yesterday.isoformat()),
-                        ("date_order", "<", today.isoformat()),
+                        ("date_order", ">=", y_lo),
+                        ("date_order", "<", y_hi),
                         *company_domain],
                 fields=["id", "amount_total"], limit=200,
             )
@@ -948,8 +952,8 @@ def business_pulse(
 
         def new_leads() -> dict:
             n = client.search_count("crm.lead", [
-                ("create_date", ">=", yesterday.isoformat()),
-                ("create_date", "<", today.isoformat()),
+                ("create_date", ">=", y_lo),
+                ("create_date", "<", y_hi),
                 *company_domain])
             return {"new_leads": n}
 
@@ -977,8 +981,8 @@ def business_pulse(
         def people_off() -> dict:
             n = client.search_count("hr.leave", [
                 ("state", "=", "validate"),
-                ("date_from", "<=", today.isoformat()),
-                ("date_to", ">=", today.isoformat()),
+                ("date_from", "<", t_hi),
+                ("date_to", ">=", y_hi),
                 *company_domain])
             return {"off_today": n}
 
