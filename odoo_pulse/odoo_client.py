@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 import re
 import ssl
+import threading
 import xmlrpc.client
 from dataclasses import dataclass
 from functools import cached_property
@@ -212,6 +213,8 @@ class OdooClient:
         self.config = config
         self._schema_cache = TTLCache(config.schema_cache_ttl, config.schema_cache_max)
         self._major_version: Any = _UNSET
+        self._uid: int | None = None
+        self._uid_lock = threading.Lock()
 
     @cached_property
     def _ssl_context(self) -> ssl.SSLContext | None:
@@ -229,26 +232,18 @@ class OdooClient:
             return _TimeoutSafeTransport(self.config.timeout, context=self._ssl_context)
         return _TimeoutTransport(self.config.timeout)
 
-    @cached_property
-    def _common(self) -> xmlrpc.client.ServerProxy:
+    def _proxy(self, path: str) -> xmlrpc.client.ServerProxy:
+        """Fresh proxy per call: ServerProxy is not thread-safe, and the
+        construction cost is negligible next to the XML-RPC round-trip."""
         return xmlrpc.client.ServerProxy(
-            f"{self.config.url}/xmlrpc/2/common",
+            f"{self.config.url}{path}",
             allow_none=True,
             transport=self._make_transport(),
         )
 
-    @cached_property
-    def _models(self) -> xmlrpc.client.ServerProxy:
-        return xmlrpc.client.ServerProxy(
-            f"{self.config.url}/xmlrpc/2/object",
-            allow_none=True,
-            transport=self._make_transport(),
-        )
-
-    @cached_property
-    def uid(self) -> int:
+    def _authenticate(self) -> int:
         try:
-            uid = self._common.authenticate(
+            uid = self._proxy("/xmlrpc/2/common").authenticate(
                 self.config.db, self.config.username, self.config.api_key, {}
             )
         except xmlrpc.client.Fault as exc:  # pragma: no cover - network dependent
@@ -261,9 +256,17 @@ class OdooClient:
             )
         return uid
 
+    @property
+    def uid(self) -> int:
+        if self._uid is None:
+            with self._uid_lock:
+                if self._uid is None:
+                    self._uid = self._authenticate()
+        return self._uid
+
     def version(self) -> dict[str, Any]:
         try:
-            return self._common.version()
+            return self._proxy("/xmlrpc/2/common").version()
         except (OSError, xmlrpc.client.ProtocolError) as exc:
             raise OdooError(f"Cannot reach Odoo at {self.config.url}: {exc}") from exc
 
@@ -275,7 +278,12 @@ class OdooClient:
         return int(match.group(1)) if match else None
 
     def major_version(self) -> int | None:
-        """Major Odoo version (e.g. 18), cached on the instance. None if unknown."""
+        """Major Odoo version (e.g. 18), cached on the instance. None if unknown.
+
+        Not lock-guarded: if two threads race here, both may compute and
+        assign the same value redundantly (one extra network call). This is
+        a benign race - the result is idempotent - so no lock is used.
+        """
         if self._major_version is _UNSET:
             self._major_version = self._parse_major(self.version().get("server_version"))
         return self._major_version
@@ -421,7 +429,7 @@ class OdooClient:
         if method in WRITE_METHODS:
             self._check_write(model, method)
         try:
-            return self._models.execute_kw(
+            return self._proxy("/xmlrpc/2/object").execute_kw(
                 self.config.db,
                 self.uid,
                 self.config.api_key,

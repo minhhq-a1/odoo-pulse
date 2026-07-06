@@ -51,9 +51,10 @@ def make_client(
     )
     client = OdooClient(cfg)
     proxy = FakeProxy(return_value=return_value, fault=fault)
-    # Pre-seed the cached_property slots so no real network/auth happens.
-    client.__dict__["uid"] = 42
-    client.__dict__["_models"] = proxy
+    # Pre-seed the cached uid and stub out per-call proxy construction so no
+    # real network/auth happens.
+    client._uid = 42
+    client._proxy = lambda path: proxy
     return client, proxy
 
 
@@ -195,7 +196,7 @@ class _RaisingProxy:
 )
 def test_execute_kw_wraps_network_errors_as_odoo_error(exc):
     client, _ = make_client()
-    client.__dict__["_models"] = _RaisingProxy(exc)
+    client._proxy = lambda path: _RaisingProxy(exc)
     with pytest.raises(OdooError, match="Cannot reach Odoo"):
         client.execute_kw("res.partner", "search_read", [[]])
 
@@ -212,7 +213,7 @@ def test_uid_wraps_network_errors_as_odoo_error(exc):
         api_key="secret",
     )
     client = OdooClient(cfg)
-    client.__dict__["_common"] = _RaisingProxy(exc)
+    client._proxy = lambda path: _RaisingProxy(exc)
     with pytest.raises(OdooError, match="Cannot reach Odoo"):
         client.uid  # noqa: B018 - property access is the thing under test
 
@@ -225,7 +226,7 @@ def test_version_wraps_network_errors_as_odoo_error():
         api_key="secret",
     )
     client = OdooClient(cfg)
-    client.__dict__["_common"] = _RaisingProxy(OSError("network unreachable"))
+    client._proxy = lambda path: _RaisingProxy(OSError("network unreachable"))
     with pytest.raises(OdooError, match="Cannot reach Odoo"):
         client.version()
 
@@ -294,3 +295,53 @@ def test_make_transport_honours_verify_ssl_false():
     # must be the unverified context built from verify_ssl=False.
     assert transport.context is client._ssl_context
     assert transport.context.verify_mode.name == "CERT_NONE"
+
+
+def test_each_execute_kw_builds_a_fresh_proxy(monkeypatch):
+    import xmlrpc.client
+    from odoo_pulse.odoo_client import OdooClient, OdooConfig
+
+    instances = []
+
+    class _FakeProxy:
+        def __init__(self, url, allow_none=True, transport=None):
+            instances.append(self)
+
+        def execute_kw(self, *a, **k):
+            return []
+
+        def authenticate(self, *a, **k):
+            return 2
+
+    monkeypatch.setattr(xmlrpc.client, "ServerProxy", _FakeProxy)
+    client = OdooClient(OdooConfig(
+        url="http://x", db="d", username="u", api_key="k"))
+    client.execute_kw("res.partner", "search_read", [[]])
+    client.execute_kw("res.partner", "search_read", [[]])
+    # 1 auth proxy + 2 object proxies
+    assert len(instances) == 3
+
+
+def test_uid_authenticates_once(monkeypatch):
+    import xmlrpc.client
+    from odoo_pulse.odoo_client import OdooClient, OdooConfig
+
+    auth_calls = []
+
+    class _FakeProxy:
+        def __init__(self, url, allow_none=True, transport=None):
+            self._url = url
+
+        def authenticate(self, *a, **k):
+            auth_calls.append(1)
+            return 2
+
+        def execute_kw(self, *a, **k):
+            return []
+
+    monkeypatch.setattr(xmlrpc.client, "ServerProxy", _FakeProxy)
+    client = OdooClient(OdooConfig(
+        url="http://x", db="d", username="u", api_key="k"))
+    client.execute_kw("res.partner", "search_read", [[]])
+    client.execute_kw("res.partner", "search_read", [[]])
+    assert len(auth_calls) == 1
