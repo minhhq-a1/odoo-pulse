@@ -14,7 +14,7 @@ from .runtime import get_client, mcp, safe
 from .workflow_helpers import (
     build_report,
     fetch_with_truncation,
-    parse_deadline,
+    parse_when,
     resolve_user_names,
     today_in_tz,
 )
@@ -100,7 +100,7 @@ def sprint_health(
                 for uid in assignees:
                     assignee_open[uid] = assignee_open.get(uid, 0) + 1
 
-            dd = parse_deadline(t.get("date_deadline"))
+            dd = parse_when(t.get("date_deadline"), timezone_offset)
             if dd is None:
                 no_deadline += 1
             elif dd < today:
@@ -276,7 +276,7 @@ def team_workload(
             if not assignees:
                 unassigned += 1
 
-            dd = parse_deadline(t.get("date_deadline"))
+            dd = parse_when(t.get("date_deadline"), timezone_offset)
             high = t.get("priority") == "1"
 
             for uid in assignees or [None]:
@@ -470,7 +470,7 @@ def project_status_report(
             for m in ms:  # ordered by deadline asc from the query
                 if m.get("is_reached"):
                     continue
-                dd = parse_deadline(m.get("deadline"))
+                dd = parse_when(m.get("deadline"), timezone_offset)
                 if dd is None:
                     continue
                 if next_milestone is None:
@@ -480,7 +480,7 @@ def project_status_report(
                 elif dd <= cutoff:
                     soon_ms += 1
 
-            end = parse_deadline(p.get("date"))
+            end = parse_when(p.get("date"), timezone_offset)
             past_end = end is not None and end < today and native != "done"
             end_soon = end is not None and today <= end <= cutoff
 
@@ -674,7 +674,7 @@ def standup_digest(
                 "priority": "High" if t.get("priority") == "1" else "Normal",
                 "deadline": None,
             }
-            dd = parse_deadline(t.get("date_deadline"))
+            dd = parse_when(t.get("date_deadline"), timezone_offset)
             if dd is None:
                 no_deadline.append(entry)
                 continue

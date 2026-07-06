@@ -9,7 +9,6 @@ from odoo_pulse.odoo_client import OdooError
 from odoo_pulse.workflow_helpers import (
     build_report,
     distinct_companies,
-    parse_deadline,
     parse_when,
     resolve_company_id,
     resolve_user_names,
@@ -22,16 +21,6 @@ from odoo_pulse.workflow_helpers import (
 
 def test_today_in_tz_returns_a_date():
     assert isinstance(today_in_tz(7), dt.date)
-
-
-def test_parse_deadline_parses_date_prefix():
-    assert parse_deadline("2026-06-30 14:00:00") == dt.date(2026, 6, 30)
-
-
-def test_parse_deadline_none_on_falsy():
-    assert parse_deadline(False) is None
-    assert parse_deadline("") is None
-    assert parse_deadline(None) is None
 
 
 def test_resolve_user_names_empty_ids_makes_no_call(fake_client):

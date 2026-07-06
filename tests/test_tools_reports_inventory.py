@@ -39,7 +39,8 @@ def test_inventory_risk_builds_domains(fake_client, monkeypatch):
     assert ("qty_available", ">", 0) in product_calls[1]["domain"]
     agg = next(c for c in fake_client.calls if c["method"] == "aggregate_records")
     assert agg["model"] == "stock.move"
-    assert ("date", ">=", "2026-04-01") in agg["domain"]
+    # today - 90d = 2026-04-01, expressed as a UTC bound at +7 (default offset)
+    assert ("date", ">=", "2026-03-31 17:00:00") in agg["domain"]
     assert ("state", "=", "done") in agg["domain"]
 
 
@@ -83,3 +84,15 @@ def test_inventory_risk_healthy_when_clean(fake_client, monkeypatch):
     out = json.loads(tools_reports.inventory_risk())
     assert out["summary"]["verdict"] == "healthy"
     assert out["risks"] == []
+
+
+def test_dead_stock_window_is_utc_bounded(fake_client):
+    import json
+    from odoo_pulse import tools_reports
+
+    json.loads(tools_reports.inventory_risk(timezone_offset=7))
+    agg = next(c for c in fake_client.calls
+               if c["method"] == "aggregate_records"
+               and c["model"] == "stock.move")
+    since = next(t for t in agg["domain"] if t[0] == "date" and t[1] == ">=")
+    assert since[2].endswith("17:00:00")

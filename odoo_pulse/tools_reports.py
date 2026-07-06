@@ -15,7 +15,6 @@ from .workflow_helpers import (
     build_report,
     distinct_companies,
     fetch_with_truncation,
-    parse_deadline,
     parse_when,
     resolve_company_id,
     today_in_tz,
@@ -87,7 +86,7 @@ def pipeline_review(
 
         # Win rate honours the same salesperson/team scope as the funnel, so a
         # filtered report never pairs a person's pipeline with a company-wide rate.
-        since = (today - timedelta(days=win_rate_days)).isoformat()
+        since = utc_bound(today - timedelta(days=win_rate_days), timezone_offset)
         won = client.search_count("crm.lead", [
             ("type", "=", "opportunity"), ("probability", "=", 100),
             ("date_closed", ">=", since), *owner_filter])
@@ -124,7 +123,7 @@ def pipeline_review(
             rrec["count"] += 1
             rrec["expected_revenue"] += revenue
 
-            moved = parse_deadline(lead.get("date_last_stage_update"))
+            moved = parse_when(lead.get("date_last_stage_update"), timezone_offset)
             if moved is not None and moved < stalled_cutoff:
                 stalled.append({
                     "name": lead["name"], "stage": stage, "salesperson": rep,
@@ -132,7 +131,7 @@ def pipeline_review(
                     "idle_days": (today - moved).days,
                 })
 
-            close = parse_deadline(lead.get("date_deadline"))
+            close = parse_when(lead.get("date_deadline"), timezone_offset)
             if close is None:
                 no_close_date += 1
             elif close < today:
@@ -503,7 +502,7 @@ def receivables_health(
         for inv in invoices:
             residual = inv.get("amount_residual") or 0.0
             side = "receivable" if inv["move_type"] == "out_invoice" else "payable"
-            due = parse_deadline(inv.get("invoice_date_due"))
+            due = parse_when(inv.get("invoice_date_due"), timezone_offset)
             days = (today - due).days if due else 0
             if days <= 0:
                 bucket = "not_due"
@@ -663,7 +662,7 @@ def inventory_risk(
         ]
         shortages.sort(key=lambda r: r["forecasted"])
 
-        since = (today - timedelta(days=dead_stock_days)).isoformat()
+        since = utc_bound(today - timedelta(days=dead_stock_days), timezone_offset)
         agg = client.aggregate_records(
             "stock.move", group_by=["product_id"], measures=[],
             domain=[("state", "=", "done"), ("date", ">=", since)],
@@ -791,8 +790,8 @@ def absence_overview(
         approved, approved_trunc = fetch_with_truncation(
             client, "hr.leave",
             [("state", "=", "validate"),
-             ("date_from", "<=", horizon.isoformat()),
-             ("date_to", ">=", today.isoformat())],
+             ("date_from", "<", utc_bound(horizon + timedelta(days=1), timezone_offset)),
+             ("date_to", ">=", utc_bound(today, timezone_offset))],
             fields=["id", "employee_id", "department_id", "date_from",
                     "date_to", "holiday_status_id", "number_of_days"],
             limit=200, order="date_from",
@@ -821,8 +820,8 @@ def absence_overview(
             emp = leave.get("employee_id") or [0, "(unknown)"]
             dept = (leave["department_id"][1]
                     if leave.get("department_id") else "(none)")
-            start = parse_deadline(leave.get("date_from"))
-            end = parse_deadline(leave.get("date_to"))
+            start = parse_when(leave.get("date_from"), timezone_offset)
+            end = parse_when(leave.get("date_to"), timezone_offset)
             if start and end and start <= today <= end:
                 off_today_ids.add(emp[0])
             dept_off.setdefault(dept, set()).add(emp[0])

@@ -20,13 +20,6 @@ def today_in_tz(timezone_offset: int) -> date:
     return datetime.now(tz).date()
 
 
-def parse_deadline(raw: Any) -> date | None:
-    """Parse Odoo's 'YYYY-MM-DD[ HH:MM:SS]' (or false) into a date, or None."""
-    if not raw:
-        return None
-    return datetime.strptime(str(raw)[:10], "%Y-%m-%d").date()
-
-
 def parse_when(raw: Any, timezone_offset: int = 0) -> date | None:
     """Parse an Odoo date ('YYYY-MM-DD') or UTC datetime
     ('YYYY-MM-DD HH:MM:SS') into the calendar date at the given UTC offset.

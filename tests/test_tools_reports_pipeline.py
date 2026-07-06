@@ -61,7 +61,8 @@ def test_pipeline_review_win_rate_count_domains(fake_client, monkeypatch):
     assert len(counts) == 2
     won, lost = counts
     assert ("probability", "=", 100) in won["domain"]
-    assert ("date_closed", ">=", "2026-04-01") in won["domain"]  # today - 90d
+    # today - 90d = 2026-04-01, expressed as a UTC bound at +7 (default offset)
+    assert ("date_closed", ">=", "2026-03-31 17:00:00") in won["domain"]
     assert ("active", "=", False) in lost["domain"]
     assert ("probability", "=", 0) in lost["domain"]
 
@@ -149,3 +150,25 @@ def test_pipeline_review_flags_mixed_companies(fake_client, monkeypatch):
     out = json.loads(tools_reports.pipeline_review())
     codes = [r["code"] for r in out["risks"]]
     assert "mixed_companies" in codes
+
+
+def test_stalled_uses_local_date_of_stage_update(fake_client):
+    import json
+    from datetime import date, timedelta
+    from odoo_pulse import tools_reports
+    from odoo_pulse.workflow_helpers import today_in_tz
+
+    today = today_in_tz(7)
+    # stage moved 20:00 UTC "15 days ago by UTC date" == 14 days ago at +7
+    moved = (today - timedelta(days=15)).strftime("%Y-%m-%d") + " 20:00:00"
+    fake_client.search_responses["crm.lead"] = [{
+        "id": 1, "name": "Deal", "stage_id": [1, "New"],
+        "user_id": [1, "Rep"], "expected_revenue": 100.0,
+        "probability": 10.0, "date_deadline": False,
+        "date_last_stage_update": moved, "company_id": False,
+    }]
+    fake_client.search_count_responses["crm.lead"] = 0
+    out = json.loads(tools_reports.pipeline_review(stalled_days=14,
+                                                   timezone_offset=7))
+    # at +7 the move happened 14 days ago -> NOT yet stalled (cutoff is <)
+    assert out["summary"]["stalled"] == 0

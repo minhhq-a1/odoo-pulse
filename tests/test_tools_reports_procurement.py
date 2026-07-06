@@ -30,7 +30,8 @@ def test_procurement_watch_domain(fake_client, monkeypatch):
     rfq_call = next(c for c in fake_client.calls
                     if c["method"] == "search_count" and c["model"] == "purchase.order")
     assert ("state", "in", ["draft", "sent"]) in rfq_call["domain"]
-    assert ("create_date", "<", "2026-06-23") in rfq_call["domain"]
+    # 2026-06-23 local midnight at +7 (default offset), expressed in UTC
+    assert ("create_date", "<", "2026-06-22 17:00:00") in rfq_call["domain"]
 
 
 def test_procurement_watch_late_and_verdict(fake_client, monkeypatch):
@@ -97,3 +98,22 @@ def test_procurement_watch_company_filter(fake_client, monkeypatch):
     call = next(c for c in fake_client.calls
                 if c["method"] == "search_read" and c["model"] == "purchase.order")
     assert ("company_id", "=", 5) in call["domain"]
+
+
+def test_late_receipt_uses_local_date_of_date_planned(fake_client):
+    import json
+    from datetime import timedelta
+    from odoo_pulse import tools_reports_ops
+    from odoo_pulse.workflow_helpers import today_in_tz
+
+    today = today_in_tz(7)
+    # 20:00 UTC "yesterday by UTC date" is already today at +7 -> not late
+    planned = (today - timedelta(days=1)).strftime("%Y-%m-%d") + " 20:00:00"
+    fake_client.search_responses["purchase.order"] = [{
+        "id": 1, "name": "PO1", "partner_id": [1, "Vendor"],
+        "date_planned": planned, "amount_total": 100.0,
+        "state": "purchase", "currency_id": [1, "USD"],
+    }]
+    fake_client.search_count_responses["purchase.order"] = 0
+    out = json.loads(tools_reports_ops.procurement_watch(timezone_offset=7))
+    assert out["summary"]["late_receipts"] == 0

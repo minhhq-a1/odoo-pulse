@@ -13,10 +13,11 @@ from .runtime import get_client, mcp, safe
 from .workflow_helpers import (
     build_report,
     fetch_with_truncation,
-    parse_deadline,
+    parse_when,
     resolve_company_id,
     today_in_tz,
     totals_by_currency,
+    utc_bound,
 )
 
 
@@ -72,7 +73,7 @@ def procurement_watch(
             vrec["orders"] += 1
             vrec["open_value"] += amount
 
-            planned = parse_deadline(po.get("date_planned"))
+            planned = parse_when(po.get("date_planned"), timezone_offset)
             if planned is not None and planned < late_cutoff:
                 late.append({
                     "po": po["name"], "vendor": vendor,
@@ -85,7 +86,7 @@ def procurement_watch(
         stale_rfqs = client.search_count("purchase.order", [
             ("state", "in", ["draft", "sent"]),
             ("create_date", "<",
-             (today - timedelta(days=rfq_stale_days)).isoformat()),
+             utc_bound(today - timedelta(days=rfq_stale_days), timezone_offset)),
             *company_domain,
         ])
 
@@ -213,7 +214,7 @@ def production_health(
             state = mo.get("state") or "(unknown)"
             by_state[state] = by_state.get(state, 0) + 1
             product = mo["product_id"][1] if mo.get("product_id") else "(none)"
-            start = parse_deadline(mo.get("date_start"))
+            start = parse_when(mo.get("date_start"), timezone_offset)
             if state == "confirmed" and start is not None and start < today:
                 behind.append({
                     "mo": mo["name"], "product": product,

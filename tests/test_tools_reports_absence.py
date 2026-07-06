@@ -43,8 +43,10 @@ def test_absence_overview_builds_domains(fake_client, monkeypatch):
                    if c["method"] == "search_read" and c["model"] == "hr.leave"]
     approved, pending = leave_calls
     assert ("state", "=", "validate") in approved["domain"]
-    assert ("date_from", "<=", "2026-07-14") in approved["domain"]
-    assert ("date_to", ">=", "2026-06-30") in approved["domain"]
+    # horizon (2026-07-14) + 1 day local midnight at +7, in UTC; and today's
+    # local midnight at +7, in UTC (default offset=7).
+    assert ("date_from", "<", "2026-07-14 17:00:00") in approved["domain"]
+    assert ("date_to", ">=", "2026-06-29 17:00:00") in approved["domain"]
     assert ("state", "in", ["confirm", "validate1"]) in pending["domain"]
 
 
@@ -79,3 +81,24 @@ def test_absence_overview_clear_when_quiet(fake_client, monkeypatch):
     out = json.loads(tools_reports.absence_overview())
     assert out["summary"]["verdict"] == "clear"
     assert out["risks"] == []
+
+
+def test_off_today_counts_leave_ending_late_utc_yesterday(fake_client):
+    import json
+    from datetime import timedelta
+    from odoo_pulse import tools_reports
+    from odoo_pulse.workflow_helpers import today_in_tz
+
+    today = today_in_tz(7)
+    # ends 18:00 UTC "yesterday by UTC date" == 01:00 today at +7 -> off today
+    frm = (today - timedelta(days=2)).strftime("%Y-%m-%d") + " 01:00:00"
+    to = (today - timedelta(days=1)).strftime("%Y-%m-%d") + " 18:00:00"
+    fake_client.search_responses_seq["hr.leave"] = [
+        [{"id": 1, "employee_id": [1, "An"], "department_id": [1, "Dev"],
+          "date_from": frm, "date_to": to,
+          "holiday_status_id": [1, "PTO"], "number_of_days": 2.0}],
+        [],  # pending queue
+    ]
+    fake_client.search_responses["hr.employee"] = []
+    out = json.loads(tools_reports.absence_overview(timezone_offset=7))
+    assert out["summary"]["off_today"] == 1

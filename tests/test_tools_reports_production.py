@@ -81,3 +81,21 @@ def test_production_health_company_filter(fake_client, monkeypatch):
     call = next(c for c in fake_client.calls
                 if c["method"] == "search_read" and c["model"] == "mrp.production")
     assert ("company_id", "=", 5) in call["domain"]
+
+
+def test_behind_start_uses_local_date_of_date_start(fake_client):
+    import json
+    from datetime import timedelta
+    from odoo_pulse import tools_reports_ops
+    from odoo_pulse.workflow_helpers import today_in_tz
+
+    today = today_in_tz(7)
+    start = (today - timedelta(days=1)).strftime("%Y-%m-%d") + " 20:00:00"
+    fake_client.search_responses["mrp.production"] = [{
+        "id": 1, "name": "MO1", "product_id": [1, "Widget"],
+        "product_qty": 5.0, "state": "confirmed",
+        "date_start": start, "date_finished": False,
+    }]
+    out = json.loads(tools_reports_ops.production_health(timezone_offset=7))
+    # planned start is "today" at +7, not in the past -> not behind
+    assert out["summary"]["behind_start"] == 0
