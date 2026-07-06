@@ -38,6 +38,9 @@ class FakeClient:
         # models whose search_read/search_count raise OdooError (to simulate
         # an app that is not installed).
         self.error_models: set[str] = set()
+        # Major Odoo version reported by major_version()/aggregate_records;
+        # tests override it to exercise the 18 vs 19 code paths.
+        self.major: int | None = 18
 
     # -- helpers for tests --------------------------------------------------
     def last(self, method: str) -> dict:
@@ -132,7 +135,7 @@ class FakeClient:
     def major_version(self):
         self.calls.append({"method": "major_version"})
         self._maybe_raise()
-        return 18
+        return self.major
 
     def aggregate_records(
         self, model, group_by, measures, domain=None, limit=None, offset=0, order=None
@@ -150,9 +153,14 @@ class FakeClient:
             }
         )
         self._maybe_raise()
+        method = (
+            "formatted_read_group"
+            if self.major is not None and self.major >= 19
+            else "read_group"
+        )
         return {
-            "method": "read_group",
-            "major_version": 18,
+            "method": method,
+            "major_version": self.major,
             "rows": self.search_responses.get(model, []),
         }
 

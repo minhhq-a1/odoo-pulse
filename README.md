@@ -37,7 +37,9 @@ mixed-currency totals instead of silently summing them; verdict cut-offs
 to your business.
 
 Under the hood it's the standard Odoo XML-RPC external API — nothing to install
-inside Odoo, works on Odoo Online, Odoo.sh, and on-premise.
+inside Odoo, works on Odoo Online, Odoo.sh, and on-premise. **Requires
+Odoo 18+**: the generic tools (`search_read`, `read_records`, …) still run on
+older versions, but the report tools are not guaranteed there.
 
 ## Try it in 5 minutes
 

@@ -1,7 +1,7 @@
 [project]
 name = "odoo-pulse"
-version = "1.1.0"
-description = "AI business analyst for Odoo ERP — one-call reports with verdicts, over MCP"
+version = "1.1.1"
+description = "AI business analyst for Odoo ERP (18+) — one-call reports with verdicts, over MCP"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }

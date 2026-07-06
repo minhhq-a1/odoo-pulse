@@ -46,6 +46,23 @@ BLOCKED_PREFIXES = ("ir.", "base")
 # Default attribute set requested from Odoo's fields_get.
 DEFAULT_FIELD_ATTRS = ["string", "type", "help", "required", "relation"]
 
+# Aggregator suffixes that formatted_read_group accepts in its ``order`` spec
+# (e.g. "price_subtotal:sum desc"). Legacy read_group's ``orderby`` does not
+# understand them, so they are stripped before dispatching to Odoo <= 18.
+_ORDER_AGGREGATORS = frozenset(
+    {
+        "sum",
+        "avg",
+        "min",
+        "max",
+        "count",
+        "count_distinct",
+        "array_agg",
+        "bool_and",
+        "bool_or",
+    }
+)
+
 # Sentinel distinguishing "not yet looked up" from a real None major version.
 _UNSET = object()
 
@@ -263,6 +280,25 @@ class OdooClient:
             self._major_version = self._parse_major(self.version().get("server_version"))
         return self._major_version
 
+    @staticmethod
+    def _legacy_orderby(order: str) -> str:
+        """Translate a formatted_read_group order spec for legacy read_group.
+
+        Strips ':agg' suffixes (e.g. 'price_subtotal:sum desc' ->
+        'price_subtotal desc'); non-aggregator suffixes are kept unchanged.
+        """
+        terms = []
+        for term in order.split(","):
+            term = term.strip()
+            if not term:
+                continue
+            field, _, direction = term.partition(" ")
+            name, sep, suffix = field.partition(":")
+            if sep and suffix in _ORDER_AGGREGATORS:
+                field = name
+            terms.append(f"{field} {direction.strip()}".strip())
+        return ", ".join(terms)
+
     def _read_group(self, model, domain, group_by, specs, limit, offset, order):
         kwargs: dict[str, Any] = {
             "fields": specs,
@@ -273,7 +309,7 @@ class OdooClient:
         if limit:
             kwargs["limit"] = limit
         if order:
-            kwargs["orderby"] = order
+            kwargs["orderby"] = self._legacy_orderby(order)
         return self.execute_kw(model, "read_group", [domain or []], kwargs)
 
     def _formatted_read_group(self, model, domain, group_by, specs, limit, offset, order):
@@ -304,11 +340,15 @@ class OdooClient:
         ``read_group`` used on Odoo <= 18. Both methods are read-only.
         """
         specs = [f"{field}:{agg}" for field, agg in measures]
+        # formatted_read_group returns no count when aggregates is empty,
+        # whereas legacy read_group(lazy=False) always includes __count.
+        # Request it explicitly on 19+ so empty-measure callers keep working.
+        formatted_specs = specs or ["__count"]
         capped = self._cap_limit(limit) if limit else None
         major = self.major_version()
         if major is not None and major >= 19:
             rows = self._formatted_read_group(
-                model, domain, group_by, specs, capped, offset, order
+                model, domain, group_by, formatted_specs, capped, offset, order
             )
             return {"method": "formatted_read_group", "major_version": major, "rows": rows}
         if major is not None:
@@ -316,7 +356,7 @@ class OdooClient:
             return {"method": "read_group", "major_version": major, "rows": rows}
         try:
             rows = self._formatted_read_group(
-                model, domain, group_by, specs, capped, offset, order
+                model, domain, group_by, formatted_specs, capped, offset, order
             )
             return {"method": "formatted_read_group", "major_version": None, "rows": rows}
         except OdooError:

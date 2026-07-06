@@ -9,7 +9,19 @@ from .runtime import get_client, mcp, safe
 @mcp.tool()
 def odoo_version() -> str:
     """Check connectivity and return the Odoo server version info."""
-    return safe(lambda: get_client().version())
+
+    def run() -> dict:
+        client = get_client()
+        info = dict(client.version())
+        major = client.major_version()
+        if major is not None and major < 18:
+            info["warning"] = (
+                "odoo-pulse targets Odoo 18+; report tools are not "
+                "guaranteed on this version."
+            )
+        return info
+
+    return safe(run)
 
 
 @mcp.tool()

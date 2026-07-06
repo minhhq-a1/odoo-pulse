@@ -52,6 +52,63 @@ def test_v19_uses_formatted_read_group_with_aggregates():
     assert call["kwargs"]["groupby"] == ["state"]
 
 
+def test_v19_empty_measures_requests_count_aggregate():
+    client, calls = _client("19.0")
+    out = client.aggregate_records("hr.leave", ["employee_id"], [])
+    assert out["method"] == "formatted_read_group"
+    call = calls[-1]
+    assert call["method"] == "formatted_read_group"
+    assert call["kwargs"]["aggregates"] == ["__count"]
+
+
+def test_v18_empty_measures_keeps_fields_empty():
+    client, calls = _client("18.0")
+    out = client.aggregate_records("hr.leave", ["employee_id"], [])
+    assert out["method"] == "read_group"
+    call = calls[-1]
+    assert call["method"] == "read_group"
+    assert "__count" not in call["kwargs"]["fields"]
+    assert call["kwargs"]["fields"] == []
+
+
+def test_v18_order_strips_aggregate_suffix():
+    client, calls = _client("18.0")
+    client.aggregate_records(
+        "sale.order.line",
+        ["product_id"],
+        [("price_subtotal", "sum")],
+        order="price_subtotal:sum desc",
+    )
+    call = calls[-1]
+    assert call["method"] == "read_group"
+    assert call["kwargs"]["orderby"] == "price_subtotal desc"
+
+
+def test_v18_order_keeps_non_aggregator_suffix():
+    client, calls = _client("18.0")
+    client.aggregate_records(
+        "sale.order",
+        ["date_order:month"],
+        [("amount_total", "sum")],
+        order="date_order:month asc, amount_total:sum desc",
+    )
+    call = calls[-1]
+    assert call["kwargs"]["orderby"] == "date_order:month asc, amount_total desc"
+
+
+def test_v19_order_passed_through_unchanged():
+    client, calls = _client("19.0")
+    client.aggregate_records(
+        "sale.order.line",
+        ["product_id"],
+        [("price_subtotal", "sum")],
+        order="price_subtotal:sum desc",
+    )
+    call = calls[-1]
+    assert call["method"] == "formatted_read_group"
+    assert call["kwargs"]["order"] == "price_subtotal:sum desc"
+
+
 def test_unknown_version_falls_back_to_read_group():
     client, calls = _client(server_version="")
     seen = []

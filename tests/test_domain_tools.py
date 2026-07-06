@@ -39,6 +39,18 @@ def test_get_model_fields_filters(fake_client):
     assert set(out) == {"name"}
 
 
+def test_odoo_version_warns_below_18(fake_client):
+    fake_client.major = 17
+    out = json.loads(tools_generic.odoo_version())
+    assert "warning" in out
+    assert "Odoo 18+" in out["warning"]
+
+
+def test_odoo_version_no_warning_on_18(fake_client):
+    out = json.loads(tools_generic.odoo_version())
+    assert "warning" not in out
+
+
 # --- Filter construction ------------------------------------------------------
 
 
