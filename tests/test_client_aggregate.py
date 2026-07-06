@@ -48,7 +48,7 @@ def test_v19_uses_formatted_read_group_with_aggregates():
     assert out["major_version"] == 19
     call = calls[-1]
     assert call["method"] == "formatted_read_group"
-    assert call["kwargs"]["aggregates"] == ["amount_total:sum"]
+    assert call["kwargs"]["aggregates"] == ["amount_total:sum", "__count"]
     assert call["kwargs"]["groupby"] == ["state"]
 
 
@@ -124,3 +124,49 @@ def test_unknown_version_falls_back_to_read_group():
     assert out["method"] == "read_group"
     assert out["major_version"] is None
     assert seen == ["formatted_read_group", "read_group"]
+
+
+def test_legacy_rows_normalised_to_spec_keys():
+    # legacy read_group returns bare field keys + __count (lazy=False)
+    client, calls = _client("18.0")
+    client.execute_kw = lambda model, method, args=None, kwargs=None: [
+        {"state": "sale", "amount_total": 1500.0, "__count": 3}
+    ]
+    out = client.aggregate_records("sale.order", ["state"], [("amount_total", "sum")])
+    row = out["rows"][0]
+    assert row["amount_total:sum"] == 1500.0
+    assert "amount_total" not in row
+    assert row["__count"] == 3
+
+
+def test_legacy_normalisation_skips_grouped_fields():
+    client, calls = _client("18.0")
+    client.execute_kw = lambda model, method, args=None, kwargs=None: [
+        {"state": "sale", "__count": 2}
+    ]
+    out = client.aggregate_records("sale.order", ["state"], [])
+    assert out["rows"][0]["state"] == "sale"
+
+
+def test_formatted_always_requests_count():
+    client, calls = _client("19.0")
+    client.aggregate_records("sale.order", ["state"], [("amount_total", "sum")])
+    call = calls[-1]
+    assert "__count" in call["kwargs"]["aggregates"]
+    assert "amount_total:sum" in call["kwargs"]["aggregates"]
+
+
+def test_unknown_version_fallback_normalises_legacy_rows():
+    client, calls = _client(server_version="")
+
+    def fake_execute_kw(model, method, args=None, kwargs=None):
+        if method == "formatted_read_group":
+            raise OdooError("Object sale.order has no method formatted_read_group")
+        return [{"state": "sale", "amount_total": 42.0, "__count": 1}]
+
+    client.execute_kw = fake_execute_kw  # type: ignore[assignment]
+    out = client.aggregate_records("sale.order", ["state"], [("amount_total", "sum")])
+    row = out["rows"][0]
+    assert row["amount_total:sum"] == 42.0
+    assert "amount_total" not in row
+    assert row["__count"] == 1

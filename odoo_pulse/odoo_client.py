@@ -299,6 +299,26 @@ class OdooClient:
             terms.append(f"{field} {direction.strip()}".strip())
         return ", ".join(terms)
 
+    @staticmethod
+    def _normalise_legacy_rows(
+        rows: list[dict], specs: list[str], group_by: list[str]
+    ) -> list[dict]:
+        """Rename legacy read_group aggregate keys to their spec form.
+
+        Legacy rows carry aggregates under the bare field name; the
+        formatted_read_group path keys them '<field>:<agg>'. Grouped field
+        names are left alone so group labels survive.
+        """
+        group_names = {g.partition(":")[0] for g in group_by}
+        for row in rows:
+            for spec in specs:
+                field = spec.partition(":")[0]
+                if field in group_names:
+                    continue
+                if spec not in row and field in row:
+                    row[spec] = row.pop(field)
+        return rows
+
     def _read_group(self, model, domain, group_by, specs, limit, offset, order):
         kwargs: dict[str, Any] = {
             "fields": specs,
@@ -342,8 +362,9 @@ class OdooClient:
         specs = [f"{field}:{agg}" for field, agg in measures]
         # formatted_read_group returns no count when aggregates is empty,
         # whereas legacy read_group(lazy=False) always includes __count.
-        # Request it explicitly on 19+ so empty-measure callers keep working.
-        formatted_specs = specs or ["__count"]
+        # Request it explicitly on both paths so every row carries __count
+        # and every requested measure lands on its spec key.
+        formatted_specs = [*specs, "__count"] if specs else ["__count"]
         capped = self._cap_limit(limit) if limit else None
         major = self.major_version()
         if major is not None and major >= 19:
@@ -352,7 +373,11 @@ class OdooClient:
             )
             return {"method": "formatted_read_group", "major_version": major, "rows": rows}
         if major is not None:
-            rows = self._read_group(model, domain, group_by, specs, capped, offset, order)
+            rows = self._normalise_legacy_rows(
+                self._read_group(model, domain, group_by, specs, capped, offset, order),
+                specs,
+                group_by,
+            )
             return {"method": "read_group", "major_version": major, "rows": rows}
         try:
             rows = self._formatted_read_group(
@@ -360,7 +385,11 @@ class OdooClient:
             )
             return {"method": "formatted_read_group", "major_version": None, "rows": rows}
         except OdooError:
-            rows = self._read_group(model, domain, group_by, specs, capped, offset, order)
+            rows = self._normalise_legacy_rows(
+                self._read_group(model, domain, group_by, specs, capped, offset, order),
+                specs,
+                group_by,
+            )
             return {"method": "read_group", "major_version": None, "rows": rows}
 
     def _check_write(self, model: str, method: str) -> None:
