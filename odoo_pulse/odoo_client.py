@@ -76,6 +76,28 @@ class OdooError(RuntimeError):
     """Raised when Odoo returns a fault or authentication fails."""
 
 
+def _int_env(name: str, default: int) -> int:
+    """Parse an integer environment variable; fail loudly on invalid non-empty values."""
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        raise OdooConfigError(f"{name} must be an integer, got {raw!r}")
+
+
+def _float_env(name: str, default: float) -> float:
+    """Parse a float environment variable; fail loudly on invalid non-empty values."""
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        raise OdooConfigError(f"{name} must be a number, got {raw!r}")
+
+
 class _TimeoutTransport(xmlrpc.client.Transport):
     """Plain-HTTP transport that enforces a socket timeout.
 
@@ -152,10 +174,7 @@ class OdooConfig:
             "0",
             "no",
         )
-        try:
-            max_records = int(os.environ.get("ODOO_MAX_RECORDS", "200"))
-        except ValueError:
-            max_records = 200
+        max_records = _int_env("ODOO_MAX_RECORDS", 200)
 
         verify_ssl = os.environ.get("ODOO_VERIFY_SSL", "true").lower() not in (
             "false",
@@ -172,24 +191,10 @@ class OdooConfig:
             "1",
             "yes",
         )
-        try:
-            schema_cache_ttl = float(os.environ.get("ODOO_SCHEMA_CACHE_TTL", "300"))
-        except ValueError:
-            schema_cache_ttl = 300.0
-        try:
-            schema_cache_max = int(os.environ.get("ODOO_SCHEMA_CACHE_MAX", "64"))
-        except ValueError:
-            schema_cache_max = 64
-        try:
-            max_attachment_bytes = int(
-                os.environ.get("ODOO_MAX_ATTACHMENT_BYTES", "1048576")
-            )
-        except ValueError:
-            max_attachment_bytes = 1048576
-        try:
-            timeout = float(os.environ.get("ODOO_TIMEOUT", "30"))
-        except ValueError:
-            timeout = 30.0
+        schema_cache_ttl = _float_env("ODOO_SCHEMA_CACHE_TTL", 300.0)
+        schema_cache_max = _int_env("ODOO_SCHEMA_CACHE_MAX", 64)
+        max_attachment_bytes = _int_env("ODOO_MAX_ATTACHMENT_BYTES", 1048576)
+        timeout = _float_env("ODOO_TIMEOUT", 30.0)
 
         return cls(
             url=url,
@@ -219,10 +224,13 @@ class OdooClient:
     @cached_property
     def _ssl_context(self) -> ssl.SSLContext | None:
         # Only relevant for https endpoints. When verification is disabled we
-        # build an unverified context so self-signed certs are accepted.
+        # accept self-signed certs via a context with verification off.
         if self.config.verify_ssl:
             return None
-        return ssl._create_unverified_context()
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        return ctx
 
     def _make_transport(self) -> xmlrpc.client.Transport:
         # ServerProxy only wires up `context=` when it builds its own default

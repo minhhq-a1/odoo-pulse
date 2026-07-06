@@ -62,9 +62,6 @@ def test_max_records_parsing_and_fallback(monkeypatch):
     _set_env(monkeypatch, ODOO_MAX_RECORDS="50")
     assert OdooConfig.from_env().max_records == 50
 
-    _set_env(monkeypatch, ODOO_MAX_RECORDS="not-a-number")
-    assert OdooConfig.from_env().max_records == 200
-
 
 def test_from_env_parses_writable_models_and_allow_delete(monkeypatch):
     monkeypatch.setenv("ODOO_URL", "https://acme.odoo.com")
@@ -128,6 +125,20 @@ def test_timeout_parsing_and_fallback(monkeypatch):
     _set_env(monkeypatch, ODOO_TIMEOUT="5.5")
     assert OdooConfig.from_env().timeout == 5.5
 
-    _set_env(monkeypatch, ODOO_TIMEOUT="not-a-number")
-    assert OdooConfig.from_env().timeout == 30.0
+
+def test_invalid_max_records_fails_loudly(monkeypatch):
+    _set_env(monkeypatch, ODOO_MAX_RECORDS="two hundred")
+    with pytest.raises(OdooConfigError, match="ODOO_MAX_RECORDS"):
+        OdooConfig.from_env()
+
+
+def test_invalid_timeout_fails_loudly(monkeypatch):
+    _set_env(monkeypatch, ODOO_TIMEOUT="soon")
+    with pytest.raises(OdooConfigError, match="ODOO_TIMEOUT"):
+        OdooConfig.from_env()
+
+
+def test_empty_numeric_env_uses_default(monkeypatch):
+    _set_env(monkeypatch, ODOO_MAX_RECORDS="")
+    assert OdooConfig.from_env().max_records == 200
 
