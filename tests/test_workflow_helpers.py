@@ -10,11 +10,13 @@ from odoo_pulse.workflow_helpers import (
     build_report,
     distinct_companies,
     parse_deadline,
+    parse_when,
     resolve_company_id,
     resolve_user_names,
     today_in_tz,
     totals_by_currency,
     trend_direction,
+    utc_bound,
 )
 
 
@@ -130,3 +132,24 @@ def test_trend_direction():
     assert trend_direction([0, 0, 0, 0]) == "flat"
     # custom threshold: +15% counts as improving only at threshold<=15
     assert trend_direction([100, 100, 115, 115], threshold_pct=20) == "flat"
+
+
+def test_parse_when_shifts_utc_datetime_into_local_date():
+    # 20:00 UTC on the 5th is already the 6th at UTC+7
+    assert parse_when("2026-07-05 20:00:00", 7) == dt.date(2026, 7, 6)
+    assert parse_when("2026-07-05 16:59:59", 7) == dt.date(2026, 7, 5)
+
+
+def test_parse_when_passes_plain_dates_through_unshifted():
+    assert parse_when("2026-07-05", 7) == dt.date(2026, 7, 5)
+
+
+def test_parse_when_handles_falsy():
+    assert parse_when(False, 7) is None
+    assert parse_when(None, 7) is None
+
+
+def test_utc_bound_is_local_midnight_expressed_in_utc():
+    assert utc_bound(dt.date(2026, 7, 6), 7) == "2026-07-05 17:00:00"
+    assert utc_bound(dt.date(2026, 7, 6), 0) == "2026-07-06 00:00:00"
+    assert utc_bound(dt.date(2026, 7, 6), -5) == "2026-07-06 05:00:00"
