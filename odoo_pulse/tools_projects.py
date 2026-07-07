@@ -12,7 +12,7 @@ import json
 
 from .odoo_client import OdooConfigError, OdooError
 from .runtime import date_domain, get_client, mcp, name_domain, safe
-from .workflow_helpers import optional_fields, resolve_user_names
+from .workflow_helpers import ensure_field, optional_fields, resolve_user_names
 
 
 
@@ -135,18 +135,27 @@ def list_timesheets(
         date_to: Inclusive upper bound on the entry date (YYYY-MM-DD).
         limit: Max results.
     """
-    domain: list = [("project_id", "!=", False)]
-    if employee:
-        domain.append(("employee_id.name", "ilike", employee))
-    if project:
-        domain.append(("project_id.name", "ilike", project))
-    domain += date_domain("date", date_from, date_to)
-    return safe(
-        lambda: get_client().search_read(
+
+    def run():
+        client = get_client()
+        ensure_field(
+            client,
+            "account.analytic.line",
+            "project_id",
+            hint="Timesheets require the hr_timesheet app; install it or use list_tasks instead.",
+        )
+        domain: list = [("project_id", "!=", False)]
+        if employee:
+            domain.append(("employee_id.name", "ilike", employee))
+        if project:
+            domain.append(("project_id.name", "ilike", project))
+        domain.extend(date_domain("date", date_from, date_to))
+        return client.search_read(
             "account.analytic.line",
             domain=domain,
             fields=["name", "employee_id", "project_id", "task_id", "unit_amount", "date"],
             limit=limit,
             order="date desc",
         )
-    )
+
+    return safe(run)

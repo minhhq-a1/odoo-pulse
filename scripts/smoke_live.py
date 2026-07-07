@@ -251,6 +251,10 @@ def build_cases(limit: int):
 _NOT_INSTALLED_HINTS = ("doesn't exist", "does not exist", "object ", "invalid model")
 
 
+# Deliberately strict: "Invalid field" stays CHECK, never skip - that is
+# exactly how the res.partner.mobile removal on Odoo 19 was caught. Tools
+# that can miss fields legitimately must degrade in the tool itself
+# (optional_fields / ensure_field), not be masked here.
 def classify_error(message: str) -> str:
     low = message.lower()
     if any(hint in low for hint in _NOT_INSTALLED_HINTS):

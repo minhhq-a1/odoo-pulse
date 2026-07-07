@@ -129,3 +129,14 @@ def test_list_tasks_requests_sprint_id_when_present(fake_client):
     call = fake_client.last("search_read")
     assert "sprint_id" in call["fields"]
 
+
+def test_list_timesheets_friendly_error_without_hr_timesheet(fake_client):
+    import json
+    from odoo_pulse import tools_projects
+
+    fake_client.fields_responses["account.analytic.line"] = {
+        "name": {"type": "char"}}
+    out = json.loads(tools_projects.list_timesheets())
+    assert "hr_timesheet" in out["error"]
+
+
