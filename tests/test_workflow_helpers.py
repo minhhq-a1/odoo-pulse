@@ -165,3 +165,30 @@ def test_ensure_field_passes_when_present():
             return {"sprint_id": {"type": "many2one"}}
 
     ensure_field(_C(), "project.task", "sprint_id")  # no raise
+
+
+from odoo_pulse.workflow_helpers import optional_fields
+
+
+class _RichSchemaClient:
+    def __init__(self, field_names):
+        self._names = field_names
+
+    def fields_get(self, model, attributes=None):
+        return {name: {"type": "char"} for name in self._names}
+
+
+def test_optional_fields_keeps_present_candidates_in_order():
+    client = _RichSchemaClient(["name", "mobile", "phone"])
+    assert optional_fields(client, "res.partner", ["mobile", "vat"]) == ["mobile"]
+
+
+def test_optional_fields_empty_when_none_present():
+    client = _RichSchemaClient(["name"])
+    assert optional_fields(client, "project.task", ["sprint_id"]) == []
+
+
+def test_optional_fields_all_present_preserves_order():
+    client = _RichSchemaClient(["b", "a", "c"])
+    assert optional_fields(client, "x", ["a", "b"]) == ["a", "b"]
+

@@ -96,6 +96,19 @@ def ensure_field(client: Any, model: str, field: str, hint: str = "") -> None:
         raise OdooError(message)
 
 
+def optional_fields(client: Any, model: str, candidates: list[str]) -> list[str]:
+    """Subset of `candidates` that exist on `model`'s schema, in order.
+
+    For fields that are custom (sprint_id) or version-dependent
+    (res.partner.mobile, removed in Odoo 19): list tools request them when
+    available and silently degrade when not. Uses the cached fields_get,
+    so the check is free after the first call per model.
+    """
+    schema = client.fields_get(model)
+    return [f for f in candidates if f in schema]
+
+
+
 def resolve_user_names(client: Any, user_ids: Any) -> dict[int, str]:
     """Map res.users ids to names, including archived users.
 
