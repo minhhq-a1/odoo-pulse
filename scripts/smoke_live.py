@@ -116,15 +116,16 @@ def build_cases(limit: int):
         ("Generic", "read_records", _read_records_probe, {"model": "res.partner"}),
         (
             "Generic",
-            "aggregate_records (crm.lead)",
+            "aggregate_records (ir.attachment)",
             tools_generic.aggregate_records,
             {
-                # crm.lead is far more likely to hold rows on a demo/live DB
-                # than confirmed sale orders; the key-normalisation contract
-                # (spec keys + __count) can only be verified against real rows.
-                "model": "crm.lead",
-                "group_by": ["stage_id"],
-                "measures": ["expected_revenue:sum"],
+                # ir.attachment always exists (base model) and always holds
+                # rows even on a fresh DB (web assets), so the key contract
+                # (spec keys + __count) is verified against real rows on any
+                # instance - business models may legitimately be empty.
+                "model": "ir.attachment",
+                "group_by": ["res_model"],
+                "measures": ["file_size:sum"],
                 "limit": limit,
             },
         ),
