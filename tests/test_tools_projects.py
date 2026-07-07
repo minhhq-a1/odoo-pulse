@@ -104,3 +104,28 @@ def test_standup_digest_shaping_bug_returns_json_error(fake_client):
     assert isinstance(out, str)
     if out.startswith("{"):
         assert "error" in json.loads(out)
+
+
+def test_list_tasks_omits_sprint_id_when_absent_from_schema(fake_client):
+    import json
+    from odoo_pulse import tools_projects
+
+    fake_client.fields_responses["project.task"] = {"name": {"type": "char"}}
+    fake_client.search_responses["project.task"] = []
+    out = json.loads(tools_projects.list_tasks())
+    assert out == []  # no fault on vanilla Odoo
+    call = fake_client.last("search_read")
+    assert "sprint_id" not in call["fields"]
+    assert "name" in call["fields"] and "project_id" in call["fields"]
+
+
+def test_list_tasks_requests_sprint_id_when_present(fake_client):
+    import json
+    from odoo_pulse import tools_projects
+
+    # default FakeClient schema includes sprint_id
+    fake_client.search_responses["project.task"] = []
+    json.loads(tools_projects.list_tasks())
+    call = fake_client.last("search_read")
+    assert "sprint_id" in call["fields"]
+

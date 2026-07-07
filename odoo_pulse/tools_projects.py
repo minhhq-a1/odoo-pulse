@@ -8,8 +8,12 @@ Covered models:
 
 from __future__ import annotations
 
+import json
+
+from .odoo_client import OdooConfigError, OdooError
 from .runtime import date_domain, get_client, mcp, name_domain, safe
-from .workflow_helpers import resolve_user_names
+from .workflow_helpers import optional_fields, resolve_user_names
+
 
 
 @mcp.tool()
@@ -56,6 +60,8 @@ def list_tasks(
 
     user_ids is resolved to [{id, name}] objects via a single batch lookup.
 
+    sprint_id is a custom field; it is included only when the instance has it.
+
     Args:
         query: Free text matched against the task name.
         project: Filter by project name.
@@ -66,10 +72,6 @@ def list_tasks(
         limit: Max results per page (Odoo hard-caps at 200).
         offset: Number of records to skip; use with limit to paginate.
     """
-    import json as _json
-
-    from .odoo_client import OdooConfigError, OdooError
-
     domain = name_domain(query, ["name"])
     if not include_subtasks:
         domain.append(("parent_id", "=", False))
@@ -82,20 +84,21 @@ def list_tasks(
 
     try:
         client = get_client()
+        fields = [
+            "name",
+            "project_id",
+            "user_ids",
+            "stage_id",
+            *optional_fields(client, "project.task", ["sprint_id"]),
+            "date_deadline",
+            "priority",
+            "state",
+            "parent_id",
+        ]
         tasks = client.search_read(
             "project.task",
             domain=domain,
-            fields=[
-                "name",
-                "project_id",
-                "user_ids",
-                "stage_id",
-                "sprint_id",
-                "date_deadline",
-                "priority",
-                "state",
-                "parent_id",
-            ],
+            fields=fields,
             limit=limit,
             offset=offset,
             order="priority desc, date_deadline",
@@ -110,9 +113,9 @@ def list_tasks(
                     for uid in task.get("user_ids", [])
                 ]
 
-        return _json.dumps(tasks, ensure_ascii=False, indent=2, default=str)
+        return json.dumps(tasks, ensure_ascii=False, indent=2, default=str)
     except (OdooConfigError, OdooError) as exc:
-        return _json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2)
+        return json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
