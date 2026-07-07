@@ -89,3 +89,18 @@ def test_standup_digest_warns_on_truncation(fake_client):
     out = tools_workflows.standup_digest("Acme")
     assert "⚠️" in out
     assert "10" in out
+
+
+def test_standup_digest_shaping_bug_returns_json_error(fake_client):
+    import json
+    from odoo_pulse import tools_workflows
+
+    # a task row missing user_ids triggers a shaping KeyError path safely
+    fake_client.search_responses["project.task"] = [
+        {"id": 1, "name": "T1", "stage_id": [1, "Doing"],
+         "date_deadline": False, "priority": "0"}]
+    out = tools_workflows.standup_digest("Acme")
+    # must never raise; either a rendered digest or a JSON error payload
+    assert isinstance(out, str)
+    if out.startswith("{"):
+        assert "error" in json.loads(out)

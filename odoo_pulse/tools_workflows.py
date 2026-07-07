@@ -777,4 +777,9 @@ def standup_digest(
     # that still returns a JSON error string on failure.
     except (OdooConfigError, OdooError) as exc:
         return json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2)
+    except Exception as exc:  # shaping bugs must not leak raw tracebacks
+        return json.dumps(
+            {"error": f"internal error: {type(exc).__name__}: {exc}"},
+            ensure_ascii=False, indent=2,
+        )
 

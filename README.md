@@ -42,7 +42,7 @@ All report tools take `timezone_offset` (default `7`). Odoo stores datetime
 fields in UTC; the tools shift them by `timezone_offset` hours before
 bucketing by calendar day, and day windows in domains are expressed as UTC
 datetime boundaries. Date-only fields (e.g. `project.milestone.deadline`,
-`invoice_date_due`) are compared as-is.
+`invoice_date_due`, `project.task.date_deadline`) are compared as-is.
 
 ### Custom `sprint_id` field
 

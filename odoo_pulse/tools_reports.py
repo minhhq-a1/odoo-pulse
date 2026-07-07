@@ -969,6 +969,7 @@ def business_pulse(
                                                 for r in rows), 2)}
 
         def overdue_tasks() -> dict:
+            # date_deadline is a Date field on most versions; kept as a plain date bound deliberately (see plan Task 2) — do not "fix" to utc_bound.
             n = client.search_count("project.task", [
                 ("date_deadline", "<", today.isoformat()),
                 ("stage_id.fold", "=", False),
