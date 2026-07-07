@@ -48,8 +48,12 @@ datetime boundaries. Date-only fields (e.g. `project.milestone.deadline`,
 
 `sprint_health`, and the `sprint_id` filter on `team_workload` /
 `standup_digest`, require a custom `sprint_id` many2one on `project.task`
-(not standard Odoo). On instances without it the tools return a clear
-error instead of an Odoo fault.
+(not standard Odoo) and return a clear error when it is absent.
+`list_tasks` includes the column only when the instance has it.
+Version-dependent fields degrade the same way: `find_partner` searches
+`mobile` only on instances that still have it (removed in Odoo 19), and
+`list_timesheets` reports an actionable error when `hr_timesheet` is not
+installed.
 
 Under the hood it's the standard Odoo XML-RPC external API — nothing to install
 inside Odoo, works on Odoo Online, Odoo.sh, and on-premise. **Requires
