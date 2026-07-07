@@ -137,3 +137,35 @@ def test_get_invoice_expands_lines(fake_client):
     assert out["name"] == "INV/1"
     assert out["lines"] == [{"id": 7, "name": "Item"}]
     assert "invoice_line_ids" not in out
+
+
+def test_find_partner_omits_mobile_when_absent_from_schema(fake_client):
+    import json
+    from odoo_pulse import domain_tools
+
+    # Odoo 19: mobile removed from res.partner
+    fake_client.fields_responses["res.partner"] = {"name": {"type": "char"}}
+    fake_client.search_responses["res.partner"] = []
+    out = json.loads(domain_tools.find_partner("acme"))
+    assert out == []
+    call = fake_client.last("search_read")
+    assert "mobile" not in call["fields"]
+    assert not any(
+        isinstance(t, (list, tuple)) and t and t[0] == "mobile"
+        for t in call["domain"]
+    )
+
+
+def test_find_partner_includes_mobile_when_present(fake_client):
+    import json
+    from odoo_pulse import domain_tools
+
+    fake_client.search_responses["res.partner"] = []
+    json.loads(domain_tools.find_partner("acme"))
+    call = fake_client.last("search_read")
+    assert "mobile" in call["fields"]
+    assert any(
+        isinstance(t, (list, tuple)) and t and t[0] == "mobile"
+        for t in call["domain"]
+    )
+

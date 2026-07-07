@@ -20,6 +20,8 @@ from __future__ import annotations
 from typing import Any
 
 from .runtime import date_domain, get_client, mcp, name_domain, safe
+from .workflow_helpers import optional_fields
+
 
 # --- Contacts -----------------------------------------------------------------
 
@@ -28,20 +30,26 @@ from .runtime import date_domain, get_client, mcp, name_domain, safe
 def find_partner(query: str, limit: int = 20) -> str:
     """Find contacts/companies (res.partner) by name, email, phone or reference.
 
+    mobile was removed from res.partner in Odoo 19; it is searched/returned
+    only when the instance still has it.
+
     Args:
         query: Free text matched against name, email, phone and customer ref.
         limit: Max results.
     """
-    domain = name_domain(query, ["name", "email", "phone", "mobile", "ref", "vat"])
-    return safe(
-        lambda: get_client().search_read(
+
+    def run():
+        client = get_client()
+        mobile = optional_fields(client, "res.partner", ["mobile"])
+        domain = name_domain(query, ["name", "email", "phone", *mobile, "ref", "vat"])
+        return client.search_read(
             "res.partner",
             domain=domain,
             fields=[
                 "name",
                 "email",
                 "phone",
-                "mobile",
+                *mobile,
                 "city",
                 "country_id",
                 "is_company",
@@ -51,7 +59,8 @@ def find_partner(query: str, limit: int = 20) -> str:
             limit=limit,
             order="name",
         )
-    )
+
+    return safe(run)
 
 
 # --- CRM ----------------------------------------------------------------------
