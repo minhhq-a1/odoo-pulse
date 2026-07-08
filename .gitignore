@@ -26,3 +26,5 @@ docs/*
 !docs/playground.md
 !docs/install.md
 !docs/tools.md
+!docs/launch/*
+
