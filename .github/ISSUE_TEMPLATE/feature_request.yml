@@ -1,0 +1,16 @@
+name: Feature request
+description: A report tool or capability you wish existed
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: The business question you want answered in one call
+      placeholder: '"Which customers are about to churn?" / "How late are my deliveries this week?"'
+    validations:
+      required: true
+  - type: textarea
+    id: models
+    attributes:
+      label: Odoo models/apps involved (if known)
+      placeholder: crm.lead, sale.order, stock.picking...

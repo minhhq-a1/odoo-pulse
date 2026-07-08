@@ -1,0 +1,36 @@
+name: Bug report
+description: Something returned the wrong data or errored
+labels: ["bug"]
+body:
+  - type: input
+    id: odoo-version
+    attributes:
+      label: Odoo version
+      placeholder: "18.0 (Odoo Online) / 19.0 on-premise"
+    validations:
+      required: true
+  - type: input
+    id: pulse-version
+    attributes:
+      label: odoo-pulse version
+      placeholder: "1.2.1 (pip show odoo-pulse)"
+    validations:
+      required: true
+  - type: input
+    id: tool
+    attributes:
+      label: Tool called
+      placeholder: "business_pulse / search_read / ..."
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Error payload or wrong output (redact company data — never paste credentials)
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
