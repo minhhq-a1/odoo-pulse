@@ -27,7 +27,5 @@ docs/*
 !docs/install.md
 !docs/tools.md
 !docs/roadmap.md
-!docs/launch/
-!docs/launch/*
 
 /mcp-registry-fork/
