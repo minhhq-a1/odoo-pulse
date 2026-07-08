@@ -29,9 +29,10 @@ structured report with a verdict — not a raw dump you have to interpret.
 | `absence_overview` | Who's off this week, pending approvals, thin-coverage departments |
 | `procurement_watch` | Purchasing: late receipts, stale RFQs, open spend per vendor |
 | `production_health` | Manufacturing: orders behind their planned start, stuck WIP |
-| `sprint_health` · `team_workload` · `project_status_report` | Project delivery: completion, overloaded members, at-risk projects |
+| `sprint_health` · `team_workload` · `project_status_report` · `standup_digest` | Project delivery: sprint completion, overloaded members, at-risk projects, and a daily stand-up digest |
 
-Every money-reporting tool takes an optional `company=` filter and flags
+Every money-reporting tool (except `inventory_risk`) takes an optional
+`company=` filter and flags
 mixed-currency totals instead of silently summing them; verdict cut-offs
 (stalled %, overdue %, growth %) are parameters, so you can calibrate them
 to your business.

@@ -98,4 +98,4 @@ By default the server exposes the report tools plus generic query tools
 (`ODOO_TOOL_GROUPS=core,reports`). Add groups — `hr`, `projects`, `operations`,
 `engagement`, `niche`, or `all` — to expose the ~60 domain tools. See
 [tools.md](tools.md) for the full catalogue and
-[Write operations](../README.md#write-operations) to enable writes.
+[Write operations](tools.md#write-operations) to enable writes.
