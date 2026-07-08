@@ -86,7 +86,12 @@ def build_briefing() -> Group:
 
 
 def main() -> int:
-    out = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("assets/business_pulse.svg")
+    args = sys.argv[1:]
+    if args == ["--print"]:
+        # Animated-demo mode (vhs): render to the terminal, save nothing.
+        Console(width=78).print(Padding(build_briefing(), (1, 1)))
+        return 0
+    out = Path(args[0]) if args else Path("assets/business_pulse.svg")
     console = Console(record=True, width=78)
     console.print(Padding(build_briefing(), (1, 1)))
     out.parent.mkdir(parents=True, exist_ok=True)

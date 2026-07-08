@@ -12,7 +12,7 @@ question, get one answer — numbers, highlights, risks, and a verdict
 Protocol](https://modelcontextprotocol.io). CRUD bridges to Odoo already exist;
 this is the analytics layer that sits on top.
 
-![business_pulse — a one-call company briefing](assets/business_pulse.svg)
+![business_pulse — a one-call company briefing](assets/business_pulse.gif)
 
 ## The analyst tools
 
