@@ -44,4 +44,5 @@ instance.
 
 Bump `pyproject.toml` + both `version` fields in `server.json` +
 `manifest.json`, tag `vX.Y.Z` (publishes to PyPI via `release.yml`), then run
-the "Publish to MCP Registry" workflow. Details: `docs/launch-registries.md`.
+the "Publish to MCP Registry" workflow (manual on purpose — it must run
+after the PyPI release for the same version is live).
