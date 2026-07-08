@@ -90,6 +90,11 @@ Generate the API key in Odoo under **Settings → Users → (your user) → Acco
 Security → New API Key**. Config for **Claude Desktop** and **Cursor**, plus pip
 and Docker alternatives: [docs/install.md](docs/install.md).
 
+Or one-click:
+
+[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=odoo-pulse&config=eyJjb21tYW5kIjogInV2eCIsICJhcmdzIjogWyJvZG9vLXB1bHNlIl0sICJlbnYiOiB7Ik9ET09fVVJMIjogImh0dHBzOi8vYWNtZS5vZG9vLmNvbSIsICJPRE9PX0RCIjogImFjbWUiLCAiT0RPT19VU0VSTkFNRSI6ICJ5b3VAZXhhbXBsZS5jb20iLCAiT0RPT19BUElfS0VZIjogInlvdXItYXBpLWtleSIsICJPRE9PX1JFQURfT05MWSI6ICJ0cnVlIn19)
+[![Install in VS Code](https://img.shields.io/badge/VS%20Code-Install%20odoo--pulse-0098FF?logo=githubcopilot&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=odoo-pulse&config=%7B%22name%22%3A%20%22odoo-pulse%22%2C%20%22command%22%3A%20%22uvx%22%2C%20%22args%22%3A%20%5B%22odoo-pulse%22%5D%2C%20%22env%22%3A%20%7B%22ODOO_URL%22%3A%20%22https%3A%2F%2Facme.odoo.com%22%2C%20%22ODOO_DB%22%3A%20%22acme%22%2C%20%22ODOO_USERNAME%22%3A%20%22you%40example.com%22%2C%20%22ODOO_API_KEY%22%3A%20%22your-api-key%22%2C%20%22ODOO_READ_ONLY%22%3A%20%22true%22%7D%7D)
+
 ## Read-only by default, safe writes when you want them
 
 The server is read-only out of the box. Writes require four independent controls
