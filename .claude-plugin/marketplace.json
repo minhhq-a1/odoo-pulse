@@ -1,0 +1,12 @@
+{
+  "name": "odoo-pulse",
+  "description": "Marketplace for odoo-pulse, an AI business analyst for Odoo ERP.",
+  "owner": { "name": "Minh Hong", "url": "https://github.com/minhhq-a1" },
+  "plugins": [
+    {
+      "name": "odoo-pulse",
+      "source": "./",
+      "description": "AI business analyst for Odoo ERP — one-call reports with verdicts, over MCP."
+    }
+  ]
+}

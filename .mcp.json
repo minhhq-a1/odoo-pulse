@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "odoo-pulse": {
+      "command": "uvx",
+      "args": ["odoo-pulse"],
+      "env": {
+        "ODOO_URL": "${ODOO_URL}",
+        "ODOO_DB": "${ODOO_DB}",
+        "ODOO_USERNAME": "${ODOO_USERNAME}",
+        "ODOO_API_KEY": "${ODOO_API_KEY}",
+        "ODOO_READ_ONLY": "${ODOO_READ_ONLY:-true}"
+      }
+    }
+  }
+}

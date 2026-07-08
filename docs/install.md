@@ -29,6 +29,16 @@ claude mcp add odoo-pulse \
   -- uvx odoo-pulse
 ```
 
+### Claude Code (plugin)
+
+```
+/plugin marketplace add minhhq-a1/odoo-pulse
+/plugin install odoo-pulse@odoo-pulse
+```
+
+The plugin launches `uvx odoo-pulse` and reads `ODOO_URL`, `ODOO_DB`,
+`ODOO_USERNAME`, `ODOO_API_KEY`, `ODOO_READ_ONLY` from your environment.
+
 ## Claude Desktop
 
 Edit `claude_desktop_config.json`
