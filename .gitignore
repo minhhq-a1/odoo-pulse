@@ -28,3 +28,4 @@ docs/*
 !docs/tools.md
 !docs/launch/*
 
+/mcp-registry-fork/

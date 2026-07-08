@@ -19,6 +19,11 @@ pytest tests/test_tools_write.py::test_create_record_preview
 
 # Live smoke test against a real Odoo instance (reads only, never writes)
 python scripts/smoke_live.py
+
+# Playground: boot a real Odoo in Docker, seed a demo story, assert reports
+make playground          # boot + seed (follows the seed logs)
+make playground-smoke    # end-to-end: boot, seed, assert reports, tear down
+make playground-reset    # wipe the playground (drops the database)
 ```
 
 ## Architecture
