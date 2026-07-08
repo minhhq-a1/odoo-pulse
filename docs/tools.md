@@ -14,7 +14,7 @@ Set `ODOO_TOOL_GROUPS` (comma-separated) to choose what the server exposes:
 | Group | Contents |
 | --- | --- |
 | `core` | Generic model-agnostic tools (below) + write tools |
-| `reports` | The analyst report tools (see README) |
+| `reports` | The [analyst report tools](#analyst-reports) (see README) |
 | `business` | Contacts / CRM / Sales / Purchase / Inventory / Accounting wrappers |
 | `hr` | HR tools |
 | `projects` | Project tools |
