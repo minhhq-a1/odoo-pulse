@@ -6,8 +6,8 @@ Wraps the two standard endpoints exposed by every Odoo instance:
 
 The client is intentionally read-only friendly: it exposes generic helpers
 (search_read, read, search_count, fields_get) and a guarded execute_kw that
-blocks write methods unless explicitly allowed. This keeps the MCP surface
-safe by default.
+blocks every method not on a read allow-list unless writes are explicitly enabled.
+This keeps the MCP surface safe by default.
 """
 
 from __future__ import annotations
@@ -23,9 +23,23 @@ from typing import Any
 
 from .cache import TTLCache
 
-# Methods that mutate data. Blocked while the server runs in read-only mode.
-WRITE_METHODS = frozenset(
-    {"create", "write", "unlink", "copy", "action_confirm", "action_post"}
+# Methods execute_kw may run WITHOUT write authorisation. This is an
+# allow-list on purpose: any method not listed here — including ORM button
+# methods like action_cancel or toggle_active — is treated as a mutation
+# and must clear _check_write. New/unknown methods therefore fail closed.
+READ_METHODS = frozenset(
+    {
+        "search",
+        "search_read",
+        "search_count",
+        "read",
+        "fields_get",
+        "read_group",
+        "formatted_read_group",
+        "name_search",
+        "name_get",
+        "default_get",
+    }
 )
 
 # Models that must never be writable, regardless of ODOO_WRITABLE_MODELS.
@@ -434,7 +448,7 @@ class OdooClient:
         args: list | None = None,
         kwargs: dict | None = None,
     ) -> Any:
-        if method in WRITE_METHODS:
+        if method not in READ_METHODS:
             self._check_write(model, method)
         try:
             return self._proxy("/xmlrpc/2/object").execute_kw(

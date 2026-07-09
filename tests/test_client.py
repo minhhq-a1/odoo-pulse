@@ -146,6 +146,35 @@ def test_write_blocked_when_model_not_in_allow_list():
     assert proxy.calls == []
 
 
+def test_unknown_method_fails_closed_in_read_only():
+    # action_cancel is not in READ_METHODS -> treated as a mutation ->
+    # blocked by read-only mode before it ever reaches the proxy.
+    client, proxy = make_client(read_only=True)
+    with pytest.raises(OdooError, match="read-only"):
+        client.execute_kw("sale.order", "action_cancel", [[1]])
+    assert proxy.calls == []
+
+
+def test_unknown_method_requires_writable_model():
+    # Writes enabled, but 'sale.order' is NOT allow-listed -> an unknown
+    # method is still blocked by the model allow-list.
+    client, proxy = make_client(read_only=False, writable_models=["crm.lead"])
+    with pytest.raises(OdooError, match="ODOO_WRITABLE_MODELS"):
+        client.execute_kw("sale.order", "action_cancel", [[1]])
+    assert proxy.calls == []
+
+
+def test_unknown_method_allowed_on_writable_model():
+    # On an allow-listed model with writes enabled, an ORM button method
+    # clears the guard and reaches the proxy (same rule as action_confirm).
+    client, proxy = make_client(
+        return_value=True, read_only=False, writable_models=["sale.order"]
+    )
+    assert client.execute_kw("sale.order", "action_cancel", [[1]]) is True
+    assert proxy.calls[0][4] == "action_cancel"
+
+
+
 def test_system_models_blocked_even_if_listed():
     client, proxy = make_client(
         read_only=False, writable_models=["res.users", "ir.model", "base.x"]
