@@ -61,7 +61,7 @@ inside Odoo, works on Odoo Online, Odoo.sh, and on-premise. **Requires
 Odoo 18+**: the generic tools (`search_read`, `read_records`, …) still run on
 older versions, but the report tools are not guaranteed there.
 
-## Try it in 5 minutes
+## Try the playground
 
 No Odoo account? Boot a demo Odoo pre-seeded with a story to tell (a stalled
 deal, a 90-day-overdue invoice, a stock shortage, someone off today):
@@ -70,8 +70,10 @@ deal, a 90-day-overdue invoice, a stock shortage, someone off today):
 docker compose -f docker-compose.playground.yml up -d
 ```
 
-Then point Claude at it and ask it to **`run business_pulse`**. Full
-walkthrough: [docs/playground.md](docs/playground.md).
+First boot pulls ~4 GB of images (Odoo + Postgres) and seeds the demo data —
+allow 5-10 minutes depending on your connection. Then point Claude at it and
+ask it to **`run business_pulse`**. Full walkthrough:
+[docs/playground.md](docs/playground.md).
 
 ## Install & connect
 

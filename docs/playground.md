@@ -1,4 +1,4 @@
-# Try odoo-pulse in 5 minutes (no Odoo account needed)
+# Try odoo-pulse (no Odoo account needed)
 
 This spins up a throwaway Odoo 18 pre-loaded with a demo "story" — a stalled
 deal, a 90-day-overdue invoice, a stock shortage, someone off today, an overdue
@@ -10,8 +10,9 @@ task — so the report tools have something real to say.
 docker compose -f docker-compose.playground.yml up -d
 ```
 
-First boot installs Odoo apps and demo data, then seeds the story — allow a few
-minutes. Follow along with:
+First boot pulls ~4 GB of images (Odoo + Postgres), installs Odoo apps and
+demo data, then seeds the story — allow 5-10 minutes depending on your
+connection. Follow along with:
 
 ```bash
 docker compose -f docker-compose.playground.yml logs -f seed
