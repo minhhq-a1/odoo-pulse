@@ -134,3 +134,24 @@ def test_business_pulse_day_windows_are_utc_shifted(fake_client, monkeypatch):
                for t in lv)
     assert any(t[0] == "date_to" and t[1] == ">=" and t[2].endswith("17:00:00")
                for t in lv)
+
+
+def test_business_pulse_runs_sections_concurrently(fake_client, monkeypatch):
+    import threading
+
+    _fix_today(monkeypatch)
+    _setup(fake_client)
+    seen_threads: set[int] = set()
+    orig = fake_client.search_count
+
+    def spying_count(model, domain=None):
+        seen_threads.add(threading.get_ident())
+        return orig(model, domain)
+
+    monkeypatch.setattr(fake_client, "search_count", spying_count)
+    out = json.loads(tools_reports.business_pulse())
+    # 3 sections issue search_count (crm, projects, hr); with gather they run
+    # on worker threads, so more than one thread id must appear.
+    assert len(seen_threads) > 1
+    assert out["summary"]["verdict"] == "attention"
+

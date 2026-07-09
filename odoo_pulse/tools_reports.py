@@ -1005,12 +1005,6 @@ def business_pulse(
             [("company_id", "=", company_id)] if company_id else [])
         sections: dict[str, dict] = {}
 
-        def section(name, fn):
-            try:
-                sections[name] = {"available": True, **fn()}
-            except OdooError as exc:
-                sections[name] = {"available": False, "reason": str(exc)}
-
         def sales_yesterday() -> dict:
             rows = client.search_read(
                 "sale.order",
@@ -1061,11 +1055,21 @@ def business_pulse(
                 *company_domain])
             return {"off_today": n}
 
-        section("sales", sales_yesterday)
-        section("crm", new_leads)
-        section("receivables", overdue_invoices)
-        section("projects", overdue_tasks)
-        section("hr", people_off)
+        outcomes = gather({
+            "sales": sales_yesterday,
+            "crm": new_leads,
+            "receivables": overdue_invoices,
+            "projects": overdue_tasks,
+            "hr": people_off,
+        })
+        for name, outcome in outcomes.items():
+            if isinstance(outcome, OdooError):
+                # An app that isn't installed degrades its own section only.
+                sections[name] = {"available": False, "reason": str(outcome)}
+            elif isinstance(outcome, Exception):
+                raise outcome
+            else:
+                sections[name] = {"available": True, **outcome}
 
         attention = (
             sections["receivables"].get("overdue_invoices", 0) > 0
