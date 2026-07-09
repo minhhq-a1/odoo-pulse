@@ -2,7 +2,7 @@
 import datetime as dt
 import json
 
-from odoo_pulse import tools_reports
+from odoo_pulse import tools_reports_pulse
 
 # today fixed at 2026-06-30 -> "yesterday" is 2026-06-29.
 YESTERDAY_ORDERS = [
@@ -13,7 +13,7 @@ OVERDUE_INVOICES = [{"id": 9, "amount_residual": 700.0}]
 
 
 def _fix_today(monkeypatch):
-    monkeypatch.setattr(tools_reports, "today_in_tz", lambda offset: dt.date(2026, 6, 30))
+    monkeypatch.setattr(tools_reports_pulse, "today_in_tz", lambda offset: dt.date(2026, 6, 30))
 
 
 def _setup(fake_client):
@@ -28,7 +28,7 @@ def _setup(fake_client):
 def test_business_pulse_sections_and_verdict(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _setup(fake_client)
-    out = json.loads(tools_reports.business_pulse())
+    out = json.loads(tools_reports_pulse.business_pulse())
     sections = out["breakdown"]["sections"]
     assert sections["sales"] == {"available": True, "orders": 2, "revenue": 1500.0}
     assert sections["crm"] == {"available": True, "new_leads": 4}
@@ -45,7 +45,7 @@ def test_business_pulse_sections_and_verdict(fake_client, monkeypatch):
 def test_business_pulse_domains_use_yesterday(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _setup(fake_client)
-    tools_reports.business_pulse(timezone_offset=7)
+    tools_reports_pulse.business_pulse(timezone_offset=7)
     sales = next(c for c in fake_client.calls
                  if c["method"] == "search_read" and c["model"] == "sale.order")
     assert ("date_order", ">=", "2026-06-28 17:00:00") in sales["domain"]
@@ -60,7 +60,7 @@ def test_business_pulse_all_clear(fake_client, monkeypatch):
     _setup(fake_client)
     fake_client.search_responses["account.move"] = []
     fake_client.search_count_responses["project.task"] = 0
-    out = json.loads(tools_reports.business_pulse())
+    out = json.loads(tools_reports_pulse.business_pulse())
     assert out["summary"]["verdict"] == "all_clear"
     assert out["risks"] == []
 
@@ -69,7 +69,7 @@ def test_business_pulse_survives_missing_apps(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _setup(fake_client)
     fake_client.error_models = {"sale.order", "crm.lead"}
-    out = json.loads(tools_reports.business_pulse())
+    out = json.loads(tools_reports_pulse.business_pulse())
     sections = out["breakdown"]["sections"]
     assert sections["sales"]["available"] is False
     assert sections["crm"]["available"] is False
@@ -84,7 +84,7 @@ def test_business_pulse_company_filter(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     fake_client.search_responses["res.company"] = [{"id": 5, "name": "Acme VN"}]
     fake_client.search_count_responses["res.company"] = 2
-    tools_reports.business_pulse(company="acme")
+    tools_reports_pulse.business_pulse(company="acme")
     for model in ("sale.order", "account.move"):
         call = next(c for c in fake_client.calls
                     if c["method"] == "search_read" and c["model"] == model)
@@ -98,7 +98,7 @@ def test_business_pulse_company_filter(fake_client, monkeypatch):
 def test_business_pulse_multi_company_caveat(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     fake_client.search_count_responses["res.company"] = 3
-    out = json.loads(tools_reports.business_pulse())
+    out = json.loads(tools_reports_pulse.business_pulse())
     risk = next(r for r in out["risks"] if r["code"] == "multi_company_totals")
     assert risk["count"] == 3
 
@@ -106,14 +106,14 @@ def test_business_pulse_multi_company_caveat(fake_client, monkeypatch):
 def test_business_pulse_single_company_no_caveat(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     fake_client.search_count_responses["res.company"] = 1
-    out = json.loads(tools_reports.business_pulse())
+    out = json.loads(tools_reports_pulse.business_pulse())
     assert "multi_company_totals" not in [r["code"] for r in out["risks"]]
 
 
 def test_business_pulse_day_windows_are_utc_shifted(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _setup(fake_client)
-    out = json.loads(tools_reports.business_pulse(timezone_offset=7))
+    out = json.loads(tools_reports_pulse.business_pulse(timezone_offset=7))
     assert out["tool"] == "business_pulse"
 
     sale_call = next(c for c in fake_client.calls
@@ -159,5 +159,5 @@ def test_business_pulse_runs_sections_concurrently(fake_client, monkeypatch):
         return orig(model, domain)
 
     monkeypatch.setattr(fake_client, "search_count", spying_count)
-    out = json.loads(tools_reports.business_pulse())
+    out = json.loads(tools_reports_pulse.business_pulse())
     assert out["summary"]["verdict"] == "attention"

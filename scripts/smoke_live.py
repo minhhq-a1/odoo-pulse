@@ -86,8 +86,12 @@ def build_cases(limit: int):
         tools_niche,
         tools_operations,
         tools_projects,
-        tools_reports,
+        tools_reports_finance,
+        tools_reports_hr,
+        tools_reports_inventory,
         tools_reports_ops,
+        tools_reports_pulse,
+        tools_reports_sales,
         tools_workflows,
     )
 
@@ -130,12 +134,12 @@ def build_cases(limit: int):
             },
         ),
         # --- Reports (reports group) ---
-        ("Reports", "pipeline_review", tools_reports.pipeline_review, {}),
-        ("Reports", "sales_snapshot", tools_reports.sales_snapshot, {}),
-        ("Reports", "receivables_health", tools_reports.receivables_health, {}),
-        ("Reports", "inventory_risk", tools_reports.inventory_risk, {}),
-        ("Reports", "absence_overview", tools_reports.absence_overview, {}),
-        ("Reports", "business_pulse", tools_reports.business_pulse, {}),
+        ("Reports", "pipeline_review", tools_reports_sales.pipeline_review, {}),
+        ("Reports", "sales_snapshot", tools_reports_sales.sales_snapshot, {}),
+        ("Reports", "receivables_health", tools_reports_finance.receivables_health, {}),
+        ("Reports", "inventory_risk", tools_reports_inventory.inventory_risk, {}),
+        ("Reports", "absence_overview", tools_reports_hr.absence_overview, {}),
+        ("Reports", "business_pulse", tools_reports_pulse.business_pulse, {}),
         # --- Reports-Ops (reports group) ---
         ("Reports-Ops", "procurement_watch", tools_reports_ops.procurement_watch, {}),
         ("Reports-Ops", "production_health", tools_reports_ops.production_health, {}),

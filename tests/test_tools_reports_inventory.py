@@ -2,7 +2,7 @@
 import datetime as dt
 import json
 
-from odoo_pulse import tools_reports
+from odoo_pulse import tools_reports_inventory
 
 # today fixed at 2026-06-30; dead_stock_days=90 -> moves since 2026-04-01.
 SHORTAGE_ROWS = [
@@ -19,7 +19,7 @@ MOVED_AGG = [{"product_id": [7, "Widget"], "__count": 3}]
 
 
 def _fix_today(monkeypatch):
-    monkeypatch.setattr(tools_reports, "today_in_tz", lambda offset: dt.date(2026, 6, 30))
+    monkeypatch.setattr(tools_reports_inventory, "today_in_tz", lambda offset: dt.date(2026, 6, 30))
 
 
 def _setup(fake_client):
@@ -32,7 +32,7 @@ def _setup(fake_client):
 def test_inventory_risk_builds_domains(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _setup(fake_client)
-    tools_reports.inventory_risk()
+    tools_reports_inventory.inventory_risk()
     product_calls = [c for c in fake_client.calls
                      if c["method"] == "search_read" and c["model"] == "product.product"]
     assert ("virtual_available", "<", 0) in product_calls[0]["domain"]
@@ -47,7 +47,7 @@ def test_inventory_risk_builds_domains(fake_client, monkeypatch):
 def test_inventory_risk_summary_and_verdict(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _setup(fake_client)
-    out = json.loads(tools_reports.inventory_risk())
+    out = json.loads(tools_reports_inventory.inventory_risk())
     s = out["summary"]
     assert s["shortages"] == 1
     assert s["dead_stock_items"] == 1          # Old Gadget (id 8, not moved)
@@ -61,7 +61,7 @@ def test_inventory_risk_summary_and_verdict(fake_client, monkeypatch):
 def test_inventory_risk_breakdown(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _setup(fake_client)
-    out = json.loads(tools_reports.inventory_risk())
+    out = json.loads(tools_reports_inventory.inventory_risk())
     assert out["breakdown"]["shortages"][0]["product"] == "Bolt M8"
     assert out["breakdown"]["shortages"][0]["forecasted"] == -30.0
     dead = out["breakdown"]["dead_stock"]
@@ -73,7 +73,7 @@ def test_inventory_risk_watch_when_only_dead_stock(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     fake_client.search_responses_seq["product.product"] = [[], list(STOCKED_ROWS)]
     fake_client.search_responses["stock.move"] = MOVED_AGG
-    out = json.loads(tools_reports.inventory_risk())
+    out = json.loads(tools_reports_inventory.inventory_risk())
     assert out["summary"]["verdict"] == "watch"
 
 
@@ -81,16 +81,16 @@ def test_inventory_risk_healthy_when_clean(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     fake_client.search_responses_seq["product.product"] = [[], [STOCKED_ROWS[0]]]
     fake_client.search_responses["stock.move"] = MOVED_AGG
-    out = json.loads(tools_reports.inventory_risk())
+    out = json.loads(tools_reports_inventory.inventory_risk())
     assert out["summary"]["verdict"] == "healthy"
     assert out["risks"] == []
 
 
 def test_dead_stock_window_is_utc_bounded(fake_client):
     import json
-    from odoo_pulse import tools_reports
+    from odoo_pulse import tools_reports_inventory
 
-    json.loads(tools_reports.inventory_risk(timezone_offset=7))
+    json.loads(tools_reports_inventory.inventory_risk(timezone_offset=7))
     agg = next(c for c in fake_client.calls
                if c["method"] == "aggregate_records"
                and c["model"] == "stock.move")
@@ -101,7 +101,7 @@ def test_dead_stock_window_is_utc_bounded(fake_client):
 def test_inventory_risk_company_scopes_quantities_via_context(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _setup(fake_client)
-    json.loads(tools_reports.inventory_risk(company=1))
+    json.loads(tools_reports_inventory.inventory_risk(company=1))
     product_calls = [c for c in fake_client.calls
                      if c["method"] == "search_read"
                      and c["model"] == "product.product"]
@@ -113,7 +113,7 @@ def test_inventory_risk_company_scopes_quantities_via_context(fake_client, monke
 def test_inventory_risk_company_scopes_dead_stock_moves(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _setup(fake_client)
-    json.loads(tools_reports.inventory_risk(company=1))
+    json.loads(tools_reports_inventory.inventory_risk(company=1))
     agg = next(c for c in fake_client.calls if c["method"] == "aggregate_records")
     assert ("company_id", "=", 1) in agg["domain"]
 
@@ -121,7 +121,7 @@ def test_inventory_risk_company_scopes_dead_stock_moves(fake_client, monkeypatch
 def test_inventory_risk_without_company_passes_no_context(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _setup(fake_client)
-    json.loads(tools_reports.inventory_risk())
+    json.loads(tools_reports_inventory.inventory_risk())
     product_calls = [c for c in fake_client.calls
                      if c["method"] == "search_read"
                      and c["model"] == "product.product"]
@@ -156,6 +156,6 @@ def test_inventory_risk_fetches_concurrently(fake_client, monkeypatch):
 
     monkeypatch.setattr(fake_client, "search_read", spying_read)
     monkeypatch.setattr(fake_client, "aggregate_records", spying_aggregate)
-    out = json.loads(tools_reports.inventory_risk())
+    out = json.loads(tools_reports_inventory.inventory_risk())
     assert out["summary"]["shortages"] == 1
     assert out["summary"]["dead_stock_items"] == 1

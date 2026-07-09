@@ -30,7 +30,7 @@ VERDICT_STYLE = {
 
 
 def build_briefing() -> Group:
-    from odoo_pulse.tools_reports import business_pulse
+    from odoo_pulse.tools_reports_pulse import business_pulse
 
     report = json.loads(business_pulse())
     if "error" in report:

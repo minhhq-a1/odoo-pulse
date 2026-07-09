@@ -2,7 +2,7 @@
 import datetime as dt
 import json
 
-from odoo_pulse import tools_reports
+from odoo_pulse import tools_reports_hr
 
 # today fixed at 2026-06-30; days=14 -> window ends 2026-07-14.
 APPROVED = [
@@ -27,7 +27,7 @@ HEADCOUNT = [
 
 
 def _fix_today(monkeypatch):
-    monkeypatch.setattr(tools_reports, "today_in_tz", lambda offset: dt.date(2026, 6, 30))
+    monkeypatch.setattr(tools_reports_hr, "today_in_tz", lambda offset: dt.date(2026, 6, 30))
 
 
 def _setup(fake_client):
@@ -38,7 +38,7 @@ def _setup(fake_client):
 def test_absence_overview_builds_domains(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _setup(fake_client)
-    tools_reports.absence_overview()
+    tools_reports_hr.absence_overview()
     leave_calls = [c for c in fake_client.calls
                    if c["method"] == "search_read" and c["model"] == "hr.leave"]
     approved, pending = leave_calls
@@ -53,7 +53,7 @@ def test_absence_overview_builds_domains(fake_client, monkeypatch):
 def test_absence_overview_summary_and_verdict(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _setup(fake_client)
-    out = json.loads(tools_reports.absence_overview())
+    out = json.loads(tools_reports_hr.absence_overview())
     s = out["summary"]
     assert s["off_today"] == 2            # Alice, Carol
     assert s["off_in_window"] == 3
@@ -65,7 +65,7 @@ def test_absence_overview_summary_and_verdict(fake_client, monkeypatch):
 def test_absence_overview_department_coverage(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _setup(fake_client)
-    out = json.loads(tools_reports.absence_overview())
+    out = json.loads(tools_reports_hr.absence_overview())
     depts = {d["department"]: d for d in out["breakdown"]["by_department"]}
     assert depts["Eng"] == {"department": "Eng", "off_in_window": 2,
                             "headcount": 4, "coverage_risk": True}
@@ -78,7 +78,7 @@ def test_absence_overview_clear_when_quiet(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     fake_client.search_responses_seq["hr.leave"] = [[APPROVED[2]], []]
     fake_client.search_responses["hr.employee"] = HEADCOUNT
-    out = json.loads(tools_reports.absence_overview())
+    out = json.loads(tools_reports_hr.absence_overview())
     assert out["summary"]["verdict"] == "clear"
     assert out["risks"] == []
 
@@ -86,7 +86,7 @@ def test_absence_overview_clear_when_quiet(fake_client, monkeypatch):
 def test_off_today_counts_leave_ending_late_utc_yesterday(fake_client):
     import json
     from datetime import timedelta
-    from odoo_pulse import tools_reports
+    from odoo_pulse import tools_reports_hr
     from odoo_pulse.workflow_helpers import today_in_tz
 
     today = today_in_tz(7)
@@ -100,7 +100,7 @@ def test_off_today_counts_leave_ending_late_utc_yesterday(fake_client):
         [],  # pending queue
     ]
     fake_client.search_responses["hr.employee"] = []
-    out = json.loads(tools_reports.absence_overview(timezone_offset=7))
+    out = json.loads(tools_reports_hr.absence_overview(timezone_offset=7))
     assert out["summary"]["off_today"] == 1
 
 
@@ -130,6 +130,6 @@ def test_absence_overview_fetches_concurrently(fake_client, monkeypatch):
 
     monkeypatch.setattr(fake_client, "search_read", spying_read)
     monkeypatch.setattr(fake_client, "aggregate_records", spying_aggregate)
-    out = json.loads(tools_reports.absence_overview())
+    out = json.loads(tools_reports_hr.absence_overview())
     assert out["summary"]["off_today"] == 2
     assert out["summary"]["pending_approvals"] == 1

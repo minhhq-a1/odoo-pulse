@@ -2,7 +2,7 @@
 import datetime as dt
 import json
 
-from odoo_pulse import tools_reports
+from odoo_pulse import tools_reports_sales
 
 # today fixed at 2026-06-30; period_days=7 -> current period starts
 # 2026-06-23, previous period starts 2026-06-16.
@@ -19,7 +19,7 @@ LINE_AGG = [
 
 
 def _fix_today(monkeypatch):
-    monkeypatch.setattr(tools_reports, "today_in_tz", lambda offset: dt.date(2026, 6, 30))
+    monkeypatch.setattr(tools_reports_sales, "today_in_tz", lambda offset: dt.date(2026, 6, 30))
 
 
 def _prime(fake_client):
@@ -33,7 +33,7 @@ def _prime(fake_client):
 def test_sales_snapshot_periods_from_aggregates(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _prime(fake_client)
-    out = json.loads(tools_reports.sales_snapshot(period_days=7,
+    out = json.loads(tools_reports_sales.sales_snapshot(period_days=7,
                                                     timezone_offset=7))
     s = out["summary"]
     assert s["orders"] == 2 and s["revenue"] == 3000.0
@@ -49,7 +49,7 @@ def test_sales_snapshot_periods_from_aggregates(fake_client, monkeypatch):
 def test_sales_snapshot_period_domains_are_utc_bounded(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _prime(fake_client)
-    json.loads(tools_reports.sales_snapshot(period_days=7, timezone_offset=7))
+    json.loads(tools_reports_sales.sales_snapshot(period_days=7, timezone_offset=7))
     aggs = [c for c in fake_client.calls
             if c["method"] == "aggregate_records" and c["model"] == "sale.order"]
     cur_domain = aggs[0]["domain"]
@@ -60,7 +60,7 @@ def test_sales_snapshot_period_domains_are_utc_bounded(fake_client, monkeypatch)
 def test_sales_snapshot_top_products_via_aggregate(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _prime(fake_client)
-    out = json.loads(tools_reports.sales_snapshot(timezone_offset=7))
+    out = json.loads(tools_reports_sales.sales_snapshot(timezone_offset=7))
     agg_call = next(c for c in fake_client.calls
                      if c["method"] == "aggregate_records"
                      and c["model"] == "sale.order.line")
@@ -76,7 +76,7 @@ def test_sales_snapshot_top_products_via_aggregate(fake_client, monkeypatch):
 def test_sales_snapshot_top_customers_via_aggregate(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _prime(fake_client)
-    out = json.loads(tools_reports.sales_snapshot(timezone_offset=7))
+    out = json.loads(tools_reports_sales.sales_snapshot(timezone_offset=7))
     top = out["breakdown"]["top_customers"]
     assert top[0] == {"customer": "Acme", "orders": 1, "revenue": 2500.0}
     assert top[1] == {"customer": "Globex", "orders": 1, "revenue": 500.0}
@@ -97,7 +97,7 @@ def test_sales_snapshot_declining_verdict(fake_client, monkeypatch):
     fake_client.search_responses["sale.order.line"] = []
     fake_client.search_responses["sale.order"] = []
     fake_client.search_count_responses["sale.order"] = 0
-    out = json.loads(tools_reports.sales_snapshot(timezone_offset=7))
+    out = json.loads(tools_reports_sales.sales_snapshot(timezone_offset=7))
     s = out["summary"]
     assert s["orders"] == 1 and s["revenue"] == 750.0
     assert s["prev_orders"] == 2 and s["prev_revenue"] == 2000.0
@@ -117,7 +117,7 @@ def test_sales_snapshot_steady_when_no_previous(fake_client, monkeypatch):
     fake_client.search_responses["sale.order.line"] = []
     fake_client.search_responses["sale.order"] = []
     fake_client.search_count_responses["sale.order"] = 0
-    out = json.loads(tools_reports.sales_snapshot(timezone_offset=7))
+    out = json.loads(tools_reports_sales.sales_snapshot(timezone_offset=7))
     assert out["summary"]["delta_pct"] is None
     assert out["summary"]["verdict"] == "steady"
 
@@ -133,7 +133,7 @@ def test_sales_snapshot_growth_threshold_param(fake_client, monkeypatch):
     fake_client.search_responses["sale.order"] = []
     fake_client.search_count_responses["sale.order"] = 0
     # delta_pct = -25 with this canned data
-    out = json.loads(tools_reports.sales_snapshot(growth_threshold_pct=30.0,
+    out = json.loads(tools_reports_sales.sales_snapshot(growth_threshold_pct=30.0,
                                                     timezone_offset=7))
     assert out["summary"]["verdict"] == "steady"   # -25 within +/-30
 
@@ -142,7 +142,7 @@ def test_sales_snapshot_company_filter(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _prime(fake_client)
     fake_client.search_responses["res.company"] = [{"id": 5, "name": "Acme VN"}]
-    tools_reports.sales_snapshot(company="acme", timezone_offset=7)
+    tools_reports_sales.sales_snapshot(company="acme", timezone_offset=7)
     order_aggs = [c for c in fake_client.calls
                   if c["method"] == "aggregate_records" and c["model"] == "sale.order"]
     for agg_call in order_aggs:
@@ -159,7 +159,7 @@ def test_sales_snapshot_company_filter(fake_client, monkeypatch):
 def test_sales_snapshot_single_currency_labelled(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _prime(fake_client)
-    out = json.loads(tools_reports.sales_snapshot(timezone_offset=7))
+    out = json.loads(tools_reports_sales.sales_snapshot(timezone_offset=7))
     assert out["summary"]["currency"] == "USD"
     assert "by_currency" not in out["summary"]
 
@@ -175,7 +175,7 @@ def test_sales_snapshot_mixed_currencies_flagged(fake_client, monkeypatch):
     fake_client.search_responses["sale.order.line"] = []
     fake_client.search_responses["sale.order"] = []
     fake_client.search_count_responses["sale.order"] = 0
-    out = json.loads(tools_reports.sales_snapshot(timezone_offset=7))
+    out = json.loads(tools_reports_sales.sales_snapshot(timezone_offset=7))
     assert out["summary"]["by_currency"] == {"USD": 1000.0, "VND": 500.0}
     codes = [r["code"] for r in out["risks"]]
     assert "mixed_currencies" in codes
@@ -185,7 +185,7 @@ def test_sales_snapshot_stale_quotations_risk(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _prime(fake_client)
     fake_client.search_count_responses["sale.order"] = 3
-    out = json.loads(tools_reports.sales_snapshot(timezone_offset=7))
+    out = json.loads(tools_reports_sales.sales_snapshot(timezone_offset=7))
     assert out["summary"]["stale_quotations"] == 3
     codes = [r["code"] for r in out["risks"]]
     assert "stale_quotations" in codes
@@ -207,7 +207,7 @@ def test_sales_snapshot_weekly_trend(fake_client, monkeypatch):
         {"id": 12, "amount_total": 10.0, "date_order": "2026-05-07 09:00:00"},
     ]
     fake_client.search_responses_seq["sale.order"] = [old + recent]
-    out = json.loads(tools_reports.sales_snapshot(timezone_offset=7))
+    out = json.loads(tools_reports_sales.sales_snapshot(timezone_offset=7))
     assert out["summary"]["trend"] == "improving"
     weeks = out["breakdown"]["weekly_revenue"]
     assert len(weeks) == 8
@@ -218,7 +218,7 @@ def test_sales_snapshot_weekly_trend(fake_client, monkeypatch):
 def test_sales_snapshot_trend_disabled(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _prime(fake_client)
-    out = json.loads(tools_reports.sales_snapshot(trend_weeks=0, timezone_offset=7))
+    out = json.loads(tools_reports_sales.sales_snapshot(trend_weeks=0, timezone_offset=7))
     assert out["summary"]["trend"] is None
     assert out["breakdown"]["weekly_revenue"] == []
     # no trend fetch happened
@@ -236,7 +236,7 @@ def test_sales_snapshot_trend_truncated_reports_no_direction(fake_client, monkey
     ]
     fake_client.search_responses_seq["sale.order"] = [truncated_trend_rows]
     fake_client.search_count_responses["sale.order"] = 500
-    out = json.loads(tools_reports.sales_snapshot(timezone_offset=7))
+    out = json.loads(tools_reports_sales.sales_snapshot(timezone_offset=7))
     assert out["summary"]["trend"] is None
     assert "truncated_trend" in [r["code"] for r in out["risks"]]
 
@@ -268,5 +268,5 @@ def test_sales_snapshot_fetches_concurrently(fake_client, monkeypatch):
 
     monkeypatch.setattr(fake_client, "aggregate_records", spying_aggregate)
     monkeypatch.setattr(fake_client, "search_count", spying_count)
-    out = json.loads(tools_reports.sales_snapshot())
+    out = json.loads(tools_reports_sales.sales_snapshot())
     assert out["summary"]["revenue"] == 3000.0

@@ -1,7 +1,7 @@
 # odoo_pulse/tools_reports_ops.py
 """Operations report tools: purchasing and manufacturing health.
 
-Same composition style as tools_reports: bounded reads shaped into the
+Same composition style as tools_workflows: bounded reads shaped into the
 build_report envelope with a rule-based verdict. Read-only.
 """
 
