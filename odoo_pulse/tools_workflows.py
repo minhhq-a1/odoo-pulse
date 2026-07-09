@@ -15,7 +15,6 @@ from .odoo_client import OdooConfigError, OdooError
 from .runtime import get_client, mcp, safe
 from .workflow_helpers import (
     build_report,
-    ensure_field,
     fetch_with_truncation,
     parse_when,
     resolve_user_names,
@@ -28,7 +27,6 @@ from .workflow_helpers import (
 @mcp.tool()
 def team_workload(
     project: str | None = None,
-    sprint_id: int | None = None,
     exclude_stages: list[str] | None = None,
     done_stages: list[str] | None = None,
     lookahead_days: int = 7,
@@ -45,7 +43,6 @@ def team_workload(
 
     Args:
         project: Optional project-name filter (ilike).
-        sprint_id: Optional sprint filter (project.task sprint_id).
         exclude_stages: Stage names dropped from scope. Default ["Cancelled"].
         done_stages: Stage names treated as completed. Default ["Done", "Delivered"].
         lookahead_days: Days ahead that count as "due soon" (default 7).
@@ -54,26 +51,16 @@ def team_workload(
         timezone_offset: UTC offset for "today" (default 7 = Asia/Ho_Chi_Minh).
         subtasks_only: Count only subtasks (parent_id != False), the team's unit
             of work. Default True.
-
-    Note: sprint_id is a custom field, not standard Odoo; the tool degrades
-        with a clear error when absent.
     """
 
     def run() -> dict:
         client = get_client()
-        if sprint_id is not None:
-            ensure_field(
-                client, "project.task", "sprint_id",
-                hint="sprint_id is a custom field; this instance does not "
-                     "have it. Omit sprint_id to run without the filter.")
         ex = exclude_stages if exclude_stages is not None else ["Cancelled"]
         done_set = {
             s.lower() for s in (done_stages if done_stages is not None else ["Done", "Delivered"])
         }
 
         domain: list = []
-        if sprint_id is not None:
-            domain.append(("sprint_id", "=", sprint_id))
         if subtasks_only:
             domain.append(("parent_id", "!=", False))
         if project:
@@ -209,7 +196,7 @@ def team_workload(
             breakdown={"by_assignee": by_assignee},
             highlights=highlights,
             risks=risks,
-            extra={"project": project, "sprint_id": sprint_id},
+            extra={"project": project},
         )
 
     return safe(run)
@@ -444,7 +431,6 @@ def project_status_report(
 @mcp.tool()
 def standup_digest(
     project: str,
-    sprint_id: int | None = None,
     exclude_stages: list[str] | None = None,
     lookahead_days: int = 7,
     timezone_offset: int = 7,
@@ -458,14 +444,10 @@ def standup_digest(
 
     Args:
         project: Project name (ilike match, e.g. "The Body Shop").
-        sprint_id: Optional sprint ID to filter tasks by sprint.
         exclude_stages: Stage names to treat as closed. Defaults to
             ["Done", "Cancelled", "Delivered"].
         lookahead_days: Days ahead to include in UPCOMING (default 7).
         timezone_offset: UTC offset in hours for "today" (default 7 = Asia/Ho_Chi_Minh).
-
-    Note: sprint_id is a custom field, not standard Odoo; the tool degrades
-        with a clear error when absent.
     """
     if exclude_stages is None:
         exclude_stages = ["Done", "Cancelled", "Delivered"]
@@ -476,19 +458,12 @@ def standup_digest(
 
     try:
         client = get_client()
-        if sprint_id is not None:
-            ensure_field(
-                client, "project.task", "sprint_id",
-                hint="sprint_id is a custom field; this instance does not "
-                     "have it. Omit sprint_id to run without the filter.")
-
         domain = [
             ("project_id.name", "ilike", project),
             ("parent_id", "!=", False),
             ("stage_id.name", "not in", exclude_stages),
         ]
-        if sprint_id is not None:
-            domain.append(("sprint_id", "=", sprint_id))
+
         tasks, truncation = fetch_with_truncation(
             client, "project.task", domain,
             fields=["id", "name", "user_ids", "stage_id",

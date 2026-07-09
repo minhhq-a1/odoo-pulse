@@ -47,9 +47,8 @@ def _task_search_call(fake_client):
 def test_team_workload_builds_domain(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _setup(fake_client)
-    tools_workflows.team_workload(project="Acme", sprint_id=12)
+    tools_workflows.team_workload(project="Acme")
     call = _task_search_call(fake_client)
-    assert ("sprint_id", "=", 12) in call["domain"]
     assert ("parent_id", "!=", False) in call["domain"]
     assert ("project_id.name", "ilike", "Acme") in call["domain"]
     assert ("stage_id.name", "not in", ["Cancelled"]) in call["domain"]
@@ -58,7 +57,7 @@ def test_team_workload_builds_domain(fake_client, monkeypatch):
 def test_team_workload_per_assignee_load(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _setup(fake_client)
-    out = json.loads(tools_workflows.team_workload(sprint_id=12))
+    out = json.loads(tools_workflows.team_workload(project="Acme"))
     by = {r["assignee"]: r for r in out["breakdown"]["by_assignee"]}
     assert by["Alice"]["open"] == 3
     assert by["Alice"]["overdue"] == 1
@@ -77,7 +76,7 @@ def test_team_workload_per_assignee_load(fake_client, monkeypatch):
 def test_team_workload_summary(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _setup(fake_client)
-    out = json.loads(tools_workflows.team_workload(sprint_id=12))
+    out = json.loads(tools_workflows.team_workload())
     s = out["summary"]
     assert s["members"] == 3             # Alice, Bob, Carol (not unassigned)
     assert s["open_tasks"] == 6          # distinct non-done tasks
@@ -92,7 +91,7 @@ def test_team_workload_summary(fake_client, monkeypatch):
 def test_team_workload_overload_threshold_flags_member(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _setup(fake_client)
-    out = json.loads(tools_workflows.team_workload(sprint_id=12, overload_threshold=2))
+    out = json.loads(tools_workflows.team_workload(overload_threshold=2))
     by = {r["assignee"]: r for r in out["breakdown"]["by_assignee"]}
     assert by["Alice"]["status"] == "overloaded"   # 3 > 2
     assert out["summary"]["overloaded_members"] == 1
@@ -112,14 +111,14 @@ def test_team_workload_balanced_when_clean(fake_client, monkeypatch):
          "date_deadline": "2026-07-05", "priority": "0", "parent_id": [99, "P"]},
     ]
     _setup(fake_client, clean)
-    out = json.loads(tools_workflows.team_workload(sprint_id=12))
+    out = json.loads(tools_workflows.team_workload(project="Acme"))
     assert out["summary"]["verdict"] == "balanced"
     assert out["risks"] == []
     assert out["summary"]["members"] == 2     # Bob, Carol (Alice's only task is done)
     assert out["summary"]["unassigned"] == 0
     assert out["tool"] == "team_workload"
     assert out["as_of"] == "2026-06-30"
-    assert out["sprint_id"] == 12
+    assert out["project"] == "Acme"
 
 
 def test_team_workload_flags_truncation_when_row_cap_hit(fake_client, monkeypatch):
@@ -132,7 +131,7 @@ def test_team_workload_flags_truncation_when_row_cap_hit(fake_client, monkeypatc
     _setup(fake_client, capped)
     fake_client.search_count_responses["project.task"] = 300
 
-    out = json.loads(tools_workflows.team_workload(sprint_id=12))
+    out = json.loads(tools_workflows.team_workload())
 
     assert out["summary"]["truncated"] is True
     assert out["summary"]["total_matching"] == 300
@@ -148,7 +147,7 @@ def test_team_workload_no_truncation_when_under_cap(fake_client, monkeypatch):
     _setup(fake_client)  # only 7 tasks
     fake_client.search_count_responses["project.task"] = 999
 
-    out = json.loads(tools_workflows.team_workload(sprint_id=12))
+    out = json.loads(tools_workflows.team_workload())
 
     assert "truncated" not in out["summary"]
     assert all(r["code"] != "truncated_data" for r in out["risks"])
