@@ -27,10 +27,11 @@ done
 echo "==> Verifying report tools"
 python3 - <<'PY'
 import json, sys
-from odoo_pulse.tools_reports import (
-    pipeline_review, sales_snapshot, receivables_health,
-    inventory_risk, absence_overview, business_pulse,
-)
+from odoo_pulse.tools_reports_sales import pipeline_review, sales_snapshot
+from odoo_pulse.tools_reports_finance import receivables_health
+from odoo_pulse.tools_reports_inventory import inventory_risk
+from odoo_pulse.tools_reports_hr import absence_overview
+from odoo_pulse.tools_reports_pulse import business_pulse
 checks = {
     "pipeline_review": lambda r: r["summary"]["verdict"] in ("at_risk", "off_track"),
     "sales_snapshot": lambda r: r["summary"]["stale_quotations"] >= 1,
