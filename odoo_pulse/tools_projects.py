@@ -12,7 +12,7 @@ import json
 
 from .odoo_client import OdooConfigError, OdooError
 from .runtime import date_domain, get_client, mcp, name_domain, safe
-from .workflow_helpers import ensure_field, optional_fields, resolve_user_names
+from .workflow_helpers import ensure_field, resolve_user_names
 
 
 
@@ -60,8 +60,6 @@ def list_tasks(
 
     user_ids is resolved to [{id, name}] objects via a single batch lookup.
 
-    sprint_id is a custom field; it is included only when the instance has it.
-
     Args:
         query: Free text matched against the task name.
         project: Filter by project name.
@@ -89,7 +87,6 @@ def list_tasks(
             "project_id",
             "user_ids",
             "stage_id",
-            *optional_fields(client, "project.task", ["sprint_id"]),
             "date_deadline",
             "priority",
             "state",

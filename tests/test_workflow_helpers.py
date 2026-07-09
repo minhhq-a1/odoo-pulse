@@ -42,20 +42,20 @@ def test_resolve_user_names_maps_ids_to_names_archived_aware(fake_client):
 
 def test_build_report_has_stable_envelope():
     report = build_report(
-        "sprint_health",
+        "project_status_report",
         dt.date(2026, 6, 30),
         summary={"total": 3},
         breakdown={"by_stage": []},
         highlights=["x"],
         risks=[{"code": "c", "count": 1, "message": "m"}],
-        extra={"sprint_id": 12},
+        extra={"project": "Acme"},
     )
     assert list(report.keys()) == [
-        "tool", "as_of", "sprint_id", "summary", "breakdown", "highlights", "risks",
+        "tool", "as_of", "project", "summary", "breakdown", "highlights", "risks",
     ]
-    assert report["tool"] == "sprint_health"
+    assert report["tool"] == "project_status_report"
     assert report["as_of"] == "2026-06-30"
-    assert report["sprint_id"] == 12
+    assert report["project"] == "Acme"
 
 
 def test_build_report_defaults_empty_collections():
@@ -153,18 +153,18 @@ class _SchemaClient:
 
 
 def test_ensure_field_raises_with_hint_when_missing():
-    with pytest.raises(OdooError, match="sprint_id.*custom"):
-        ensure_field(_SchemaClient(), "project.task", "sprint_id",
-                     hint="sprint_id is a custom field; this instance "
+    with pytest.raises(OdooError, match="x_priority_score.*custom"):
+        ensure_field(_SchemaClient(), "project.task", "x_priority_score",
+                     hint="x_priority_score is a custom field; this instance "
                           "does not have it.")
 
 
 def test_ensure_field_passes_when_present():
     class _C:
         def fields_get(self, model, attributes=None):
-            return {"sprint_id": {"type": "many2one"}}
+            return {"x_priority_score": {"type": "integer"}}
 
-    ensure_field(_C(), "project.task", "sprint_id")  # no raise
+    ensure_field(_C(), "project.task", "x_priority_score")  # no raise
 
 
 from odoo_pulse.workflow_helpers import optional_fields
@@ -185,7 +185,7 @@ def test_optional_fields_keeps_present_candidates_in_order():
 
 def test_optional_fields_empty_when_none_present():
     client = _RichSchemaClient(["name"])
-    assert optional_fields(client, "project.task", ["sprint_id"]) == []
+    assert optional_fields(client, "project.task", ["x_priority_score"]) == []
 
 
 def test_optional_fields_all_present_preserves_order():

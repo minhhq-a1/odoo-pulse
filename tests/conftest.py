@@ -13,7 +13,6 @@ from odoo_pulse.odoo_client import OdooError
 
 _DEFAULT_FIELDS = {
     "name": {"type": "char", "string": "Name"},
-    "sprint_id": {"type": "many2one", "string": "Sprint"},
     "mobile": {"type": "char", "string": "Mobile"},
     "project_id": {"type": "many2one", "string": "Project"},
 }
