@@ -50,6 +50,7 @@ def fetch_with_truncation(
     fields: list[str],
     limit: int,
     order: str | None = None,
+    context: dict | None = None,
 ) -> tuple[list[dict], dict | None]:
     """search_read that also detects silent truncation against the row cap.
 
@@ -60,6 +61,9 @@ def fetch_with_truncation(
     logic (rather than reaching into the private ``_cap_limit``) and issues
     one extra ``search_count`` only when the cap was actually hit.
 
+    ``context`` is forwarded to search_read (not to the truncation search_count;
+    the count may be unscoped in the rare capped case).
+
     Returns ``(rows, None)`` when the result set is known-complete, or
     ``(rows, {"total_matching", "fetched", "missing"})`` when it's truncated.
     """
@@ -67,7 +71,9 @@ def fetch_with_truncation(
     if limit and 0 < limit <= effective_limit:
         effective_limit = limit
 
-    rows = client.search_read(model, domain=domain, fields=fields, limit=limit, order=order)
+    rows = client.search_read(
+        model, domain=domain, fields=fields, limit=limit, order=order, context=context
+    )
     if len(rows) != effective_limit:
         return rows, None
 

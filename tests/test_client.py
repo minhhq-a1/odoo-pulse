@@ -345,3 +345,20 @@ def test_uid_authenticates_once(monkeypatch):
     client.execute_kw("res.partner", "search_read", [[]])
     client.execute_kw("res.partner", "search_read", [[]])
     assert len(auth_calls) == 1
+
+
+def test_search_read_forwards_context():
+    client, proxy = make_client(return_value=[])
+    client.search_read(
+        "product.product", domain=[], fields=["id"],
+        context={"allowed_company_ids": [1]},
+    )
+    kwargs = proxy.calls[0][6]  # calls: (db, uid, key, model, method, args, kwargs)
+    assert kwargs["context"] == {"allowed_company_ids": [1]}
+
+
+def test_search_read_omits_context_by_default():
+    client, proxy = make_client(return_value=[])
+    client.search_read("product.product", domain=[], fields=["id"])
+    kwargs = proxy.calls[0][6]
+    assert "context" not in kwargs

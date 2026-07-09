@@ -466,6 +466,7 @@ class OdooClient:
         limit: int | None = None,
         offset: int = 0,
         order: str | None = None,
+        context: dict | None = None,
     ) -> list[dict]:
         kwargs: dict[str, Any] = {
             "fields": fields or [],
@@ -474,6 +475,8 @@ class OdooClient:
         }
         if order:
             kwargs["order"] = order
+        if context:
+            kwargs["context"] = context
         return self.execute_kw(model, "search_read", [domain or []], kwargs)
 
     def search_count(self, model: str, domain: list | None = None) -> int:

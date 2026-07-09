@@ -95,7 +95,7 @@ class FakeClient:
         return self.read_responses.get(model, [])
 
     def search_read(
-        self, model, domain=None, fields=None, limit=None, offset=0, order=None
+        self, model, domain=None, fields=None, limit=None, offset=0, order=None, context=None
     ):
         self.calls.append(
             {
@@ -106,6 +106,7 @@ class FakeClient:
                 "limit": limit,
                 "offset": offset,
                 "order": order,
+                "context": context,
             }
         )
         self._maybe_raise()
