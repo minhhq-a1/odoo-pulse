@@ -21,6 +21,10 @@ Ask the user for these, and set them as environment variables on the server:
   Security → New API Key (required)
 - `ODOO_READ_ONLY` — keep `true` (default) unless the user explicitly wants
   writes; writes also require further opt-in (see the repo README).
+- `ODOO_TOOL_GROUPS` — optional; default `core,reports` exposes the generic
+  query tools plus the report tools. Only set this if the user wants the ~60
+  domain-specific tools: add groups (`hr`, `projects`, `operations`,
+  `engagement`, `niche`) or set `all` for everything.
 
 If the user has no Odoo instance, they can run the bundled demo:
 `docker compose -f docker-compose.playground.yml up -d` (database `playground`,
@@ -61,5 +65,8 @@ company briefing.
 ## Notes
 
 - The server is read-only by default; it will not modify Odoo data unless the
-  user enables writes via `ODOO_READ_ONLY=false` plus a model allow-list.
+  user enables writes via `ODOO_READ_ONLY=false` plus `ODOO_WRITABLE_MODELS`
+  (a comma-separated model allow-list), and additionally
+  `ODOO_ALLOW_DELETE=true` for deletes. Even then, every write tool returns a
+  dry-run preview unless called with `confirm=true`.
 - Full tool catalogue and configuration: see `README.md` and `docs/tools.md`.

@@ -13,6 +13,12 @@ variables.
 | `ODOO_USERNAME` | yes | `you@example.com` | Login |
 | `ODOO_API_KEY` | yes | `1a2b3c…` | Settings → Users → Account Security → New API Key |
 | `ODOO_READ_ONLY` | no | `true` | `true` (default) blocks all writes |
+| `ODOO_WRITABLE_MODELS` | no | *(empty)* | Comma-separated allow-list of models writable when `ODOO_READ_ONLY=false` |
+| `ODOO_ALLOW_DELETE` | no | `false` | Additionally required (`true`) for `delete_records` |
+
+Writes are off by default. Even with all three write variables set, every write
+tool returns a dry-run preview unless called with `confirm=true` — details in
+[Write operations](tools.md#write-operations).
 
 No Odoo account? See the [5-minute playground](playground.md) — it boots a demo
 Odoo for you.

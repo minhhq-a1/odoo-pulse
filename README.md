@@ -93,9 +93,11 @@ Or one-click:
 
 ## Read-only by default, safe writes when you want them
 
-The server is read-only out of the box. Writes require four independent controls
-to line up (`ODOO_READ_ONLY=false`, a model allow-list, a delete flag, and a
-per-call `confirm=true` after a dry-run preview); system models are never
+The server is read-only out of the box (`ODOO_READ_ONLY=true`). Writes require
+four independent controls to line up: `ODOO_READ_ONLY=false`,
+`ODOO_WRITABLE_MODELS` (a comma-separated model allow-list),
+`ODOO_ALLOW_DELETE=true` additionally for deletes, and a per-call `confirm=true`
+— every write tool returns a dry-run preview without it. System models are never
 writable. Details: [docs/tools.md#write-operations](docs/tools.md#write-operations).
 
 ## More tools
