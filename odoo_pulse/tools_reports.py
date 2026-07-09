@@ -357,56 +357,47 @@ def sales_snapshot(
                 count += row.get("__count") or 0
             return count, round(total, 2), by_cur
 
-        cur_count, cur_total, by_currency = period_totals(cur_lo, cur_hi)
-        prev_count, prev_total, _ = period_totals(prev_lo, cur_lo)
+        def sale_order_aggregates():
+            # cur/prev/cust all aggregate sale.order; kept ordered inside one
+            # thunk so they never race each other (real Odoo or the fake's
+            # per-model response queue).
+            cur = period_totals(cur_lo, cur_hi)
+            prev = period_totals(prev_lo, cur_lo)
+            cust = client.aggregate_records(
+                "sale.order", group_by=["partner_id"],
+                measures=[("amount_total", "sum")],
+                domain=[*base, ("date_order", ">=", cur_lo),
+                        ("date_order", "<", cur_hi)],
+                limit=top_n, order="amount_total:sum desc",
+            )
+            return cur, prev, cust
 
-        delta_pct = (round((cur_total - prev_total) / prev_total * 100, 1)
-                     if prev_total else None)
+        def product_aggregate():
+            return client.aggregate_records(
+                "sale.order.line",
+                group_by=["product_id"],
+                measures=[("price_subtotal", "sum")],
+                domain=[("order_id.state", "in", ["sale", "done"]),
+                        ("order_id.date_order", ">=", cur_lo),
+                        *([("order_id.company_id", "=", company_id)]
+                          if company_id else [])],
+                limit=top_n,
+                order="price_subtotal:sum desc",
+            )
 
-        cust_agg = client.aggregate_records(
-            "sale.order", group_by=["partner_id"],
-            measures=[("amount_total", "sum")],
-            domain=[*base, ("date_order", ">=", cur_lo),
-                    ("date_order", "<", cur_hi)],
-            limit=top_n, order="amount_total:sum desc",
-        )
-        top_customers = [
-            {"customer": r["partner_id"][1] if r.get("partner_id") else "(unknown)",
-             "orders": r.get("__count") or 0,
-             "revenue": round(r.get("amount_total:sum") or 0.0, 2)}
-            for r in cust_agg.get("rows", [])
-        ]
+        def stale_quote_count():
+            return client.search_count("sale.order", [
+                ("state", "in", ["draft", "sent"]),
+                ("create_date", "<",
+                 utc_bound(today - timedelta(days=stale_quote_days),
+                           timezone_offset)),
+                *company_domain,
+            ])
 
-        agg = client.aggregate_records(
-            "sale.order.line",
-            group_by=["product_id"],
-            measures=[("price_subtotal", "sum")],
-            domain=[("order_id.state", "in", ["sale", "done"]),
-                    ("order_id.date_order", ">=", cur_lo),
-                    *([("order_id.company_id", "=", company_id)]
-                      if company_id else [])],
-            limit=top_n,
-            order="price_subtotal:sum desc",
-        )
-        top_products = [
-            {"product": row["product_id"][1] if row.get("product_id") else "(none)",
-             "revenue": row.get("price_subtotal:sum") or 0.0}
-            for row in agg.get("rows", [])
-        ]
+        trend_start = today - timedelta(days=7 * trend_weeks)
 
-        stale_quotes = client.search_count("sale.order", [
-            ("state", "in", ["draft", "sent"]),
-            ("create_date", "<",
-             utc_bound(today - timedelta(days=stale_quote_days), timezone_offset)),
-            *company_domain,
-        ])
-
-        trend = None
-        weekly: list[dict] = []
-        trend_trunc = None
-        if trend_weeks > 0:
-            trend_start = today - timedelta(days=7 * trend_weeks)
-            trend_rows, trend_trunc = fetch_with_truncation(
+        def trend_fetch():
+            return fetch_with_truncation(
                 client, "sale.order",
                 [("state", "in", ["sale", "done"]),
                  ("date_order", ">=", utc_bound(trend_start, timezone_offset)),
@@ -414,6 +405,39 @@ def sales_snapshot(
                 fields=["id", "amount_total", "date_order"],
                 limit=200,
             )
+
+        thunks = {"sales": sale_order_aggregates, "products": product_aggregate,
+                  "quotes": stale_quote_count}
+        if trend_weeks > 0:
+            thunks["trend"] = trend_fetch
+        fetched = gather_strict(thunks)
+
+        (cur_count, cur_total, by_currency), (prev_count, prev_total, _), \
+            cust_agg = fetched["sales"]
+
+        delta_pct = (round((cur_total - prev_total) / prev_total * 100, 1)
+                     if prev_total else None)
+
+        top_customers = [
+            {"customer": r["partner_id"][1] if r.get("partner_id") else "(unknown)",
+             "orders": r.get("__count") or 0,
+             "revenue": round(r.get("amount_total:sum") or 0.0, 2)}
+            for r in cust_agg.get("rows", [])
+        ]
+
+        top_products = [
+            {"product": row["product_id"][1] if row.get("product_id") else "(none)",
+             "revenue": row.get("price_subtotal:sum") or 0.0}
+            for row in fetched["products"].get("rows", [])
+        ]
+
+        stale_quotes = fetched["quotes"]
+
+        trend = None
+        weekly: list[dict] = []
+        trend_trunc = None
+        if trend_weeks > 0:
+            trend_rows, trend_trunc = fetched["trend"]
             buckets = [0.0] * trend_weeks
             for o in trend_rows:
                 day = parse_when(o.get("date_order"), timezone_offset)

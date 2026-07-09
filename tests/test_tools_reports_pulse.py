@@ -141,17 +141,23 @@ def test_business_pulse_runs_sections_concurrently(fake_client, monkeypatch):
 
     _fix_today(monkeypatch)
     _setup(fake_client)
-    seen_threads: set[int] = set()
+    # The first two counting sections (each its own thunk) must be in flight
+    # AT THE SAME TIME; sequential execution would break the barrier, error
+    # the report and fail the verdict assertion. Thread-ident spying would
+    # be flaky: the pool reuses one worker when a thunk finishes before the
+    # next submit. Only the first two waiters block -- the third counting
+    # section and the later res.company count must pass through, or the
+    # (cyclic) barrier would trap them.
+    barrier = threading.Barrier(2, timeout=2)
+    seen = {"n": 0}
     orig = fake_client.search_count
 
     def spying_count(model, domain=None):
-        seen_threads.add(threading.get_ident())
+        seen["n"] += 1
+        if seen["n"] <= 2:
+            barrier.wait()
         return orig(model, domain)
 
     monkeypatch.setattr(fake_client, "search_count", spying_count)
     out = json.loads(tools_reports.business_pulse())
-    # 3 sections issue search_count (crm, projects, hr); with gather they run
-    # on worker threads, so more than one thread id must appear.
-    assert len(seen_threads) > 1
     assert out["summary"]["verdict"] == "attention"
-

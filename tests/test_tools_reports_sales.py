@@ -239,3 +239,34 @@ def test_sales_snapshot_trend_truncated_reports_no_direction(fake_client, monkey
     out = json.loads(tools_reports.sales_snapshot(timezone_offset=7))
     assert out["summary"]["trend"] is None
     assert "truncated_trend" in [r["code"] for r in out["risks"]]
+
+
+def test_sales_snapshot_fetches_concurrently(fake_client, monkeypatch):
+    import threading
+
+    _fix_today(monkeypatch)
+    _prime(fake_client)
+    # The first sale.order aggregate (sales thunk) and the stale-quote count
+    # (quotes thunk) must be in flight AT THE SAME TIME; if the report ran
+    # sequentially the barrier would time out, error the report and fail the
+    # summary assertion. Thread-ident spying would be flaky here: the pool
+    # reuses one worker when a thunk finishes before the next submit.
+    barrier = threading.Barrier(2, timeout=2)
+    agg_seen = {"n": 0}
+    orig_agg = fake_client.aggregate_records
+    orig_count = fake_client.search_count
+
+    def spying_aggregate(*args, **kwargs):
+        agg_seen["n"] += 1
+        if agg_seen["n"] == 1:
+            barrier.wait()
+        return orig_agg(*args, **kwargs)
+
+    def spying_count(*args, **kwargs):
+        barrier.wait()
+        return orig_count(*args, **kwargs)
+
+    monkeypatch.setattr(fake_client, "aggregate_records", spying_aggregate)
+    monkeypatch.setattr(fake_client, "search_count", spying_count)
+    out = json.loads(tools_reports.sales_snapshot())
+    assert out["summary"]["revenue"] == 3000.0
