@@ -53,25 +53,30 @@ def test_pipeline_review_summary_and_verdict(fake_client, monkeypatch):
     assert out["as_of"] == "2026-06-30"
 
 
+def _win_lost_calls(fake_client):
+    counts = [c for c in fake_client.calls
+              if c["method"] == "search_count" and c["model"] == "crm.lead"]
+    won = next(c for c in counts if ("probability", "=", 100) in c["domain"])
+    lost = next(c for c in counts if ("active", "=", False) in c["domain"])
+    return won, lost
+
+
 def test_pipeline_review_win_rate_count_domains(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     fake_client.search_responses["crm.lead"] = LEADS
     tools_reports.pipeline_review()
-    counts = [c for c in fake_client.calls if c["method"] == "search_count"]
-    assert len(counts) == 2
-    won, lost = counts
-    assert ("probability", "=", 100) in won["domain"]
+    won, lost = _win_lost_calls(fake_client)
     # today - 90d = 2026-04-01, expressed as a UTC bound at +7 (default offset)
     assert ("date_closed", ">=", "2026-03-31 17:00:00") in won["domain"]
-    assert ("active", "=", False) in lost["domain"]
     assert ("probability", "=", 0) in lost["domain"]
+    assert ("date_closed", ">=", "2026-03-31 17:00:00") in lost["domain"]
 
 
 def test_pipeline_review_win_rate_respects_owner_filter(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     fake_client.search_responses["crm.lead"] = LEADS
     tools_reports.pipeline_review(salesperson="Alice", team="Direct")
-    won, lost = [c for c in fake_client.calls if c["method"] == "search_count"]
+    won, lost = _win_lost_calls(fake_client)
     # A filtered report must scope the win/lost counts to the same owner,
     # not report a company-wide rate against one person's pipeline.
     for call in (won, lost):

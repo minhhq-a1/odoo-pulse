@@ -192,3 +192,46 @@ def test_optional_fields_all_present_preserves_order():
     client = _RichSchemaClient(["b", "a", "c"])
     assert optional_fields(client, "x", ["a", "b"]) == ["a", "b"]
 
+
+def test_gather_returns_values_in_key_order():
+    import threading
+    from odoo_pulse.workflow_helpers import gather
+    out = gather({"a": lambda: 1, "b": lambda: 2, "c": lambda: 3})
+    assert out == {"a": 1, "b": 2, "c": 3}
+    assert list(out) == ["a", "b", "c"]
+
+
+def test_gather_captures_exceptions_as_values():
+    from odoo_pulse.workflow_helpers import gather
+    boom = ValueError("boom")
+
+    def raiser():
+        raise boom
+
+    out = gather({"ok": lambda: 42, "bad": raiser})
+    assert out["ok"] == 42
+    assert out["bad"] is boom
+
+
+def test_gather_single_thunk_runs_inline():
+    import threading
+    from odoo_pulse.workflow_helpers import gather
+    ident = gather({"only": threading.get_ident})
+    assert ident["only"] == threading.get_ident()
+
+
+def test_gather_runs_thunks_concurrently():
+    import threading
+    from odoo_pulse.workflow_helpers import gather
+    # Both thunks must be inside barrier.wait() at the same time; if gather
+    # ran them sequentially the barrier would time out and raise.
+    barrier = threading.Barrier(2, timeout=2)
+
+    def thunk():
+        barrier.wait()
+        return "ok"
+
+    out = gather({"a": thunk, "b": thunk})
+    assert out == {"a": "ok", "b": "ok"}
+
+
