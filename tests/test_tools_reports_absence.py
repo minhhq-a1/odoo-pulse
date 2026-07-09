@@ -102,3 +102,34 @@ def test_off_today_counts_leave_ending_late_utc_yesterday(fake_client):
     fake_client.search_responses["hr.employee"] = []
     out = json.loads(tools_reports.absence_overview(timezone_offset=7))
     assert out["summary"]["off_today"] == 1
+
+
+def test_absence_overview_fetches_concurrently(fake_client, monkeypatch):
+    import threading
+
+    _fix_today(monkeypatch)
+    _setup(fake_client)
+    # The first hr.leave fetch (leaves thunk) and the hr.employee headcount
+    # aggregate (headcount thunk) must be in flight AT THE SAME TIME;
+    # sequential execution would break the barrier, error the report and
+    # fail the summary assertion. The pending hr.leave fetch passes through.
+    barrier = threading.Barrier(2, timeout=2)
+    seen = {"n": 0}
+    orig_read = fake_client.search_read
+    orig_agg = fake_client.aggregate_records
+
+    def spying_read(*args, **kwargs):
+        seen["n"] += 1
+        if seen["n"] == 1:
+            barrier.wait()
+        return orig_read(*args, **kwargs)
+
+    def spying_aggregate(*args, **kwargs):
+        barrier.wait()
+        return orig_agg(*args, **kwargs)
+
+    monkeypatch.setattr(fake_client, "search_read", spying_read)
+    monkeypatch.setattr(fake_client, "aggregate_records", spying_aggregate)
+    out = json.loads(tools_reports.absence_overview())
+    assert out["summary"]["off_today"] == 2
+    assert out["summary"]["pending_approvals"] == 1

@@ -898,26 +898,39 @@ def absence_overview(
         today = today_in_tz(timezone_offset)
         horizon = today + timedelta(days=days)
 
-        approved, approved_trunc = fetch_with_truncation(
-            client, "hr.leave",
-            [("state", "=", "validate"),
-             ("date_from", "<", utc_bound(horizon + timedelta(days=1), timezone_offset)),
-             ("date_to", ">=", utc_bound(today, timezone_offset))],
-            fields=["id", "employee_id", "department_id", "date_from",
-                    "date_to", "holiday_status_id", "number_of_days"],
-            limit=200, order="date_from",
-        )
-        pending, pending_trunc = fetch_with_truncation(
-            client, "hr.leave",
-            [("state", "in", ["confirm", "validate1"])],
-            fields=["id", "employee_id", "department_id", "date_from", "date_to"],
-            limit=200, order="date_from",
-        )
+        def leave_lists():
+            # Both hr.leave fetches share one thunk (ordered) so they never
+            # race each other (real Odoo or the fake's per-model queue).
+            approved = fetch_with_truncation(
+                client, "hr.leave",
+                [("state", "=", "validate"),
+                 ("date_from", "<",
+                  utc_bound(horizon + timedelta(days=1), timezone_offset)),
+                 ("date_to", ">=", utc_bound(today, timezone_offset))],
+                fields=["id", "employee_id", "department_id", "date_from",
+                        "date_to", "holiday_status_id", "number_of_days"],
+                limit=200, order="date_from",
+            )
+            pending = fetch_with_truncation(
+                client, "hr.leave",
+                [("state", "in", ["confirm", "validate1"])],
+                fields=["id", "employee_id", "department_id", "date_from",
+                        "date_to"],
+                limit=200, order="date_from",
+            )
+            return approved, pending
 
-        agg = client.aggregate_records(
-            "hr.employee", group_by=["department_id"], measures=[],
-            domain=[], limit=200,
-        )
+        def department_headcount():
+            return client.aggregate_records(
+                "hr.employee", group_by=["department_id"], measures=[],
+                domain=[], limit=200,
+            )
+
+        fetched = gather_strict(
+            {"leaves": leave_lists, "headcount": department_headcount})
+        (approved, approved_trunc), (pending, pending_trunc) = fetched["leaves"]
+        agg = fetched["headcount"]
+
         headcount: dict[str, int] = {}
         for row in agg.get("rows", []):
             dept = row["department_id"][1] if row.get("department_id") else "(none)"
