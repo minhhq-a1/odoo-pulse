@@ -248,3 +248,19 @@ def gather(
     with ThreadPoolExecutor(max_workers=min(len(thunks), max_workers)) as pool:
         futures = {key: pool.submit(call, fn) for key, fn in thunks.items()}
         return {key: futures[key].result() for key in thunks}
+
+
+def gather_strict(
+    thunks: dict[str, Callable[[], Any]], max_workers: int = 8
+) -> dict[str, Any]:
+    """:func:`gather` for callers where any failure is fatal.
+
+    Re-raises the first exception in key order instead of returning it —
+    the composed report tools want a single OdooError to surface through
+    ``safe()`` exactly as it would have sequentially.
+    """
+    results = gather(thunks, max_workers)
+    for outcome in results.values():
+        if isinstance(outcome, Exception):
+            raise outcome
+    return results

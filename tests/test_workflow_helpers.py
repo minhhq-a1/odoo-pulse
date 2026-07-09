@@ -235,3 +235,25 @@ def test_gather_runs_thunks_concurrently():
     assert out == {"a": "ok", "b": "ok"}
 
 
+
+
+def test_gather_strict_returns_values_in_key_order():
+    from odoo_pulse.workflow_helpers import gather_strict
+    out = gather_strict({"a": lambda: 1, "b": lambda: 2})
+    assert out == {"a": 1, "b": 2}
+    assert list(out) == ["a", "b"]
+
+
+def test_gather_strict_reraises_first_exception_in_key_order():
+    from odoo_pulse.workflow_helpers import gather_strict
+    first, second = ValueError("first"), TypeError("second")
+
+    def raise_first():
+        raise first
+
+    def raise_second():
+        raise second
+
+    with pytest.raises(ValueError) as exc:
+        gather_strict({"a": raise_first, "b": raise_second, "c": lambda: 3})
+    assert exc.value is first

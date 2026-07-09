@@ -16,6 +16,7 @@ from .workflow_helpers import (
     distinct_companies,
     fetch_with_truncation,
     gather,
+    gather_strict,
     parse_when,
     resolve_company_id,
     today_in_tz,
@@ -88,7 +89,7 @@ def pipeline_review(
         # Win rate honours the same salesperson/team scope as the funnel, so a
         # filtered report never pairs a person's pipeline with a company-wide rate.
         since = utc_bound(today - timedelta(days=win_rate_days), timezone_offset)
-        counts = gather({
+        counts = gather_strict({
             "won": lambda: client.search_count("crm.lead", [
                 ("type", "=", "opportunity"), ("probability", "=", 100),
                 ("date_closed", ">=", since), *owner_filter]),
@@ -97,9 +98,6 @@ def pipeline_review(
                 ("probability", "=", 0), ("date_closed", ">=", since),
                 *owner_filter]),
         })
-        for outcome in counts.values():
-            if isinstance(outcome, Exception):
-                raise outcome
         won, lost = counts["won"], counts["lost"]
         win_rate = round(won / (won + lost) * 100, 1) if (won + lost) else None
 
