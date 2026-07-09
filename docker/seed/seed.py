@@ -311,7 +311,13 @@ def seed_hr() -> None:
         if validate:
             S.write("hr.leave", [lv], {"state": "validate"})
         else:
-            S.write("hr.leave", [lv], {"state": "confirm"})
+            # Drift note: Odoo 19 creates hr.leave already in 'confirm' (the
+            # draft/"To Submit" stage is gone); re-writing the same state
+            # raises "You can't do the same action twice." Only push
+            # draft -> confirm when the instance still starts at draft (<=18).
+            state = S.call("hr.leave", "read", [[lv], ["state"]])[0]["state"]
+            if state == "draft":
+                S.write("hr.leave", [lv], {"state": "confirm"})
         return lv
 
     # Two employees off across today => off_today + thin coverage (2/3 = 66%).
