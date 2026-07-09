@@ -23,7 +23,7 @@ Set `ODOO_TOOL_GROUPS` (comma-separated) to choose what the server exposes:
 | `niche` | Enterprise & specialised apps |
 | `all` | Everything |
 
-Default (`core,reports`) is 27 tools — reports are the front door, the domain
+Default (`core,reports`) is 26 tools — reports are the front door, the domain
 wrappers below are "power user mode".
 
 ## Analyst reports
@@ -127,12 +127,9 @@ Report manufacturing health — late starts and stuck orders — in one call.
 - `timezone_offset` (default `7`): UTC offset for "today".
 - `company`: Optional company name (ilike) or id to scope the report.
 
-### `sprint_health` · `team_workload` · `project_status_report` · `standup_digest`
+### `team_workload` · `project_status_report` · `standup_digest`
 
-Project delivery reports — sprint completion, per-assignee workload,
-portfolio-wide project health, and a daily stand-up digest. Same composition style as the reports above
-(filters, thresholds, `timezone_offset`); see the docstrings in
-`odoo_pulse/tools_workflows.py` for the full argument list.
+Project delivery reports — per-assignee workload, portfolio-wide project health, and a daily stand-up digest. Same composition style as the reports above (filters, thresholds, `timezone_offset`); see the docstrings in `odoo_pulse/tools_workflows.py` for the full argument list.
 
 ### Multi-company / multi-currency
 
@@ -205,8 +202,7 @@ return a friendly error instead of failing.
 | `list_tasks` | Tasks by project / assignee / stage |
 | `list_timesheets` | Timesheet entries |
 
-(The composed project analysts — `sprint_health`, `team_workload`,
-`project_status_report`, `standup_digest` — are in the `reports` group; see the README.)
+(The composed project analysts — `team_workload`, `project_status_report`, `standup_digest` — are in the `reports` group; see the README.)
 
 ### Operations (`operations`)
 

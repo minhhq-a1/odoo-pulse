@@ -29,7 +29,7 @@ structured report with a verdict — not a raw dump you have to interpret.
 | `absence_overview` | Who's off this week, pending approvals, thin-coverage departments |
 | `procurement_watch` | Purchasing: late receipts, stale RFQs, open spend per vendor |
 | `production_health` | Manufacturing: orders behind their planned start, stuck WIP |
-| `sprint_health` · `team_workload` · `project_status_report` · `standup_digest` | Project delivery: sprint completion, overloaded members, at-risk projects, and a daily stand-up digest |
+| `team_workload` · `project_status_report` · `standup_digest` | Project delivery: overloaded members, at-risk projects, and a daily stand-up digest |
 
 Every money-reporting tool (except `inventory_risk`) takes an optional
 `company=` filter and flags
@@ -45,16 +45,9 @@ bucketing by calendar day, and day windows in domains are expressed as UTC
 datetime boundaries. Date-only fields (e.g. `project.milestone.deadline`,
 `invoice_date_due`, `project.task.date_deadline`) are compared as-is.
 
-### Custom `sprint_id` field
+### Version-dependent fields
 
-`sprint_health`, and the `sprint_id` filter on `team_workload` /
-`standup_digest`, require a custom `sprint_id` many2one on `project.task`
-(not standard Odoo) and return a clear error when it is absent.
-`list_tasks` includes the column only when the instance has it.
-Version-dependent fields degrade the same way: `find_partner` searches
-`mobile` only on instances that still have it (removed in Odoo 19), and
-`list_timesheets` reports an actionable error when `hr_timesheet` is not
-installed.
+`find_partner` searches `mobile` only on instances that still have it (removed in Odoo 19), and `list_timesheets` reports an actionable error when `hr_timesheet` is not installed.
 
 Under the hood it's the standard Odoo XML-RPC external API — nothing to install
 inside Odoo, works on Odoo Online, Odoo.sh, and on-premise. **Requires

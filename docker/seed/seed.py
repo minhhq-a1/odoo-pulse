@@ -322,8 +322,8 @@ def seed_hr() -> None:
 
 
 def seed_projects() -> None:
-    print("[seed] Project / sprint...")
-    project = S.create("project.project", {"name": "PLAYGROUND Sprint 12"})
+    print("[seed] Project / delivery...")
+    project = S.create("project.project", {"name": "PLAYGROUND Delivery"})
     # A couple of internal users to spread load across (admin + any demo user).
     users = S.search("res.users", [("share", "=", False)], limit=3) or [S.uid]
 

@@ -2,7 +2,7 @@
 
 Importing a tool module registers its @mcp.tool() functions as a side
 effect, so choosing which modules server.py imports IS the tool filter.
-Default surface is core + reports (27 tools); the breadth wrappers are
+Default surface is core + reports (26 tools); the breadth wrappers are
 opt-in groups so they don't bloat the client's context window.
 """
 
