@@ -1,4 +1,4 @@
-# odoo-pulse playground: Postgres + Odoo 18 + one-shot seed.
+# odoo-pulse playground: Postgres + Odoo (default 18, ODOO_IMAGE to override) + one-shot seed.
 name: odoo-pulse-playground
 
 services:
@@ -17,7 +17,8 @@ services:
       retries: 20
 
   odoo:
-    image: odoo:18
+    # Overridable for the CI matrix; local default stays 18.
+    image: ${ODOO_IMAGE:-odoo:18}
     depends_on:
       db:
         condition: service_healthy

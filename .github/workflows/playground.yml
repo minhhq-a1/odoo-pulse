@@ -10,6 +10,13 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: false          # a 19 failure must not mask the 18 result
+      matrix:
+        odoo_image: ["odoo:18", "odoo:19"]
+    name: smoke (${{ matrix.odoo_image }})
+    env:
+      ODOO_IMAGE: ${{ matrix.odoo_image }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
