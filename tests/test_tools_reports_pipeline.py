@@ -209,3 +209,65 @@ def test_pipeline_review_requests_company_currency_field(fake_client, monkeypatc
                 if c["method"] == "search_read" and c["model"] == "crm.lead")
     assert "company_currency" in call["fields"]
 
+
+def _many_leads(n=200):
+    return [{"id": i, "name": f"Deal {i}", "stage_id": [1, "New"],
+             "user_id": [10, "Alice"], "expected_revenue": 100.0,
+             "probability": 50.0, "date_deadline": False,
+             "date_last_stage_update": "2026-06-28 09:00:00",
+             "company_id": False, "company_currency": False}
+            for i in range(1, n + 1)]
+
+
+def test_pipeline_review_truncated_uses_server_side_totals(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    # 200 fetched rows == the cap -> fetch_with_truncation probes the count.
+    fake_client.search_responses["crm.lead"] = _many_leads(200)
+    fake_client.aggregate_responses_seq["crm.lead"] = [
+        [{"expected_revenue:sum": 123456.0, "__count": 500}]]
+
+    def hook(model, domain):
+        # today fixed at 2026-06-30 (+7): stalled cutoff 2026-06-16 ->
+        # utc bound "2026-06-15 17:00:00"; close cutoff 2026-07-30.
+        if ("date_last_stage_update", "<", "2026-06-15 17:00:00") in domain:
+            return 300                                   # stalled, full pop
+        if ("date_deadline", "<", "2026-06-30") in domain:
+            return 30                                    # overdue close
+        if ("date_deadline", ">=", "2026-06-30") in domain:
+            return 20                                    # closing soon
+        if ("date_deadline", "=", False) in domain:
+            return 450                                   # no close date
+        if ("probability", "=", 100) in domain:
+            return 10                                    # won
+        if ("active", "=", False) in domain:
+            return 10                                    # lost
+        return 500                                       # truncation probe
+
+    fake_client.search_count_hook = hook
+    out = json.loads(tools_reports.pipeline_review())
+    s = out["summary"]
+    assert s["truncated"] is True
+    assert s["open_opportunities"] == 500        # full population, not 200
+    assert s["expected_revenue"] == 123456.0     # server-side aggregate
+    assert s["stalled"] == 300
+    assert s["stalled_pct"] == 60.0
+    assert s["verdict"] == "off_track"           # 60% >= 50 over FULL data
+    assert s["overdue_close_date"] == 30
+    assert s["closing_soon"] == 20
+    assert s["no_close_date"] == 450
+    assert set(s["partial_fields"]) == {
+        "weighted_revenue", "expected_revenue_by_currency",
+        "weighted_revenue_by_currency"}
+    trunc = next(r for r in out["risks"] if r["code"] == "truncated_data")
+    assert "top 200" in trunc["message"]
+
+
+def test_pipeline_review_not_truncated_has_no_partial_fields(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    fake_client.search_responses["crm.lead"] = LEADS
+    fake_client.search_count_responses["crm.lead"] = 0
+    out = json.loads(tools_reports.pipeline_review())
+    assert "partial_fields" not in out["summary"]
+    assert "truncated" not in out["summary"]
+
+

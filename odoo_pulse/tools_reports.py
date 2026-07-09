@@ -149,7 +149,39 @@ def pipeline_review(
                 closing_soon += 1
 
         stalled.sort(key=lambda r: -r["idle_days"])
-        stalled_pct = round(len(stalled) / total * 100, 1) if total else 0.0
+        stalled_count = len(stalled)
+
+        partial_fields: list[str] = []
+        if truncation:
+            # The fetched rows are only the top-N by expected revenue, so
+            # every verdict input is recomputed over the FULL population:
+            # one aggregate for the revenue sum, four counts for the buckets.
+            total = truncation["total_matching"]
+            agg = client.aggregate_records(
+                "crm.lead", group_by=[],
+                measures=[("expected_revenue", "sum")], domain=domain)
+            agg_rows = agg.get("rows", [])
+            if agg_rows:
+                expected_total = agg_rows[0].get("expected_revenue:sum") or 0.0
+            stalled_count = client.search_count("crm.lead", [
+                *domain,
+                ("date_last_stage_update", "<",
+                 utc_bound(stalled_cutoff, timezone_offset))])
+            overdue_close = client.search_count("crm.lead", [
+                *domain, ("date_deadline", "!=", False),
+                ("date_deadline", "<", today.isoformat())])
+            closing_soon = client.search_count("crm.lead", [
+                *domain, ("date_deadline", ">=", today.isoformat()),
+                ("date_deadline", "<=", close_cutoff.isoformat())])
+            no_close_date = client.search_count("crm.lead", [
+                *domain, ("date_deadline", "=", False)])
+            # These need per-row math (revenue * probability, currency of
+            # each row) and cannot be recomputed server-side over XML-RPC.
+            partial_fields = ["weighted_revenue",
+                              "expected_revenue_by_currency",
+                              "weighted_revenue_by_currency"]
+
+        stalled_pct = round(stalled_count / total * 100, 1) if total else 0.0
 
         if total == 0:
             verdict = "at_risk"
@@ -168,7 +200,7 @@ def pipeline_review(
                 k: round(v, 2) for k, v in expected_by_cur.items()},
             "weighted_revenue_by_currency": {
                 k: round(v, 2) for k, v in weighted_by_cur.items()},
-            "stalled": len(stalled),
+            "stalled": stalled_count,
             "stalled_pct": stalled_pct,
             "overdue_close_date": overdue_close,
             "closing_soon": closing_soon,
@@ -181,6 +213,7 @@ def pipeline_review(
         if truncation:
             summary["truncated"] = True
             summary["total_matching"] = truncation["total_matching"]
+            summary["partial_fields"] = partial_fields
 
         stages = sorted(by_stage.values(), key=lambda r: -r["expected_revenue"])
         reps = sorted(by_rep.values(), key=lambda r: -r["expected_revenue"])
@@ -200,17 +233,19 @@ def pipeline_review(
             risks.append({
                 "code": "truncated_data", "count": truncation["missing"],
                 "message": (
-                    f"Report covers only {truncation['fetched']} of "
-                    f"{truncation['total_matching']} matching opportunities."
+                    f"Summary totals and verdict cover all "
+                    f"{truncation['total_matching']} matching opportunities; "
+                    f"breakdowns and the stalled list cover only the top "
+                    f"{truncation['fetched']} by expected revenue."
                 ),
             })
         if total == 0:
             risks.append({"code": "empty_pipeline", "count": 0,
                           "message": "No open opportunities match the filter."})
-        if stalled:
+        if stalled_count:
             risks.append({
-                "code": "stalled_deals", "count": len(stalled),
-                "message": (f"{len(stalled)} deal(s) with no stage change in "
+                "code": "stalled_deals", "count": stalled_count,
+                "message": (f"{stalled_count} deal(s) with no stage change in "
                             f"{stalled_days}+ days"),
             })
         if overdue_close:

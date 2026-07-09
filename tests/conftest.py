@@ -44,6 +44,11 @@ class FakeClient:
         self.execute_kw_responses: dict[tuple[str, str], object] = {}
         # model -> canned return value for search_count; falls back to 7.
         self.search_count_responses: dict[str, int] = {}
+        # optional callable(model, domain) -> int | None; when set and it
+        # returns a value, search_count uses it. Lets a test answer several
+        # counts on the SAME model differently, keyed by domain content —
+        # deterministic even when a tool issues counts concurrently.
+        self.search_count_hook = None
         # models whose search_read/search_count raise OdooError (to simulate
         # an app that is not installed).
         self.error_models: set[str] = set()
@@ -85,6 +90,10 @@ class FakeClient:
         self._maybe_raise()
         if model in self.error_models:
             raise OdooError(f"Object {model} doesn't exist")
+        if self.search_count_hook is not None:
+            value = self.search_count_hook(model, domain)
+            if value is not None:
+                return value
         return self.search_count_responses.get(model, 7)
 
     def read(self, model, ids, fields=None):
