@@ -740,15 +740,46 @@ def inventory_risk(
         company_id = resolve_company_id(client, company)
         ctx = {"allowed_company_ids": [company_id]} if company_id else None
 
-        short_rows, short_trunc = fetch_with_truncation(
-            client, "product.product",
-            [("type", "=", "consu"), ("is_storable", "=", True),
-             ("virtual_available", "<", 0)],
-            fields=["id", "name", "default_code", "qty_available",
-                    "virtual_available"],
-            limit=200,
-            context=ctx,
-        )
+        since = utc_bound(today - timedelta(days=dead_stock_days), timezone_offset)
+
+        def product_lists():
+            # Both product.product fetches share one thunk (ordered) so they
+            # never race each other (real Odoo or the fake's per-model queue).
+            short = fetch_with_truncation(
+                client, "product.product",
+                [("type", "=", "consu"), ("is_storable", "=", True),
+                 ("virtual_available", "<", 0)],
+                fields=["id", "name", "default_code", "qty_available",
+                        "virtual_available"],
+                limit=200,
+                context=ctx,
+            )
+            stocked = fetch_with_truncation(
+                client, "product.product",
+                [("type", "=", "consu"), ("is_storable", "=", True),
+                 ("qty_available", ">", 0)],
+                fields=["id", "name", "default_code", "qty_available",
+                        "standard_price"],
+                limit=200,
+                context=ctx,
+            )
+            return short, stocked
+
+        def moved_aggregate():
+            domain: list = [("state", "=", "done"), ("date", ">=", since)]
+            if company_id:
+                domain.append(("company_id", "=", company_id))
+            return client.aggregate_records(
+                "stock.move", group_by=["product_id"], measures=[],
+                domain=domain,
+                limit=200,
+            )
+
+        fetched = gather_strict(
+            {"products": product_lists, "moves": moved_aggregate})
+        (short_rows, short_trunc), (stocked, stocked_trunc) = fetched["products"]
+        agg = fetched["moves"]
+
         shortages = [
             {"product": p["name"], "code": p.get("default_code") or None,
              "on_hand": p.get("qty_available") or 0.0,
@@ -757,29 +788,10 @@ def inventory_risk(
         ]
         shortages.sort(key=lambda r: r["forecasted"])
 
-        since = utc_bound(today - timedelta(days=dead_stock_days), timezone_offset)
-        domain: list = [("state", "=", "done"), ("date", ">=", since)]
-        if company_id:
-            domain.append(("company_id", "=", company_id))
-        agg = client.aggregate_records(
-            "stock.move", group_by=["product_id"], measures=[],
-            domain=domain,
-            limit=200,
-        )
         moved_rows = agg.get("rows", [])
         moved_ids = {row["product_id"][0] for row in moved_rows
                      if row.get("product_id")}
         moved_capped = len(moved_rows) >= min(200, client.config.max_records)
-
-        stocked, stocked_trunc = fetch_with_truncation(
-            client, "product.product",
-            [("type", "=", "consu"), ("is_storable", "=", True),
-             ("qty_available", ">", 0)],
-            fields=["id", "name", "default_code", "qty_available",
-                    "standard_price"],
-            limit=200,
-            context=ctx,
-        )
         dead: list[dict] = []
         dead_value = 0.0
         for p in stocked:

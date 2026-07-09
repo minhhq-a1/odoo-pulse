@@ -128,3 +128,34 @@ def test_inventory_risk_without_company_passes_no_context(fake_client, monkeypat
     assert product_calls, "expected product.product queries"
     for call in product_calls:
         assert call["context"] is None
+
+
+def test_inventory_risk_fetches_concurrently(fake_client, monkeypatch):
+    import threading
+
+    _fix_today(monkeypatch)
+    _setup(fake_client)
+    # The first product.product fetch (products thunk) and the stock.move
+    # aggregate (moves thunk) must be in flight AT THE SAME TIME; sequential
+    # execution would break the barrier, error the report and fail the
+    # summary assertion. The second product fetch must pass through.
+    barrier = threading.Barrier(2, timeout=2)
+    seen = {"n": 0}
+    orig_read = fake_client.search_read
+    orig_agg = fake_client.aggregate_records
+
+    def spying_read(*args, **kwargs):
+        seen["n"] += 1
+        if seen["n"] == 1:
+            barrier.wait()
+        return orig_read(*args, **kwargs)
+
+    def spying_aggregate(*args, **kwargs):
+        barrier.wait()
+        return orig_agg(*args, **kwargs)
+
+    monkeypatch.setattr(fake_client, "search_read", spying_read)
+    monkeypatch.setattr(fake_client, "aggregate_records", spying_aggregate)
+    out = json.loads(tools_reports.inventory_risk())
+    assert out["summary"]["shortages"] == 1
+    assert out["summary"]["dead_stock_items"] == 1
