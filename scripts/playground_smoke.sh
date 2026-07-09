@@ -48,6 +48,18 @@ for name, ok in checks.items():
     print(f"  {'OK  ' if passed else 'FAIL'} {name}: verdict={r['summary'].get('verdict')}")
     if not passed:
         failed.append(name)
+
+# Company-scoped paths: proves hr.leave.company_id exists live and the
+# allowed_company_ids context plumbing works end-to-end (spec C1+C2).
+r = json.loads(business_pulse(company=1))
+ok_hr = "hr" not in r["summary"]["sections_unavailable"] \
+    and r["breakdown"]["sections"]["hr"]["off_today"] >= 1
+print(f"  {'OK  ' if ok_hr else 'FAIL'} business_pulse(company=1): hr section")
+r = json.loads(inventory_risk(company=1))
+ok_inv = r["summary"]["shortages"] >= 1
+print(f"  {'OK  ' if ok_inv else 'FAIL'} inventory_risk(company=1): shortages")
+if not (ok_hr and ok_inv):
+    failed.append("company_scoped")
 sys.exit(1 if failed else 0)
 PY
 
