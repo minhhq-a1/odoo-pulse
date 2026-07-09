@@ -147,7 +147,7 @@ def test_pipeline_review_company_filter(fake_client, monkeypatch):
 
 def test_pipeline_review_flags_mixed_companies(fake_client, monkeypatch):
     _fix_today(monkeypatch)
-    leads = [dict(l) for l in LEADS]
+    leads = [dict(lead) for lead in LEADS]
     leads[0]["company_id"] = [1, "Acme VN"]
     leads[1]["company_id"] = [2, "Acme US"]
     fake_client.search_responses["crm.lead"] = leads
@@ -159,7 +159,7 @@ def test_pipeline_review_flags_mixed_companies(fake_client, monkeypatch):
 
 def test_stalled_uses_local_date_of_stage_update(fake_client):
     import json
-    from datetime import date, timedelta
+    from datetime import timedelta
     from odoo_pulse import tools_reports_sales
     from odoo_pulse.workflow_helpers import today_in_tz
 
@@ -181,7 +181,7 @@ def test_stalled_uses_local_date_of_stage_update(fake_client):
 
 def test_pipeline_review_splits_revenue_by_currency(fake_client, monkeypatch):
     _fix_today(monkeypatch)
-    leads = [dict(l) for l in LEADS]
+    leads = [dict(lead) for lead in LEADS]
     leads[0]["company_currency"] = [1, "VND"]   # 10000 @ 20%
     leads[1]["company_currency"] = [2, "USD"]   # 50000 @ 60%
     leads[2]["company_currency"] = [1, "VND"]   # 20000 @ 10%
@@ -196,9 +196,9 @@ def test_pipeline_review_splits_revenue_by_currency(fake_client, monkeypatch):
 
 def test_pipeline_review_single_currency_no_mixed_risk(fake_client, monkeypatch):
     _fix_today(monkeypatch)
-    leads = [dict(l) for l in LEADS]
-    for l in leads:
-        l["company_currency"] = [1, "VND"]
+    leads = [dict(lead) for lead in LEADS]
+    for lead in leads:
+        lead["company_currency"] = [1, "VND"]
     fake_client.search_responses["crm.lead"] = leads
     fake_client.search_count_responses["crm.lead"] = 0
     out = json.loads(tools_reports_sales.pipeline_review())

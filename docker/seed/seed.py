@@ -8,7 +8,6 @@ Standard library only (xmlrpc.client) — no dependencies, no image build.
 from __future__ import annotations
 
 import os
-import sys
 import time
 import xmlrpc.client
 from datetime import date, datetime, timedelta, timezone
