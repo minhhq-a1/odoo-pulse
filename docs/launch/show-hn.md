@@ -26,7 +26,8 @@ Design choices that mattered:
 - Read-only by default; writes need four independent opt-ins
   (env switch + model allow-list + delete flag + per-call confirm).
 - Nothing to install inside Odoo — plain XML-RPC external API, works on
-  Odoo Online / Odoo.sh / on-premise (18+).
+  Odoo Online / Odoo.sh / on-premise (18+). CI boots a real Odoo 18 and
+  19 nightly and asserts every report tells its story on both.
 - Mixed currencies are never silently summed — you get a by_currency
   breakdown and a risk flag instead of a wrong total.
 - No live Odoo needed to try it: `docker compose -f
