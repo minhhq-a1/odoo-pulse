@@ -172,3 +172,40 @@ def test_stalled_uses_local_date_of_stage_update(fake_client):
                                                    timezone_offset=7))
     # at +7 the move happened 14 days ago -> NOT yet stalled (cutoff is <)
     assert out["summary"]["stalled"] == 0
+
+
+def test_pipeline_review_splits_revenue_by_currency(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    leads = [dict(l) for l in LEADS]
+    leads[0]["company_currency"] = [1, "VND"]   # 10000 @ 20%
+    leads[1]["company_currency"] = [2, "USD"]   # 50000 @ 60%
+    leads[2]["company_currency"] = [1, "VND"]   # 20000 @ 10%
+    fake_client.search_responses["crm.lead"] = leads
+    fake_client.search_count_responses["crm.lead"] = 0
+    out = json.loads(tools_reports.pipeline_review())
+    s = out["summary"]
+    assert s["expected_revenue_by_currency"] == {"VND": 30000.0, "USD": 50000.0}
+    assert s["weighted_revenue_by_currency"] == {"VND": 4000.0, "USD": 30000.0}
+    assert any(r["code"] == "mixed_currencies" for r in out["risks"])
+
+
+def test_pipeline_review_single_currency_no_mixed_risk(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    leads = [dict(l) for l in LEADS]
+    for l in leads:
+        l["company_currency"] = [1, "VND"]
+    fake_client.search_responses["crm.lead"] = leads
+    fake_client.search_count_responses["crm.lead"] = 0
+    out = json.loads(tools_reports.pipeline_review())
+    assert out["summary"]["expected_revenue_by_currency"] == {"VND": 80000.0}
+    assert not any(r["code"] == "mixed_currencies" for r in out["risks"])
+
+
+def test_pipeline_review_requests_company_currency_field(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    fake_client.search_responses["crm.lead"] = LEADS
+    tools_reports.pipeline_review()
+    call = next(c for c in fake_client.calls
+                if c["method"] == "search_read" and c["model"] == "crm.lead")
+    assert "company_currency" in call["fields"]
+

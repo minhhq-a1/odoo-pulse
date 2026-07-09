@@ -80,7 +80,7 @@ def pipeline_review(
             client, "crm.lead", domain,
             fields=["id", "name", "stage_id", "user_id", "expected_revenue",
                     "probability", "date_deadline", "date_last_stage_update",
-                    "company_id"],
+                    "company_id", "company_currency"],
             limit=200, order="expected_revenue desc",
         )
 
@@ -100,6 +100,8 @@ def pipeline_review(
 
         total = len(leads)
         expected_total = weighted_total = 0.0
+        expected_by_cur: dict[str, float] = {}
+        weighted_by_cur: dict[str, float] = {}
         stalled: list[dict] = []
         overdue_close = closing_soon = no_close_date = 0
         by_stage: dict[str, dict] = {}
@@ -110,6 +112,13 @@ def pipeline_review(
             prob = lead.get("probability") or 0.0
             expected_total += revenue
             weighted_total += revenue * prob / 100.0
+
+            cur = lead.get("company_currency")
+            cur_name = cur[1] if cur else "(unknown)"
+            expected_by_cur[cur_name] = (
+                expected_by_cur.get(cur_name, 0.0) + revenue)
+            weighted_by_cur[cur_name] = (
+                weighted_by_cur.get(cur_name, 0.0) + revenue * prob / 100.0)
 
             stage = lead["stage_id"][1] if lead.get("stage_id") else "(none)"
             srec = by_stage.setdefault(
@@ -155,6 +164,10 @@ def pipeline_review(
             "open_opportunities": total,
             "expected_revenue": round(expected_total, 2),
             "weighted_revenue": round(weighted_total, 2),
+            "expected_revenue_by_currency": {
+                k: round(v, 2) for k, v in expected_by_cur.items()},
+            "weighted_revenue_by_currency": {
+                k: round(v, 2) for k, v in weighted_by_cur.items()},
             "stalled": len(stalled),
             "stalled_pct": stalled_pct,
             "overdue_close_date": overdue_close,
@@ -214,6 +227,16 @@ def pipeline_review(
                     f"Revenue totals mix {len(companies)} companies "
                     f"({', '.join(companies)}) and therefore their currencies; "
                     "pass company= to scope."),
+            })
+
+        if len(expected_by_cur) > 1:
+            names = ", ".join(sorted(expected_by_cur))
+            risks.append({
+                "code": "mixed_currencies", "count": len(expected_by_cur),
+                "message": (
+                    f"Pipeline spans {len(expected_by_cur)} currencies "
+                    f"({names}); expected_revenue/weighted_revenue mix them — "
+                    "read the *_by_currency splits instead."),
             })
 
         return build_report(
