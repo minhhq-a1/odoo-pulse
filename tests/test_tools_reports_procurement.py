@@ -117,3 +117,31 @@ def test_late_receipt_uses_local_date_of_date_planned(fake_client):
     fake_client.search_count_responses["purchase.order"] = 0
     out = json.loads(tools_reports_ops.procurement_watch(timezone_offset=7))
     assert out["summary"]["late_receipts"] == 0
+
+
+def test_procurement_watch_fetches_concurrently(fake_client, monkeypatch):
+    import threading
+
+    _fix_today(monkeypatch)
+    fake_client.search_responses["purchase.order"] = POS
+    fake_client.search_count_responses["purchase.order"] = 3
+    # The PO fetch (orders thunk) and the stale-RFQ count (rfqs thunk) must
+    # be in flight AT THE SAME TIME; sequential execution would break the
+    # barrier, error the report and fail the summary assertion.
+    barrier = threading.Barrier(2, timeout=2)
+    orig_read = fake_client.search_read
+    orig_count = fake_client.search_count
+
+    def spying_read(*args, **kwargs):
+        barrier.wait()
+        return orig_read(*args, **kwargs)
+
+    def spying_count(*args, **kwargs):
+        barrier.wait()
+        return orig_count(*args, **kwargs)
+
+    monkeypatch.setattr(fake_client, "search_read", spying_read)
+    monkeypatch.setattr(fake_client, "search_count", spying_count)
+    out = json.loads(tools_reports_ops.procurement_watch())
+    assert out["summary"]["open_pos"] == 2
+    assert out["summary"]["stale_rfqs"] == 3

@@ -13,6 +13,7 @@ from .runtime import get_client, mcp, safe
 from .workflow_helpers import (
     build_report,
     fetch_with_truncation,
+    gather_strict,
     parse_when,
     resolve_company_id,
     today_in_tz,
@@ -52,13 +53,24 @@ def procurement_watch(
         company_domain: list = (
             [("company_id", "=", company_id)] if company_id else [])
 
-        orders, truncation = fetch_with_truncation(
-            client, "purchase.order",
-            [("state", "=", "purchase"), *company_domain],
-            fields=["id", "name", "partner_id", "date_planned",
-                    "amount_total", "state", "currency_id"],
-            limit=200, order="date_planned",
-        )
+        fetched = gather_strict({
+            "orders": lambda: fetch_with_truncation(
+                client, "purchase.order",
+                [("state", "=", "purchase"), *company_domain],
+                fields=["id", "name", "partner_id", "date_planned",
+                        "amount_total", "state", "currency_id"],
+                limit=200, order="date_planned",
+            ),
+            "stale_rfqs": lambda: client.search_count("purchase.order", [
+                ("state", "in", ["draft", "sent"]),
+                ("create_date", "<",
+                 utc_bound(today - timedelta(days=rfq_stale_days),
+                           timezone_offset)),
+                *company_domain,
+            ]),
+        })
+        orders, truncation = fetched["orders"]
+        stale_rfqs = fetched["stale_rfqs"]
 
         late_cutoff = today - timedelta(days=late_grace_days)
         open_value = 0.0
@@ -82,13 +94,6 @@ def procurement_watch(
                     "amount": amount,
                 })
         late.sort(key=lambda r: -r["days_late"])
-
-        stale_rfqs = client.search_count("purchase.order", [
-            ("state", "in", ["draft", "sent"]),
-            ("create_date", "<",
-             utc_bound(today - timedelta(days=rfq_stale_days), timezone_offset)),
-            *company_domain,
-        ])
 
         if late:
             verdict = "action_needed"
