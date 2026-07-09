@@ -93,8 +93,7 @@ Report stock at risk — shortages and dead stock — in one call.
 - `dead_stock_days` (default `90`): No-movement window for dead stock.
 - `top_n` (default `10`): Rows listed per breakdown section.
 - `timezone_offset` (default `7`): UTC offset for "today".
-
-Not company-scoped — see [Multi-company / multi-currency](#multi-company--multi-currency).
+- `company`: Optional company name (ilike) or id to scope the report.
 
 ### `absence_overview`
 
@@ -137,9 +136,7 @@ Reports never convert currencies. When the rows behind a total span more
 than one currency, the report adds a `by_currency` breakdown to `summary`
 and a `mixed_currencies` (or `mixed_companies` / `multi_company_totals`)
 entry to `risks`. Pass `company=<name or id>` to scope a report to one
-company. `inventory_risk` cannot be company-scoped yet (stock quantities
-are context-dependent in Odoo); on multi-company instances read it as a
-whole-instance view.
+company.
 
 ## Generic (model-agnostic)
 

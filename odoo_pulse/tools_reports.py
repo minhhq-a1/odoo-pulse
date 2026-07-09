@@ -627,6 +627,7 @@ def inventory_risk(
     dead_stock_days: int = 90,
     top_n: int = 10,
     timezone_offset: int = 7,
+    company: str | int | None = None,
 ) -> str:
     """Report stock at risk — shortages and dead stock — in one call.
 
@@ -640,11 +641,16 @@ def inventory_risk(
         dead_stock_days: No-movement window for dead stock (default 90).
         top_n: Rows listed per breakdown section (default 10).
         timezone_offset: UTC offset for "today" (default 7 = Asia/Ho_Chi_Minh).
+        company: Optional company id or name; scopes stock quantities via
+            allowed_company_ids context and dead-stock moves via company_id.
     """
 
     def run() -> dict:
         client = get_client()
         today = today_in_tz(timezone_offset)
+
+        company_id = resolve_company_id(client, company)
+        ctx = {"allowed_company_ids": [company_id]} if company_id else None
 
         short_rows, short_trunc = fetch_with_truncation(
             client, "product.product",
@@ -653,6 +659,7 @@ def inventory_risk(
             fields=["id", "name", "default_code", "qty_available",
                     "virtual_available"],
             limit=200,
+            context=ctx,
         )
         shortages = [
             {"product": p["name"], "code": p.get("default_code") or None,
@@ -663,9 +670,12 @@ def inventory_risk(
         shortages.sort(key=lambda r: r["forecasted"])
 
         since = utc_bound(today - timedelta(days=dead_stock_days), timezone_offset)
+        domain: list = [("state", "=", "done"), ("date", ">=", since)]
+        if company_id:
+            domain.append(("company_id", "=", company_id))
         agg = client.aggregate_records(
             "stock.move", group_by=["product_id"], measures=[],
-            domain=[("state", "=", "done"), ("date", ">=", since)],
+            domain=domain,
             limit=200,
         )
         moved_rows = agg.get("rows", [])
@@ -680,6 +690,7 @@ def inventory_risk(
             fields=["id", "name", "default_code", "qty_available",
                     "standard_price"],
             limit=200,
+            context=ctx,
         )
         dead: list[dict] = []
         dead_value = 0.0
@@ -756,7 +767,7 @@ def inventory_risk(
             summary=summary,
             breakdown={"shortages": shortages[:top_n], "dead_stock": dead[:top_n]},
             highlights=highlights, risks=risks,
-            extra={"dead_stock_days": dead_stock_days},
+            extra={"dead_stock_days": dead_stock_days, "company": company},
         )
 
     return safe(run)

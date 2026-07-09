@@ -96,3 +96,35 @@ def test_dead_stock_window_is_utc_bounded(fake_client):
                and c["model"] == "stock.move")
     since = next(t for t in agg["domain"] if t[0] == "date" and t[1] == ">=")
     assert since[2].endswith("17:00:00")
+
+
+def test_inventory_risk_company_scopes_quantities_via_context(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    _setup(fake_client)
+    json.loads(tools_reports.inventory_risk(company=1))
+    product_calls = [c for c in fake_client.calls
+                     if c["method"] == "search_read"
+                     and c["model"] == "product.product"]
+    assert product_calls, "expected product.product queries"
+    for call in product_calls:
+        assert call["context"] == {"allowed_company_ids": [1]}
+
+
+def test_inventory_risk_company_scopes_dead_stock_moves(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    _setup(fake_client)
+    json.loads(tools_reports.inventory_risk(company=1))
+    agg = next(c for c in fake_client.calls if c["method"] == "aggregate_records")
+    assert ("company_id", "=", 1) in agg["domain"]
+
+
+def test_inventory_risk_without_company_passes_no_context(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    _setup(fake_client)
+    json.loads(tools_reports.inventory_risk())
+    product_calls = [c for c in fake_client.calls
+                     if c["method"] == "search_read"
+                     and c["model"] == "product.product"]
+    assert product_calls, "expected product.product queries"
+    for call in product_calls:
+        assert call["context"] is None
