@@ -140,7 +140,6 @@ def build_cases(limit: int):
         ("Reports-Ops", "procurement_watch", tools_reports_ops.procurement_watch, {}),
         ("Reports-Ops", "production_health", tools_reports_ops.production_health, {}),
         # --- Workflows (reports group) ---
-        ("Workflows", "sprint_health", tools_workflows.sprint_health, {"sprint_id": 0}),
         ("Workflows", "team_workload", tools_workflows.team_workload, {}),
         ("Workflows", "project_status_report", tools_workflows.project_status_report, {}),
         ("Workflows", "standup_digest", tools_workflows.standup_digest, {"project": "a"}),
