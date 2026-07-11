@@ -399,6 +399,45 @@ def project_profitability(
                 f"top contributor: {top['employee']} ({top['hours']} h)")
 
         risks: list[dict] = []
+        if truncation:
+            risks.append({
+                "code": "truncated_data", "count": truncation["missing"],
+                "message": (
+                    f"Report covers only {truncation['fetched']} of "
+                    f"{truncation['total_matching']} matching projects."),
+            })
+        if off_track:
+            risks.append({
+                "code": "over_budget", "count": off_track,
+                "message": (f"{off_track} project(s) burned past "
+                            f"{burn_pct_off_track}% of hours or budget"),
+            })
+        if negative:
+            risks.append({
+                "code": "negative_margin", "count": negative,
+                "message": (f"{negative} project(s) cost more than they "
+                            "earned (revenue - cost < 0)"),
+            })
+        if no_alloc:
+            risks.append({
+                "code": "no_allocation", "count": no_alloc,
+                "message": (f"{no_alloc} project(s) log hours but have no "
+                            "allocated_hours — hours burn not computable"),
+            })
+        if no_acct:
+            risks.append({
+                "code": "no_analytic_account", "count": no_acct,
+                "message": (f"{no_acct} project(s) log hours but have no "
+                            "analytic account — cost/revenue blind"),
+            })
+        if len(companies) > 1:
+            risks.append({
+                "code": "mixed_companies", "count": len(companies),
+                "message": (
+                    "Analytic amounts are in company currency and scope "
+                    f"spans {', '.join(companies)}; filter by manager/"
+                    "customer/project to compare like with like."),
+            })
 
         breakdown: dict = {"projects": rows_out}
         if drill_id is not None:

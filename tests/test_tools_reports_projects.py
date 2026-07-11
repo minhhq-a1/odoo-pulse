@@ -323,3 +323,87 @@ def test_multi_match_has_no_drill(fake_client):
             if c["method"] == "aggregate_records"
             and c["model"] == "account.analytic.line"]
     assert len(aggs) == 3  # no drill aggregates were issued
+
+
+# -- risks & edges ----------------------------------------------------------------
+
+def test_risk_emission(fake_client):
+    projects = [
+        dict(PROJECTS[0]),
+        # Hours logged but no allocation and no analytic account,
+        # in a second company.
+        {"id": 3, "name": "Gamma", "user_id": None, "partner_id": None,
+         "company_id": [2, "Second Co"], "allocated_hours": 0.0,
+         "account_id": None},
+    ]
+    fake_client.fields_responses["project.project"] = PROJECT_FIELDS
+    fake_client.search_responses["project.project"] = projects
+    fake_client.aggregate_responses_seq["account.analytic.line"] = [
+        [{"project_id": [1, "Alpha"], "unit_amount:sum": 120.0},
+         {"project_id": [3, "Gamma"], "unit_amount:sum": 5.0}],
+        [{"account_id": [11, "AA Alpha"], "amount:sum": -8000.0}],
+        [],  # no revenue -> Alpha margin is -8000
+    ]
+    out = json.loads(tools_reports_projects.project_profitability())
+    by_code = {r["code"]: r for r in out["risks"]}
+    # Alpha: 120/100 = 120% -> off_track -> over_budget risk
+    assert by_code["over_budget"]["count"] == 1
+    assert by_code["negative_margin"]["count"] == 1
+    assert by_code["no_allocation"]["count"] == 1
+    assert by_code["no_analytic_account"]["count"] == 1
+    assert by_code["mixed_companies"]["count"] == 2
+    assert out["summary"]["companies"] == ["Main Co", "Second Co"]
+    assert out["summary"]["margin_pct"] is None  # revenue == 0
+    assert all(r["message"] for r in out["risks"])
+
+
+def test_truncation_risk(fake_client):
+    rows = [dict(PROJECTS[0], id=i, name=f"P{i:03d}") for i in range(1, 201)]
+    fake_client.fields_responses["project.project"] = PROJECT_FIELDS
+    fake_client.search_responses["project.project"] = rows
+    fake_client.search_count_responses["project.project"] = 250
+    fake_client.aggregate_responses_seq["account.analytic.line"] = [[], [], []]
+    out = json.loads(tools_reports_projects.project_profitability())
+    assert out["summary"]["truncated"] is True
+    assert out["summary"]["total_matching"] == 250
+    risk = next(r for r in out["risks"] if r["code"] == "truncated_data")
+    assert risk["count"] == 50
+
+
+def test_no_projects_short_circuits(fake_client):
+    fake_client.fields_responses["project.project"] = PROJECT_FIELDS
+    fake_client.search_responses["project.project"] = []
+    out = json.loads(tools_reports_projects.project_profitability())
+    assert out["summary"]["projects"] == 0
+    assert out["summary"]["hours_logged"] == 0.0
+    assert out["summary"]["margin_pct"] is None
+    assert out["breakdown"]["projects"] == []
+    assert out["risks"] == []
+    assert not any(c["method"] == "aggregate_records"
+                   for c in fake_client.calls)
+
+
+def test_timesheet_module_absent(fake_client):
+    fake_client.fields_responses["project.project"] = PROJECT_FIELDS
+    fake_client.search_responses["project.project"] = PROJECTS
+    fake_client.fields_responses["account.analytic.line"] = {"name": {}}
+    out = json.loads(tools_reports_projects.project_profitability())
+    assert "hr_timesheet" in out["error"]
+
+
+def test_allocated_hours_field_absent(fake_client):
+    # Very old / stripped install: no allocated_hours on project.project.
+    fake_client.fields_responses["project.project"] = {
+        "name": {}, "account_id": {}}
+    fake_client.search_responses["project.project"] = [
+        {k: v for k, v in PROJECTS[0].items() if k != "allocated_hours"}]
+    fake_client.aggregate_responses_seq["account.analytic.line"] = [
+        [{"project_id": [1, "Alpha"], "unit_amount:sum": 30.0}],
+        [{"account_id": [11, "AA Alpha"], "amount:sum": -100.0}],
+        [], [], []]  # single match -> drill aggregates run too
+    out = json.loads(tools_reports_projects.project_profitability())
+    row = out["breakdown"]["projects"][0]
+    assert row["hours_allocated"] == 0.0
+    assert row["hours_burn_pct"] is None
+    assert row["verdict"] == "on_track"  # nothing to burn against
+    assert "no_allocation" in {r["code"] for r in out["risks"]}
