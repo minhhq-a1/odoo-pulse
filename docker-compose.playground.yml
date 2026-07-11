@@ -33,7 +33,7 @@ services:
     command: >
       odoo
       -d playground
-      -i crm,sale_management,account,stock,project,hr_holidays
+      -i crm,sale_management,account,stock,project,hr_holidays,hr_timesheet
       --without-demo=False
       --db-filter=^playground$
     volumes:

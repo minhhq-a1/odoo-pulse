@@ -391,7 +391,7 @@ def seed_projects() -> None:
         except Exception as exc:
             print(f"[seed] WARNING: could not create stages: {exc}")
 
-    def task(name: str, deadline_delta: int, assignees: list[int]):
+    def task(name: str, deadline_delta: int, assignees: list[int]) -> int:
         # Drift note: assignees are user_ids (many2many) on Odoo 17+.
         vals = {
             "name": f"PLAYGROUND: {name}",
@@ -401,14 +401,44 @@ def seed_projects() -> None:
         }
         if stage_id:
             vals["stage_id"] = stage_id
-        S.create("project.task", vals)
+        return S.create("project.task", vals)
 
     # Overdue task in the default (non-folded) stage => overdue_tasks.
-    task("Ship auth service", -3, [users[0]])
-    task("Fix billing bug", -1, [users[0]])
+    t1 = task("Ship auth service", -3, [users[0]])
+    t2 = task("Fix billing bug", -1, [users[0]])
     # Upcoming tasks, piled on one assignee => uneven load for team_workload.
     task("Write API docs", 4, [users[0]])
     task("Design review", 6, [users[min(1, len(users) - 1)]])
+
+    # Hours story for project_profitability: 10h allocated, 12h logged
+    # => 120% burn => off_track.
+    try:
+        S.write("project.project", [project], {"allocated_hours": 10.0})
+    except Exception as exc:
+        print(f"[seed] WARNING: could not set allocated_hours: {exc}")
+    # Wrapped like the allocated_hours write: a version drift here (e.g. the
+    # auto-created analytic account) must degrade with a WARNING, not kill
+    # the one-shot seed.
+    try:
+        emps = S.search("hr.employee", [], limit=2)
+        if emps:
+            def timesheet(task_id: int, emp: int, hours: float, delta: int):
+                S.create("account.analytic.line", {
+                    "name": "PLAYGROUND work",
+                    "project_id": project,
+                    "task_id": task_id,
+                    "employee_id": emp,
+                    "unit_amount": hours,
+                    "date": S.d(delta),
+                })
+            timesheet(t1, emps[0], 6.0, -2)
+            timesheet(t1, emps[min(1, len(emps) - 1)], 4.0, -1)
+            timesheet(t2, emps[0], 2.0, 0)
+            print("[seed] timesheets: 12h on PLAYGROUND Delivery")
+        else:
+            print("[seed] WARNING: no employees found; skipping timesheets")
+    except Exception as exc:
+        print(f"[seed] WARNING: could not seed timesheets: {exc}")
 
 
 def main() -> int:

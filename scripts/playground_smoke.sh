@@ -32,6 +32,7 @@ from odoo_pulse.tools_reports_finance import receivables_health
 from odoo_pulse.tools_reports_inventory import inventory_risk
 from odoo_pulse.tools_reports_hr import absence_overview
 from odoo_pulse.tools_reports_pulse import business_pulse
+from odoo_pulse.tools_reports_projects import project_profitability
 checks = {
     "pipeline_review": lambda r: r["summary"]["verdict"] in ("at_risk", "off_track"),
     "sales_snapshot": lambda r: r["summary"]["stale_quotations"] >= 1,
@@ -61,6 +62,19 @@ ok_inv = r["summary"]["shortages"] >= 1
 print(f"  {'OK  ' if ok_inv else 'FAIL'} inventory_risk(company=1): shortages")
 if not (ok_hr and ok_inv):
     failed.append("company_scoped")
+
+# project_profitability: seeded 12h against 10h allocated on one project.
+r = json.loads(project_profitability(project="PLAYGROUND"))
+ok_pp = (r["summary"]["projects"] == 1
+         and r["summary"]["hours_logged"] == 12.0
+         and r["breakdown"]["projects"]
+         and "by_employee" in r["breakdown"]
+         and r["breakdown"]["projects"][0]["verdict"] == "off_track")
+print(f"  {'OK  ' if ok_pp else 'FAIL'} project_profitability: "
+      f"hours={r['summary']['hours_logged']} "
+      f"verdict={r['breakdown']['projects'][0]['verdict'] if r['breakdown']['projects'] else '-'}")
+if not ok_pp:
+    failed.append("project_profitability")
 sys.exit(1 if failed else 0)
 PY
 
