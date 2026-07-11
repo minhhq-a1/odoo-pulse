@@ -2,7 +2,7 @@
 
 Importing a tool module registers its @mcp.tool() functions as a side
 effect, so choosing which modules server.py imports IS the tool filter.
-Default surface is core + reports (26 tools); the breadth wrappers are
+Default surface is core + reports (27 tools); the breadth wrappers are
 opt-in groups so they don't bloat the client's context window.
 """
 
@@ -15,7 +15,8 @@ GROUP_MODULES: dict[str, tuple[str, ...]] = {
     "core": ("tools_generic", "tools_write"),
     "reports": ("tools_workflows", "tools_reports_sales", "tools_reports_finance",
                 "tools_reports_inventory", "tools_reports_hr",
-                "tools_reports_pulse", "tools_reports_ops"),
+                "tools_reports_pulse", "tools_reports_ops",
+                "tools_reports_projects"),
     "business": ("domain_tools",),
     "hr": ("tools_hr",),
     "projects": ("tools_projects",),

@@ -23,7 +23,7 @@ Set `ODOO_TOOL_GROUPS` (comma-separated) to choose what the server exposes:
 | `niche` | Enterprise & specialised apps |
 | `all` | Everything |
 
-Default (`core,reports`) is 26 tools — reports are the front door, the domain
+Default (`core,reports`) is 27 tools — reports are the front door, the domain
 wrappers below are "power user mode".
 
 ## Analyst reports
@@ -125,6 +125,22 @@ Report manufacturing health — late starts and stuck orders — in one call.
 - `top_n` (default `5`): Rows in the behind-start / stuck lists.
 - `timezone_offset` (default `7`): UTC offset for "today".
 - `company`: Optional company name (ilike) or id to scope the report.
+
+### `project_profitability`
+
+Report delivery hours, money and budget burn per project in one call.
+
+- `project`: Optional project-name filter (ilike). Exactly one match adds
+  per-employee / per-task drill-down breakdowns.
+- `manager`: Optional project-manager filter (`user_id.name` ilike).
+- `customer`: Optional customer filter (`partner_id.name` ilike).
+- `date_from` / `date_to`: Optional `YYYY-MM-DD` bounds on logged hours and
+  analytic amounts. Allocated hours and budgets stay lifetime totals, so any
+  date filter disables the burn verdicts (`verdict: "n/a"`).
+- `top_n` (default `5`): Rows in the drill-down breakdowns.
+- `burn_pct_at_risk` (default `80`) / `burn_pct_off_track` (default `100`):
+  Worst burn % thresholds for the per-project verdict.
+- `timezone_offset` (default `7`): UTC offset for "today".
 
 ### `team_workload` · `project_status_report` · `standup_digest`
 

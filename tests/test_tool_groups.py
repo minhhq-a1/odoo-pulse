@@ -27,7 +27,7 @@ def test_modules_to_load_default(monkeypatch):
     assert modules_to_load() == [
         "tools_generic", "tools_write", "tools_workflows", "tools_reports_sales",
         "tools_reports_finance", "tools_reports_inventory", "tools_reports_hr",
-        "tools_reports_pulse", "tools_reports_ops",
+        "tools_reports_pulse", "tools_reports_ops", "tools_reports_projects",
     ]
 
 
@@ -40,9 +40,13 @@ def test_modules_to_load_deduplicates():
     assert modules_to_load("core,core,reports") == [
         "tools_generic", "tools_write", "tools_workflows", "tools_reports_sales",
         "tools_reports_finance", "tools_reports_inventory", "tools_reports_hr",
-        "tools_reports_pulse", "tools_reports_ops",
+        "tools_reports_pulse", "tools_reports_ops", "tools_reports_projects",
     ]
 
 
 def test_reports_group_includes_ops_module():
     assert "tools_reports_ops" in GROUP_MODULES["reports"]
+
+
+def test_reports_group_includes_projects_module():
+    assert "tools_reports_projects" in GROUP_MODULES["reports"]
