@@ -239,3 +239,47 @@ def test_envelope_shape(fake_client, monkeypatch):
                                  "burn_pct_off_track": 100.0}
     assert out["highlights"][0] == (
         "100.0 h logged across 2 project(s), cost 9000.0, margin 3000.0")
+
+
+# -- date filters ---------------------------------------------------------------
+
+def test_date_filter_disables_burn(fake_client):
+    _seed_portfolio(fake_client)
+    out = json.loads(tools_reports_projects.project_profitability(
+        date_from="2026-07-01", date_to="2026-07-31"))
+    assert out["burn_evaluated"] is False
+    s = out["summary"]
+    assert s["hours_burn_pct"] is None
+    assert s["off_track"] == 0 and s["at_risk"] == 0 and s["on_track"] == 0
+    rows = out["breakdown"]["projects"]
+    assert all(r["verdict"] == "n/a" for r in rows)
+    assert all(r["hours_burn_pct"] is None for r in rows)
+    assert all(r["budget_burn_pct"] is None for r in rows)
+    assert [r["project"] for r in rows] == ["Alpha", "Beta"]  # cost desc
+    assert out["filters"]["date_from"] == "2026-07-01"
+
+
+def test_date_bounds_hit_analytic_domains_only(fake_client):
+    _seed_portfolio(fake_client)
+    tools_reports_projects.project_profitability(
+        date_from="2026-07-01", date_to="2026-07-31")
+    aggs = [c for c in fake_client.calls
+            if c["method"] == "aggregate_records"
+            and c["model"] == "account.analytic.line"]
+    assert aggs
+    for agg in aggs:
+        assert ("date", ">=", "2026-07-01") in agg["domain"]
+        assert ("date", "<=", "2026-07-31") in agg["domain"]
+    proj = next(c for c in fake_client.calls
+                if c["method"] == "search_read"
+                and c["model"] == "project.project")
+    assert not any(cond[0] == "date" for cond in proj["domain"])
+
+
+def test_invalid_date_is_clean_error(fake_client):
+    _seed_portfolio(fake_client)
+    out = json.loads(tools_reports_projects.project_profitability(
+        date_from="notadate"))
+    assert out["error"] == "Invalid date_from 'notadate': expected YYYY-MM-DD"
+    # validated BEFORE any domain was built -> no RPC happened
+    assert not any(c["method"] == "search_read" for c in fake_client.calls)
