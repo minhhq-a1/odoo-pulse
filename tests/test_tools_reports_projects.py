@@ -283,3 +283,43 @@ def test_invalid_date_is_clean_error(fake_client):
     assert out["error"] == "Invalid date_from 'notadate': expected YYYY-MM-DD"
     # validated BEFORE any domain was built -> no RPC happened
     assert not any(c["method"] == "search_read" for c in fake_client.calls)
+
+
+# -- drill mode ------------------------------------------------------------------
+
+def test_drill_mode_single_match(fake_client):
+    fake_client.fields_responses["project.project"] = PROJECT_FIELDS
+    fake_client.search_responses["project.project"] = [PROJECTS[0]]
+    fake_client.aggregate_responses_seq["account.analytic.line"] = [
+        [dict(AGG_HOURS[0])], [dict(AGG_COST[0])], [dict(AGG_REVENUE[0])],
+        [{"employee_id": [21, "Chi"], "unit_amount:sum": 60.0},
+         {"employee_id": [22, "Duy"], "unit_amount:sum": 30.0}],
+        [{"task_id": [31, "Build API"], "unit_amount:sum": 55.0}],
+    ]
+    out = json.loads(tools_reports_projects.project_profitability(
+        project="Alpha", top_n=2))
+    assert out["breakdown"]["by_employee"] == [
+        {"employee": "Chi", "hours": 60.0},
+        {"employee": "Duy", "hours": 30.0}]
+    assert out["breakdown"]["by_task"] == [
+        {"task": "Build API", "hours": 55.0}]
+    drill = [c for c in fake_client.calls
+             if c["method"] == "aggregate_records"
+             and c["group_by"] in (["employee_id"], ["task_id"])]
+    assert len(drill) == 2
+    for c in drill:
+        assert c["limit"] == 2
+        assert c["order"] == "unit_amount:sum desc"
+        assert ("project_id", "=", 1) in c["domain"]
+    assert "top contributor: Chi (60.0 h)" in out["highlights"]
+
+
+def test_multi_match_has_no_drill(fake_client):
+    _seed_portfolio(fake_client)
+    out = json.loads(tools_reports_projects.project_profitability(project="a"))
+    assert "by_employee" not in out["breakdown"]
+    assert "by_task" not in out["breakdown"]
+    aggs = [c for c in fake_client.calls
+            if c["method"] == "aggregate_records"
+            and c["model"] == "account.analytic.line"]
+    assert len(aggs) == 3  # no drill aggregates were issued
