@@ -8,6 +8,9 @@ Caveats for callers:
 - Analytic amounts are in each company's currency (mixed_companies risk).
 - Two projects sharing one analytic account each get the full account's
   cost/revenue/budget (accepted double-count; splitting would be arbitrary).
+- Budgets match by a line-level project_id m2o when the instance has one
+  (authoritative), else by the project's own analytic account — budgets
+  carried on a second analytic dimension without project_id stay invisible.
 - On Odoo 18+ the budget state filter is skipped (state lives on the parent
   budget.analytic and drifts across minor versions); revenue-type budgets
   ARE excluded via a dotted budget_type domain — when that field is missing
@@ -79,20 +82,18 @@ def _verdict(
     return "on_track", worst
 
 
-def _budget_by_account(
-    client, account_ids: list[int]
-) -> tuple[dict[int, float], bool]:
-    """Planned budget (absolute) per analytic account id + budgets_available.
+def _budget_sources(client, account_ids: list[int]):
+    """Yield usable (model, link_field, acct_field, amount_field, extra_domain).
 
     The FIRST call against each candidate model is a real RPC
     (search_count) inside try/except OdooError — fields_get is NOT a
     reliable absence probe (see the design doc: the FakeClient returns a
     default schema for unknown models, and the degradation path must be
-    identical under test and in production). Model absent or candidate
-    fields unresolvable -> next candidate; none usable -> ({}, False).
+    identical under test and in production). A candidate is usable when an
+    amount field resolves AND it can be matched to projects: either the
+    line model carries a project_id m2o (custom field seen in the wild) or
+    an analytic-account field resolves and there are account ids to match.
     """
-    if not account_ids:
-        return {}, False
     candidates = list(_BUDGET_CANDIDATES)
     major = client.major_version()
     if major is not None and major <= 17:
@@ -102,25 +103,455 @@ def _budget_by_account(
             client.search_count(model, [])
         except OdooError:
             continue
-        acct_fields = optional_fields(client, model, acct_candidates)
-        amount_fields = optional_fields(client, model, amount_candidates)
-        if not acct_fields or not amount_fields:
+        link = (optional_fields(client, model, ["project_id"]) or [None])[0]
+        acct = (optional_fields(client, model, acct_candidates) or [None])[0]
+        amount = (optional_fields(client, model, amount_candidates)
+                  or [None])[0]
+        if not amount or not (link or (acct and account_ids)):
             continue
-        acct_field, amount_field = acct_fields[0], amount_fields[0]
+        yield model, link, acct, amount, extra_domain
+
+
+def _budget_by_project(
+    client, project_ids: list[int], acct_by_project: dict[int, int]
+) -> tuple[dict[int, float], bool]:
+    """Planned budget (absolute) per project id + budgets_available.
+
+    Uses the first usable :func:`_budget_sources` candidate. Line-level
+    project_id matching is authoritative per project; analytic-account
+    matching (the classic path) fills projects the project aggregate did
+    not cover — two projects sharing one account each get the account's
+    full amount (accepted double-count caveat). Fixed aggregate order
+    (project first, then account) keeps the FakeClient queue deterministic.
+    None usable -> ({}, False).
+    """
+    if not project_ids:
+        return {}, False
+    account_ids = sorted(set(acct_by_project.values()))
+    for model, link, acct, amount, extra_domain in _budget_sources(
+            client, account_ids):
+        by_project: dict[int, float] = {}
+        by_account: dict[int, float] = {}
         try:
-            agg = client.aggregate_records(
-                model, group_by=[acct_field],
-                measures=[(amount_field, "sum")],
-                domain=[(acct_field, "in", account_ids), *extra_domain])
+            if link:
+                agg = client.aggregate_records(
+                    model, group_by=[link],
+                    measures=[(amount, "sum")],
+                    domain=[(link, "in", project_ids), *extra_domain])
+                for row in agg.get("rows", []):
+                    m2o = row.get(link)
+                    if m2o:
+                        by_project[m2o[0]] = abs(
+                            row.get(f"{amount}:sum") or 0.0)
+            if acct and account_ids:
+                agg = client.aggregate_records(
+                    model, group_by=[acct],
+                    measures=[(amount, "sum")],
+                    domain=[(acct, "in", account_ids), *extra_domain])
+                for row in agg.get("rows", []):
+                    m2o = row.get(acct)
+                    if m2o:
+                        by_account[m2o[0]] = abs(
+                            row.get(f"{amount}:sum") or 0.0)
         except OdooError:
             continue
-        budgets: dict[int, float] = {}
-        for row in agg.get("rows", []):
-            acct = row.get(acct_field)
-            if acct:
-                budgets[acct[0]] = abs(row.get(f"{amount_field}:sum") or 0.0)
+        budgets = {pid: by_account[aid]
+                   for pid, aid in acct_by_project.items()
+                   if aid in by_account}
+        budgets.update(by_project)
         return budgets, True
     return {}, False
+
+
+_PRACTICAL_CANDIDATES = ["practical_amount", "achieved_amount"]
+# Odoo spells the crossovered-era field "theoritical" in some series.
+_THEORETICAL_CANDIDATES = ["theoretical_amount", "theoritical_amount"]
+_PARENT_CANDIDATES = ["crossovered_budget_id", "budget_analytic_id"]
+
+
+@mcp.tool()
+def project_budget(
+    project: str | None = None,
+    manager: str | None = None,
+    customer: str | None = None,
+    top_n: int = 10,
+    burn_pct_at_risk: float = 80.0,
+    burn_pct_off_track: float = 100.0,
+    timezone_offset: int = 7,
+) -> str:
+    """Report planned vs actual budget per project, line by line.
+
+    Reads the Budgets app (budget.line on Odoo 18+, else
+    crossovered.budget.lines) and matches lines to active projects by a
+    line-level project_id m2o when the instance has one, else through the
+    project's analytic account. Amounts are absolute company-currency
+    sums; server-computed practical/theoretical amounts are used as-is.
+    Also compares each project's total analytic cost against the practical
+    amounts booked on its budget lines, flagging spend the budget does not
+    capture. When the filter matches exactly one project the report gains
+    a per-line breakdown. No date filters: budget lines carry their own
+    period.
+
+    Args:
+        project: Optional project-name filter (name ilike). Exactly one
+            match switches on the per-line breakdown.
+        manager: Optional project-manager filter (user_id.name ilike).
+        customer: Optional customer filter (partner_id.name ilike).
+        top_n: Rows in the per-line breakdown (default 10).
+        burn_pct_at_risk: Burn %% >= this -> at_risk (default 80).
+        burn_pct_off_track: Burn %% >= this -> off_track (default 100).
+        timezone_offset: UTC offset for "today" (default 7).
+    """
+
+    def run() -> dict:
+        client = get_client()
+        today = today_in_tz(timezone_offset)
+
+        domain: list = [("active", "=", True)]
+        if project:
+            domain.append(("name", "ilike", project))
+        if manager:
+            domain.append(("user_id.name", "ilike", manager))
+        if customer:
+            domain.append(("partner_id.name", "ilike", customer))
+
+        acct_fields = optional_fields(
+            client, "project.project",
+            ["account_id", "analytic_account_id"])
+        projects, truncation = fetch_with_truncation(
+            client, "project.project", domain,
+            fields=["id", "name", "user_id", "partner_id", "company_id",
+                    *acct_fields],
+            limit=200, order="name")
+
+        acct_field = acct_fields[0] if acct_fields else None
+        ids = [p["id"] for p in projects]
+        acct_by_project = {
+            p["id"]: p[acct_field][0]
+            for p in projects if acct_field and p.get(acct_field)}
+        account_ids = sorted(set(acct_by_project.values()))
+        drill_id = ids[0] if len(ids) == 1 else None
+
+        budgets_available = False
+        line_rows: list[dict] = []
+        line_truncation = None
+        line_acct = practical_field = theoretical_field = None
+        parent_field = amount_field = link_field = None
+        line_opt: list[str] = []
+        cost_by_account: dict[int, float] = {}
+
+        if ids:
+            def fetch_lines():
+                # First usable candidate whose line fetch does not fault
+                # (a faulting dotted extra-domain field drops to the next
+                # candidate, mirroring _budget_by_project).
+                for src in _budget_sources(client, account_ids):
+                    model, link, acct, amount, extra_domain = src
+                    opt = optional_fields(client, model, [
+                        *_PRACTICAL_CANDIDATES, *_THEORETICAL_CANDIDATES,
+                        *_PARENT_CANDIDATES, "general_budget_id",
+                        "date_from", "date_to"])
+                    fields = ["id", amount, *opt]
+                    if link:
+                        fields.append(link)
+                        match = (link, "in", ids)
+                    else:
+                        match = (acct, "in", account_ids)
+                    if acct and acct not in fields:
+                        fields.append(acct)
+                    try:
+                        rows, trunc = fetch_with_truncation(
+                            client, model, [match, *extra_domain],
+                            fields=fields, limit=500)
+                    except OdooError:
+                        continue
+                    return src, opt, rows, trunc
+                return None
+
+            def fetch_cost():
+                if not account_ids:
+                    return None
+                return client.aggregate_records(
+                    "account.analytic.line", group_by=["account_id"],
+                    measures=[("amount", "sum")],
+                    domain=[("account_id", "in", account_ids),
+                            ("amount", "<", 0)])
+
+            fetched = gather_strict(
+                {"lines": fetch_lines, "cost": fetch_cost})
+            if fetched["lines"] is not None:
+                budgets_available = True
+                src, line_opt, line_rows, line_truncation = fetched["lines"]
+                _, link_field, line_acct, amount_field, _ = src
+                pick = (lambda cands:
+                        next((f for f in cands if f in line_opt), None))
+                practical_field = pick(_PRACTICAL_CANDIDATES)
+                theoretical_field = pick(_THEORETICAL_CANDIDATES)
+                parent_field = pick(_PARENT_CANDIDATES)
+            for row in ((fetched["cost"] or {}).get("rows", [])):
+                m2o = row.get("account_id")
+                if m2o:
+                    cost_by_account[m2o[0]] = abs(row.get("amount:sum")
+                                                  or 0.0)
+
+        lines_by_project: dict[int, list[dict]] = {}
+        if link_field:
+            for row in line_rows:
+                m2o = row.get(link_field)
+                if m2o:
+                    lines_by_project.setdefault(m2o[0], []).append(row)
+        elif line_acct:
+            pids_by_acct: dict[int, list[int]] = {}
+            for pid, aid in acct_by_project.items():
+                pids_by_acct.setdefault(aid, []).append(pid)
+            for row in line_rows:
+                m2o = row.get(line_acct)
+                for pid in (pids_by_acct.get(m2o[0], []) if m2o else []):
+                    lines_by_project.setdefault(pid, []).append(row)
+
+        def line_stats(row: dict) -> tuple[float, float | None, bool]:
+            planned = abs(row.get(amount_field) or 0.0)
+            practical = (abs(row.get(practical_field) or 0.0)
+                         if practical_field else None)
+            over = (practical is not None
+                    and ((planned > 0 and practical > planned)
+                         or (planned == 0 and practical > 0)))
+            return planned, practical, over
+
+        rows_out: list[dict] = []
+        off_track = at_risk = on_track = 0
+        t_planned = t_practical = t_cost = t_uncaptured = 0.0
+        over_plan_total = no_budget = outside = with_budget = 0
+        budget_ids: set[int] = set()
+        for p in projects:
+            pid = p["id"]
+            acct_id = acct_by_project.get(pid)
+            cost = (cost_by_account.get(acct_id, 0.0)
+                    if acct_id is not None else 0.0)
+            plines = lines_by_project.get(pid, [])
+            budget_names = sorted(
+                {row[parent_field][1] for row in plines
+                 if parent_field and row.get(parent_field)})
+            for row in plines:
+                if parent_field and row.get(parent_field):
+                    budget_ids.add(row[parent_field][0])
+
+            planned = practical = burn = uncaptured = None
+            over_plan = 0
+            if budgets_available and plines:
+                with_budget += 1
+                planned = practical = 0.0
+                for row in plines:
+                    pl, pr, over = line_stats(row)
+                    planned += pl
+                    practical += pr or 0.0
+                    over_plan += 1 if over else 0
+                if practical_field is None:
+                    practical = None
+                burn = (round(practical / planned * 100, 1)
+                        if practical is not None and planned else None)
+                verdict, _ = _verdict(None, burn, burn_pct_at_risk,
+                                      burn_pct_off_track)
+                if verdict == "off_track":
+                    off_track += 1
+                elif verdict == "at_risk":
+                    at_risk += 1
+                else:
+                    on_track += 1
+                if practical is not None:
+                    uncaptured = round(max(cost - practical, 0.0), 2)
+                    if cost > 0 and (cost - practical) > 0.01 * cost:
+                        outside += 1
+            else:
+                verdict = "n/a"
+                if budgets_available:
+                    no_budget += 1
+
+            over_plan_total += over_plan
+            t_planned += planned or 0.0
+            t_practical += practical or 0.0
+            t_cost += cost
+            t_uncaptured += uncaptured or 0.0
+
+            rows_out.append({
+                "project": p["name"],
+                "manager": p["user_id"][1] if p.get("user_id") else None,
+                "customer": (p["partner_id"][1]
+                             if p.get("partner_id") else None),
+                "budgets": budget_names,
+                "lines": len(plines),
+                "planned": round(planned, 2) if planned is not None else None,
+                "practical": (round(practical, 2)
+                              if practical is not None else None),
+                "burn_pct": burn,
+                "cost": round(cost, 2),
+                "uncaptured_cost": uncaptured,
+                "over_plan_lines": over_plan,
+                "verdict": verdict,
+                "_burn": burn,
+            })
+
+        rank = {"off_track": 0, "at_risk": 1, "on_track": 2, "n/a": 3}
+        if budgets_available:
+            rows_out.sort(key=lambda r: (
+                rank[r["verdict"]],
+                -(r["_burn"] if r["_burn"] is not None else -1.0),
+                r["project"]))
+        else:
+            rows_out.sort(key=lambda r: (-r["cost"], r["project"]))
+        worst_name = worst_val = None
+        if rows_out and rows_out[0]["_burn"] is not None:
+            worst_name = rows_out[0]["project"]
+            worst_val = rows_out[0]["_burn"]
+        for r in rows_out:
+            r.pop("_burn")
+
+        has_practical = budgets_available and practical_field is not None
+        summary: dict = {
+            "projects": len(projects),
+            "with_budget": with_budget,
+            "budgets": len(budget_ids),
+            "planned": (round(t_planned, 2)
+                        if budgets_available else None),
+            "practical": (round(t_practical, 2)
+                          if has_practical else None),
+            "burn_pct": (round(t_practical / t_planned * 100, 1)
+                         if has_practical and t_planned else None),
+            "cost": round(t_cost, 2),
+            "uncaptured_cost": (round(t_uncaptured, 2)
+                                if has_practical else None),
+            "off_track": off_track,
+            "at_risk": at_risk,
+            "on_track": on_track,
+            "over_plan_lines": over_plan_total,
+        }
+        companies = distinct_companies(projects)
+        if len(companies) > 1:
+            summary["companies"] = companies
+        if truncation:
+            summary["truncated"] = True
+            summary["total_matching"] = truncation["total_matching"]
+
+        breakdown: dict = {"projects": rows_out}
+        if drill_id is not None and budgets_available:
+            dlines = []
+            for row in lines_by_project.get(drill_id, []):
+                pl, pr, over = line_stats(row)
+                if line_acct and row.get(line_acct):
+                    label = row[line_acct][1]
+                elif row.get("general_budget_id"):
+                    label = row["general_budget_id"][1]
+                else:
+                    label = f"(line {row.get('id')})"
+                dlines.append({
+                    "line": label,
+                    "budget": (row[parent_field][1]
+                               if parent_field and row.get(parent_field)
+                               else None),
+                    "planned": round(pl, 2),
+                    "practical": round(pr, 2) if pr is not None else None,
+                    "theoretical": (
+                        round(abs(row.get(theoretical_field) or 0.0), 2)
+                        if theoretical_field else None),
+                    "burn_pct": (round(pr / pl * 100, 1)
+                                 if pr is not None and pl else None),
+                    "over_plan": over,
+                    "date_from": row.get("date_from") or None,
+                    "date_to": row.get("date_to") or None,
+                })
+            dlines.sort(key=lambda ln: -(ln["practical"] or 0.0))
+            breakdown["lines"] = dlines[:top_n]
+
+        highlights: list[str] = []
+        if summary["practical"] is not None:
+            highlights.append(
+                f"{summary['practical']} spent of {summary['planned']} "
+                f"planned across {len(projects)} project(s)")
+        else:
+            highlights.append(
+                f"budget figures unavailable across {len(projects)} "
+                "project(s)")
+        if worst_name is not None:
+            highlights.append(f"worst burn: {worst_name} at {worst_val}%")
+        top_lines = breakdown.get("lines") or []
+        if top_lines and top_lines[0]["practical"] is not None:
+            top = top_lines[0]
+            highlights.append(
+                f"top line: {top['line']} ({top['practical']} spent of "
+                f"{top['planned']} planned)")
+
+        risks: list[dict] = []
+        if truncation:
+            risks.append({
+                "code": "truncated_data", "count": truncation["missing"],
+                "message": (
+                    f"Report covers only {truncation['fetched']} of "
+                    f"{truncation['total_matching']} matching projects."),
+            })
+        if line_truncation:
+            risks.append({
+                "code": "truncated_budget_lines",
+                "count": line_truncation["missing"],
+                "message": (
+                    f"Only {line_truncation['fetched']} of "
+                    f"{line_truncation['total_matching']} matching budget "
+                    "lines were read; totals are incomplete."),
+            })
+        if ids and not budgets_available:
+            risks.append({
+                "code": "budgets_unavailable", "count": len(projects),
+                "message": ("No usable budget model found (Budgets app "
+                            "not installed?) — planned/practical figures "
+                            "unavailable."),
+            })
+        if off_track:
+            risks.append({
+                "code": "over_budget", "count": off_track,
+                "message": (f"{off_track} project(s) burned past "
+                            f"{burn_pct_off_track}% of planned budget"),
+            })
+        if over_plan_total:
+            risks.append({
+                "code": "line_over_plan", "count": over_plan_total,
+                "message": (f"{over_plan_total} budget line(s) spent more "
+                            "than planned"),
+            })
+        if budgets_available and no_budget:
+            risks.append({
+                "code": "no_budget", "count": no_budget,
+                "message": (f"{no_budget} project(s) have no budget lines "
+                            "— nothing to burn against"),
+            })
+        if outside:
+            risks.append({
+                "code": "spend_outside_budget", "count": outside,
+                "message": (
+                    f"{outside} project(s) carry analytic cost above the "
+                    "practical amounts booked on their budget lines — "
+                    "spend is landing outside the budget's analytic "
+                    "accounts"),
+            })
+        if len(companies) > 1:
+            risks.append({
+                "code": "mixed_companies", "count": len(companies),
+                "message": (
+                    "Amounts are in company currency and scope spans "
+                    f"{', '.join(companies)}; filter by manager/customer/"
+                    "project to compare like with like."),
+            })
+
+        return build_report(
+            "project_budget", today,
+            summary=summary, breakdown=breakdown,
+            highlights=highlights, risks=risks,
+            extra={"filters": {"project": project, "manager": manager,
+                               "customer": customer},
+                   "thresholds": {
+                       "burn_pct_at_risk": burn_pct_at_risk,
+                       "burn_pct_off_track": burn_pct_off_track},
+                   "budgets_available": budgets_available})
+
+    return safe(run)
 
 
 @mcp.tool()
@@ -252,7 +683,8 @@ def project_profitability(
 
             fetched = gather_strict({
                 "analytic": analytic_calls,
-                "budget": lambda: _budget_by_account(client, account_ids),
+                "budget": lambda: _budget_by_project(
+                    client, ids, acct_by_project),
             })
             hours_agg, cost_agg, revenue_agg, emp_agg, task_agg = \
                 fetched["analytic"]
@@ -294,8 +726,7 @@ def project_profitability(
             revenue = (revenue_by_account.get(acct_id, 0.0)
                        if acct_id is not None else 0.0)
             margin = revenue - cost
-            budget = (budgets.get(acct_id)
-                      if budgets_available and acct_id is not None else None)
+            budget = budgets.get(pid) if budgets_available else None
 
             hours_burn = (round(hours / alloc * 100, 1)
                           if burn_evaluated and alloc else None)

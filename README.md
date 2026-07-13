@@ -30,6 +30,7 @@ structured report with a verdict — not a raw dump you have to interpret.
 | `procurement_watch` | Purchasing: late receipts, stale RFQs, open spend per vendor |
 | `production_health` | Manufacturing: orders behind their planned start, stuck WIP |
 | `project_profitability` | Projects: hours logged vs allocated, cost/revenue/margin, budget burn verdict |
+| `project_budget` | Budget vs actual per project, line by line — over-plan lines and spend the budget doesn't capture |
 | `team_workload` · `project_status_report` · `standup_digest` | Project delivery: overloaded members, at-risk projects, and a daily stand-up digest |
 
 Every money-reporting tool takes an optional

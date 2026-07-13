@@ -23,7 +23,7 @@ Set `ODOO_TOOL_GROUPS` (comma-separated) to choose what the server exposes:
 | `niche` | Enterprise & specialised apps |
 | `all` | Everything |
 
-Default (`core,reports`) is 27 tools — reports are the front door, the domain
+Default (`core,reports`) is 28 tools — reports are the front door, the domain
 wrappers below are "power user mode".
 
 ## Analyst reports
@@ -140,6 +140,22 @@ Report delivery hours, money and budget burn per project in one call.
 - `top_n` (default `5`): Rows in the drill-down breakdowns.
 - `burn_pct_at_risk` (default `80`) / `burn_pct_off_track` (default `100`):
   Worst burn % thresholds for the per-project verdict.
+- `timezone_offset` (default `7`): UTC offset for "today".
+
+### `project_budget`
+
+Report planned vs actual budget per project, line by line (Budgets app).
+Matches budget lines to projects by a line-level `project_id` m2o when the
+instance has one, else through the project's analytic account, and flags
+analytic spend the budget lines do not capture.
+
+- `project`: Optional project-name filter (ilike). Exactly one match adds a
+  per-line breakdown (planned / practical / theoretical / burn %).
+- `manager`: Optional project-manager filter (`user_id.name` ilike).
+- `customer`: Optional customer filter (`partner_id.name` ilike).
+- `top_n` (default `10`): Rows in the per-line breakdown.
+- `burn_pct_at_risk` (default `80`) / `burn_pct_off_track` (default `100`):
+  Burn % thresholds for the per-project verdict.
 - `timezone_offset` (default `7`): UTC offset for "today".
 
 ### `team_workload` · `project_status_report` · `standup_digest`

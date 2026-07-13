@@ -7,7 +7,7 @@ import pytest
 from odoo_pulse import tools_reports_projects
 from odoo_pulse.odoo_client import OdooError
 from odoo_pulse.tools_reports_projects import (
-    _budget_by_account,
+    _budget_by_project,
     _validate_date,
     _verdict,
 )
@@ -33,10 +33,10 @@ def test_verdict_boundaries_and_worst_of_two():
     assert _verdict(None, 85.0, 80.0, 100.0) == ("at_risk", 85.0)
 
 
-# -- _budget_by_account ------------------------------------------------------
+# -- _budget_by_project --------------------------------------------------------
 
-def test_budget_no_accounts_short_circuits(fake_client):
-    assert _budget_by_account(fake_client, []) == ({}, False)
+def test_budget_no_projects_short_circuits(fake_client):
+    assert _budget_by_project(fake_client, [], {}) == ({}, False)
     assert fake_client.calls == []
 
 
@@ -45,7 +45,7 @@ def test_budget_probe_uses_rpc_not_fields_get(fake_client):
     # (the fake returns a default schema for any model) — this test pins
     # the probe order the spec requires.
     fake_client.error_models = {"budget.line", "crossovered.budget.lines"}
-    budgets, available = _budget_by_account(fake_client, [11, 12])
+    budgets, available = _budget_by_project(fake_client, [1, 2], {1: 11, 2: 12})
     assert budgets == {} and available is False
     probed = [c["model"] for c in fake_client.calls
               if c["method"] == "search_count"]
@@ -55,38 +55,77 @@ def test_budget_probe_uses_rpc_not_fields_get(fake_client):
 def test_budget_probe_order_flips_on_17(fake_client):
     fake_client.major = 17
     fake_client.error_models = {"budget.line", "crossovered.budget.lines"}
-    _budget_by_account(fake_client, [11])
+    _budget_by_project(fake_client, [1], {1: 11})
     probed = [c["model"] for c in fake_client.calls
               if c["method"] == "search_count"]
     assert probed == ["crossovered.budget.lines", "budget.line"]
 
 
 def test_budget_unresolvable_fields_degrade(fake_client):
-    # Models "exist" (search_count returns the default 7) but the default
-    # schema has none of the candidate fields -> ({}, False), no aggregate.
-    budgets, available = _budget_by_account(fake_client, [11])
+    # Models "exist" (search_count returns the default 7) and the default
+    # schema even has project_id — but no amount field resolves, so the
+    # candidate is unusable -> ({}, False), no aggregate.
+    budgets, available = _budget_by_project(fake_client, [1], {1: 11})
     assert budgets == {} and available is False
     assert not any(c["method"] == "aggregate_records"
                    for c in fake_client.calls)
 
 
-def test_budget_sums_absolute_per_account(fake_client):
+def test_budget_matches_by_line_project_id(fake_client):
+    # Line model carries project_id (custom field seen in the wild on
+    # crossovered.budget.lines): match directly, no analytic-account hop.
+    fake_client.fields_responses["budget.line"] = {
+        "project_id": {}, "budget_amount": {}}
+    fake_client.aggregate_responses_seq["budget.line"] = [[
+        {"project_id": [1, "Alpha"], "budget_amount:sum": -10000.0},
+        {"project_id": [2, "Beta"], "budget_amount:sum": 4000.0},
+    ]]
+    budgets, available = _budget_by_project(fake_client, [1, 2], {1: 11})
+    assert available is True
+    assert budgets == {1: 10000.0, 2: 4000.0}
+    agg = fake_client.last("aggregate_records")
+    assert agg["model"] == "budget.line"
+    assert agg["group_by"] == ["project_id"]
+    assert agg["measures"] == [("budget_amount", "sum")]
+    assert ("project_id", "in", [1, 2]) in agg["domain"]
+    # Revenue-type budgets must not count toward the expense budget.
+    assert ("budget_analytic_id.budget_type", "!=", "revenue") in agg["domain"]
+
+
+def test_budget_account_fallback_maps_shared_account(fake_client):
+    # No project_id on the line model -> classic analytic-account matching;
+    # two projects sharing one account each get the full amount (accepted
+    # double-count caveat).
     fake_client.fields_responses["budget.line"] = {
         "account_id": {}, "budget_amount": {}}
     fake_client.aggregate_responses_seq["budget.line"] = [[
-        {"account_id": [11, "AA Alpha"], "budget_amount:sum": -10000.0},
-        {"account_id": [12, "AA Beta"], "budget_amount:sum": 4000.0},
-    ]]
-    budgets, available = _budget_by_account(fake_client, [11, 12])
+        {"account_id": [11, "AA Shared"], "budget_amount:sum": -10000.0}]]
+    budgets, available = _budget_by_project(
+        fake_client, [1, 2], {1: 11, 2: 11})
     assert available is True
-    assert budgets == {11: 10000.0, 12: 4000.0}
+    assert budgets == {1: 10000.0, 2: 10000.0}
     agg = fake_client.last("aggregate_records")
-    assert agg["model"] == "budget.line"
     assert agg["group_by"] == ["account_id"]
-    assert agg["measures"] == [("budget_amount", "sum")]
-    assert ("account_id", "in", [11, 12]) in agg["domain"]
-    # Revenue-type budgets must not count toward the expense budget.
-    assert ("budget_analytic_id.budget_type", "!=", "revenue") in agg["domain"]
+    assert ("account_id", "in", [11]) in agg["domain"]
+
+
+def test_budget_project_id_wins_over_account_match(fake_client):
+    # Both link styles resolve: the project aggregate runs first and its
+    # value is authoritative per project; account matching fills the rest.
+    fake_client.fields_responses["budget.line"] = {
+        "project_id": {}, "account_id": {}, "budget_amount": {}}
+    fake_client.aggregate_responses_seq["budget.line"] = [
+        [{"project_id": [1, "Alpha"], "budget_amount:sum": -8000.0}],
+        [{"account_id": [11, "AA Alpha"], "budget_amount:sum": -5000.0},
+         {"account_id": [12, "AA Beta"], "budget_amount:sum": -3000.0}],
+    ]
+    budgets, available = _budget_by_project(
+        fake_client, [1, 2], {1: 11, 2: 12})
+    assert available is True
+    assert budgets == {1: 8000.0, 2: 3000.0}
+    aggs = [c for c in fake_client.calls
+            if c["method"] == "aggregate_records"]
+    assert [a["group_by"] for a in aggs] == [["project_id"], ["account_id"]]
 
 
 def test_budget_crossovered_filters_confirmed(fake_client):
@@ -95,8 +134,8 @@ def test_budget_crossovered_filters_confirmed(fake_client):
         "analytic_account_id": {}, "planned_amount": {}}
     fake_client.aggregate_responses_seq["crossovered.budget.lines"] = [[
         {"analytic_account_id": [11, "AA"], "planned_amount:sum": -5000.0}]]
-    budgets, available = _budget_by_account(fake_client, [11])
-    assert budgets == {11: 5000.0} and available is True
+    budgets, available = _budget_by_project(fake_client, [1], {1: 11})
+    assert budgets == {1: 5000.0} and available is True
     agg = fake_client.last("aggregate_records")
     assert agg["model"] == "crossovered.budget.lines"
     assert ("crossovered_budget_id.state", "in",
@@ -124,7 +163,7 @@ AGG_REVENUE = [{"account_id": [11, "AA Alpha"], "amount:sum": 12000.0}]
 def _seed_portfolio(fake):
     """Two projects; queue order is the in-thunk order: hours, cost, revenue.
     Budgets stay unavailable: the probe search_count 'succeeds' (default 7)
-    but the default schema has no candidate fields -> ({}, False)."""
+    but the default schema resolves no amount field -> ({}, False)."""
     fake.fields_responses["project.project"] = PROJECT_FIELDS
     fake.search_responses["project.project"] = PROJECTS
     fake.aggregate_responses_seq["account.analytic.line"] = [
