@@ -112,3 +112,12 @@ def test_get_client_is_singleton_under_concurrency(monkeypatch):
     runtime._client = None
     assert len(created) == 1
     assert len(set(map(id, results))) == 1
+
+
+def test_mcp_server_declares_disambiguation_instructions():
+    text = runtime.mcp.instructions
+    assert text
+    # Identity: live business data...
+    assert "Live business data" in text
+    # ...and the not-for boundary vs code-index servers.
+    assert "NOT for Odoo source-code" in text

@@ -13,7 +13,15 @@ from mcp.server.fastmcp import FastMCP
 
 from .odoo_client import OdooClient, OdooConfig, OdooConfigError, OdooError
 
-mcp = FastMCP("odoo-pulse")
+mcp = FastMCP(
+    "odoo-pulse",
+    instructions=(
+        "Live business data from the user's own Odoo instance: records, "
+        "reports, KPIs — read via tools (search_read, one-call reports) or "
+        "the odoo://{model}/{id} resource. NOT for Odoo source-code or "
+        "module-structure questions; use a code-index server for those."
+    ),
+)
 
 _client: OdooClient | None = None
 _client_lock = threading.Lock()
