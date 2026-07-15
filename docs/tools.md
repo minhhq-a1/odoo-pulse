@@ -13,7 +13,7 @@ Set `ODOO_TOOL_GROUPS` (comma-separated) to choose what the server exposes:
 
 | Group | Contents |
 | --- | --- |
-| `core` | Generic model-agnostic tools (below) + write tools |
+| `core` | Generic model-agnostic tools (below) + write tools + the `odoo://{model}/{id}` record resource |
 | `reports` | The analyst report tools (see README) |
 | `business` | Contacts / CRM / Sales / Purchase / Inventory / Accounting wrappers |
 | `hr` | HR tools |
@@ -23,8 +23,9 @@ Set `ODOO_TOOL_GROUPS` (comma-separated) to choose what the server exposes:
 | `niche` | Enterprise & specialised apps |
 | `all` | Everything |
 
-Default (`core,reports`) is 28 tools — reports are the front door, the domain
-wrappers below are "power user mode".
+Default (`core,reports`) is 28 tools plus the `odoo://{model}/{id}` MCP
+resource (one record as JSON, all stored fields) — reports are the front
+door, the domain wrappers below are "power user mode".
 
 ## Analyst reports
 
