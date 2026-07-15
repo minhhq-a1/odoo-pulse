@@ -24,7 +24,7 @@ from .runtime import mcp  # noqa: E402
 from .tool_groups import modules_to_load  # noqa: E402
 
 for _module in modules_to_load():
-    # Importing a tool module registers its @mcp.tool() functions.
+    # Importing a tool module registers its @mcp.tool() / @mcp.resource() functions.
     importlib.import_module(f".{_module}", package=__package__)
 
 

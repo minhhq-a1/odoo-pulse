@@ -1,9 +1,10 @@
 """Parse ODOO_TOOL_GROUPS into the list of tool modules the server loads.
 
-Importing a tool module registers its @mcp.tool() functions as a side
-effect, so choosing which modules server.py imports IS the tool filter.
-Default surface is core + reports (28 tools); the breadth wrappers are
-opt-in groups so they don't bloat the client's context window.
+Importing a tool module registers its @mcp.tool() / @mcp.resource()
+functions as a side effect, so choosing which modules server.py imports
+IS the tool filter. Default surface is core + reports (28 tools + the
+odoo://{model}/{id} resource); the breadth wrappers are opt-in groups so
+they don't bloat the client's context window.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ import os
 
 # group name -> module names inside the odoo_pulse package
 GROUP_MODULES: dict[str, tuple[str, ...]] = {
-    "core": ("tools_generic", "tools_write"),
+    "core": ("tools_generic", "tools_write", "resources"),
     "reports": ("tools_workflows", "tools_reports_sales", "tools_reports_finance",
                 "tools_reports_inventory", "tools_reports_hr",
                 "tools_reports_pulse", "tools_reports_ops",
