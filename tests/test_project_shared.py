@@ -200,3 +200,61 @@ def test_subtasks_by_month_buckets_and_no_date_end(fake_client):
     # id=3 has no date_end -> excluded from months, reported separately
     assert no_date_end == {"task_count": 1, "delivery_hours": 2.0,
                            "allocated_hours": 1.0, "effective_hours": 1.5}
+
+
+# -- derive_project_health ----------------------------------------------------
+
+import datetime as dt
+
+from odoo_pulse.project_shared import derive_project_health
+
+
+def _ms(name, deadline, reached=False):
+    return {"name": name, "deadline": deadline, "is_reached": reached}
+
+
+def test_health_overdue_milestone_is_off_track_and_divergent():
+    today = dt.date(2026, 7, 15)
+    h = derive_project_health(
+        {"last_update_status": "on_track", "date": False},
+        [_ms("Go-live", "2026-01-16"), _ms("Kickoff", "2025-01-01", True)],
+        today, today + dt.timedelta(days=7), 7)
+    assert h["derived_health"] == "off_track"
+    assert h["divergent"] is True
+    assert h["overdue"] == 1
+    assert h["reached"] == 1 and h["total"] == 2
+    assert h["next_milestone"] == {"name": "Go-live",
+                                   "deadline": "2026-01-16"}
+
+
+def test_health_due_soon_is_at_risk():
+    today = dt.date(2026, 7, 15)
+    h = derive_project_health(
+        {"last_update_status": "to_define", "date": False},
+        [_ms("Demo", "2026-07-20")],
+        today, today + dt.timedelta(days=7), 7)
+    assert h["derived_health"] == "at_risk"
+    assert h["soon"] == 1 and h["overdue"] == 0
+    assert h["divergent"] is False
+
+
+def test_health_past_end_date_off_track_unless_done():
+    today = dt.date(2026, 7, 15)
+    h = derive_project_health(
+        {"last_update_status": "on_track", "date": "2026-06-30"}, [],
+        today, today + dt.timedelta(days=7), 7)
+    assert h["past_end"] is True and h["derived_health"] == "off_track"
+    h2 = derive_project_health(
+        {"last_update_status": "done", "date": "2026-06-30"}, [],
+        today, today + dt.timedelta(days=7), 7)
+    assert h2["past_end"] is False and h2["derived_health"] == "on_track"
+
+
+def test_health_milestone_order_independent():
+    today = dt.date(2026, 7, 15)
+    # unsorted input: earliest unreached must still win next_milestone
+    h = derive_project_health(
+        {"last_update_status": "on_track", "date": False},
+        [_ms("B", "2026-09-01"), _ms("A", "2026-08-01")],
+        today, today + dt.timedelta(days=7), 7)
+    assert h["next_milestone"]["name"] == "A"

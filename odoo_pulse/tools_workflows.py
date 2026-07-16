@@ -12,6 +12,7 @@ import json
 from datetime import timedelta
 
 from .odoo_client import OdooConfigError, OdooError
+from .project_shared import derive_project_health
 from .runtime import get_client, mcp, safe
 from .workflow_helpers import (
     build_report,
@@ -287,50 +288,20 @@ def project_status_report(
         divergent = 0
 
         for p in projects:
-            native = p.get("last_update_status") or "to_define"
             ms = ms_by_project.get(p["id"], [])
-            total_ms = len(ms)
-            reached_ms = sum(1 for m in ms if m.get("is_reached"))
+            h = derive_project_health(p, ms, today, cutoff, timezone_offset)
 
-            overdue_ms = 0
-            soon_ms = 0
-            next_milestone = None
-            for m in ms:  # ordered by deadline asc from the query
-                if m.get("is_reached"):
-                    continue
-                dd = parse_when(m.get("deadline"), timezone_offset)
-                if dd is None:
-                    continue
-                if next_milestone is None:
-                    next_milestone = {"name": m["name"], "deadline": m["deadline"]}
-                if dd < today:
-                    overdue_ms += 1
-                elif dd <= cutoff:
-                    soon_ms += 1
-
-            end = parse_when(p.get("date"), timezone_offset)
-            past_end = end is not None and end < today and native != "done"
-            end_soon = end is not None and today <= end <= cutoff
-
-            if overdue_ms > 0 or past_end:
-                derived = "off_track"
+            if h["derived_health"] == "off_track":
                 off_track += 1
-            elif soon_ms > 0 or end_soon:
-                derived = "at_risk"
+            elif h["derived_health"] == "at_risk":
                 at_risk += 1
             else:
-                derived = "on_track"
                 on_track += 1
 
-            total_overdue_ms += overdue_ms
-            if past_end:
+            total_overdue_ms += h["overdue"]
+            if h["past_end"]:
                 past_end_projects += 1
-
-            is_div = (
-                (native in ("on_track", "on_hold") and derived == "off_track")
-                or (native == "on_track" and derived == "at_risk")
-            )
-            if is_div:
+            if h["divergent"]:
                 divergent += 1
 
             rows.append({
@@ -340,12 +311,12 @@ def project_status_report(
                 "customer": p["partner_id"][1] if p.get("partner_id") else None,
                 "end_date": p.get("date") or None,
                 "task_count": p.get("task_count", 0),
-                "milestones": {"reached": reached_ms, "total": total_ms},
-                "overdue_milestones": overdue_ms,
-                "next_milestone": next_milestone,
-                "native_status": native,
-                "derived_health": derived,
-                "divergent": is_div,
+                "milestones": {"reached": h["reached"], "total": h["total"]},
+                "overdue_milestones": h["overdue"],
+                "next_milestone": h["next_milestone"],
+                "native_status": h["native_status"],
+                "derived_health": h["derived_health"],
+                "divergent": h["divergent"],
             })
 
         rows.sort(key=lambda r: (rank[r["derived_health"]],
