@@ -210,3 +210,113 @@ def test_hours_section_totals_and_leaderboards(fake_client):
                                  "hours": 320.5}]
     assert h["by_task"] == [{"task_id": 8554, "task": "Build X",
                              "hours": 84.0}]
+
+
+from odoo_pulse.tools_project_detail import (
+    _budget_context,
+    _budget_detail_section,
+    _selected,
+)
+
+_LINE_SCHEMA = {
+    "planned_amount": {"type": "float"},
+    "practical_amount": {"type": "float"},
+    "analytic_account_id": {"type": "many2one"},
+    "crossovered_budget_id": {"type": "many2one"},
+    "date_from": {"type": "date"}, "date_to": {"type": "date"},
+}
+
+_BUDGET_SCHEMA = {
+    "name": {"type": "char"}, "date_from": {"type": "date"},
+    "date_to": {"type": "date"}, "state": {"type": "selection"},
+}
+
+
+def _seed_budget(fake):
+    fake.major = 18
+    fake.fields_responses["project.project"] = dict(_PROJECT_SCHEMA)
+    fake.search_responses["project.project"] = [
+        {"id": 59, "name": "The Body Shop", "account_id": [5, "AA TBS"]}]
+    # candidate probe: budget.line missing, crossovered present
+    fake.error_models.add("budget.line")
+    fake.fields_responses["crossovered.budget.lines"] = dict(_LINE_SCHEMA)
+    fake.search_responses["crossovered.budget.lines"] = [
+        {"id": 1, "planned_amount": -1593314320.0,
+         "practical_amount": -1735766746.0,
+         "analytic_account_id": [5, "AA TBS"],
+         "crossovered_budget_id": [12, "PASX TBS"],
+         "date_from": "2025-03-01", "date_to": "2026-07-31"},
+    ]
+    fake.fields_responses["crossovered.budget"] = dict(_BUDGET_SCHEMA)
+    fake.search_responses["crossovered.budget"] = [
+        {"id": 12, "name": "PASX TBS", "date_from": "2025-03-01",
+         "date_to": "2026-07-31", "state": "validate"}]
+
+
+def test_budget_context_lists_budgets(fake_client):
+    _seed_budget(fake_client)
+    ctx = _budget_context(fake_client, 59)
+    assert ctx["available"] is True
+    assert ctx["budgets"] == [{"id": 12, "name": "PASX TBS",
+                               "date_from": "2025-03-01",
+                               "date_to": "2026-07-31",
+                               "state": "validate"}]
+    assert ctx["parent_field"] == "crossovered_budget_id"
+
+
+def test_selected_none_vs_empty_list(fake_client):
+    _seed_budget(fake_client)
+    ctx = _budget_context(fake_client, 59)
+    ids_all, periods_all = _selected(ctx, None)
+    assert ids_all == [12]
+    assert periods_all == [{"date_from": "2025-03-01",
+                            "date_to": "2026-07-31"}]
+    ids_none, periods_none = _selected(ctx, [])
+    assert ids_none == [] and periods_none == []
+
+
+def test_budget_detail_signs_and_periods(fake_client):
+    _seed_budget(fake_client)
+    ctx = _budget_context(fake_client, 59)
+    fake_client.search_responses["account.analytic.line"] = [
+        {"id": 1, "date": "2025-10-03", "amount": -210500000.0,
+         "unit_amount": 890.0, "employee_id": [155, "A"],
+         "task_id": [8554, "Build X"]},
+        # credit line REDUCES cost (positive amount)
+        {"id": 2, "date": "2025-10-20", "amount": 500000.0,
+         "unit_amount": 0.0, "employee_id": [155, "A"],
+         "task_id": [8554, "Build X"]},
+    ]
+    detail = _budget_detail_section(fake_client, 59, ctx, None, 7)
+    assert detail["selected_budget_ids"] == [12]
+    assert detail["planned"] == 1593314320.0     # abs of negative planned
+    assert detail["practical"] == 1735766746.0
+    assert detail["date_from"] == "2025-03-01"
+    assert detail["date_to"] == "2026-07-31"
+    assert detail["valid_cost"] == 210000000.0   # 210.5M - 0.5M credit
+    assert detail["valid_hours"] == 890.0
+    assert detail["by_month"] == [{"month": "2025-10",
+                                   "cost": 210000000.0, "hours": 890.0}]
+    assert detail["by_employee"][0]["employee_id"] == 155
+    assert detail["by_task"][0]["task_id"] == 8554
+    # domain: task-linked lines only, plain-date period bounds
+    call = fake_client.last("search_read")
+    assert ("task_id", "!=", False) in call["domain"]
+    assert ("date", ">=", "2025-03-01") in call["domain"]
+    assert ("date", "<=", "2026-07-31") in call["domain"]
+
+
+def test_budget_detail_empty_selection_all_time_cost(fake_client):
+    _seed_budget(fake_client)
+    ctx = _budget_context(fake_client, 59)
+    fake_client.search_responses["account.analytic.line"] = [
+        {"id": 1, "date": "2020-01-01", "amount": -100.0,
+         "unit_amount": 1.0, "employee_id": False, "task_id": [9, "T"]},
+    ]
+    detail = _budget_detail_section(fake_client, 59, ctx, [], 7)
+    assert detail["selected_budget_ids"] == []
+    assert detail["planned"] == 0.0
+    assert detail["valid_cost"] == 100.0         # no period filter
+    call = fake_client.last("search_read")
+    assert not any(leaf[0] == "date" for leaf in call["domain"]
+                   if isinstance(leaf, tuple))
