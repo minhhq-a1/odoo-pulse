@@ -65,6 +65,14 @@ def test_periods_domain_rejects_garbage_and_empty_period():
         periods_domain("date", [{}], 7)
 
 
+def test_periods_domain_rejects_trailing_garbage_after_valid_date():
+    # a valid date PREFIX followed by garbage must not silently truncate
+    # to the valid part and pass.
+    with pytest.raises(OdooError, match="date_from"):
+        periods_domain(
+            "date", [{"date_from": "2025-01-01xyz"}], 7)
+
+
 # -- paged_search_read --------------------------------------------------------
 
 def test_paged_search_read_single_short_page(fake_client):

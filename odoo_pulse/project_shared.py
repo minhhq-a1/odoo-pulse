@@ -126,8 +126,13 @@ def _budget_by_project(
 
 
 def _parse_ymd(value, param: str):
+    """Strict YYYY-MM-DD parse (surrounding whitespace only). Unlike
+    parse_when, this does NOT truncate to the first 10 characters --
+    callers (periods_domain, budget date fields) expect plain dates, and a
+    silent truncation would accept garbage like "2025-01-01xyz" as valid.
+    """
     try:
-        return datetime.strptime(str(value)[:10], "%Y-%m-%d").date()
+        return datetime.strptime(str(value).strip(), "%Y-%m-%d").date()
     except (TypeError, ValueError):
         raise OdooError(f"Invalid {param} {value!r}: expected YYYY-MM-DD")
 

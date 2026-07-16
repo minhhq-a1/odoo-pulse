@@ -21,6 +21,8 @@ def test_validate_date_passthrough_and_error():
     assert _validate_date("2026-07-01", "date_from") == "2026-07-01"
     with pytest.raises(OdooError, match="Invalid date_from"):
         _validate_date("notadate", "date_from")
+    with pytest.raises(OdooError, match="Invalid date_from"):
+        _validate_date("2026-07-01xyz", "date_from")
 
 
 def test_verdict_boundaries_and_worst_of_two():
