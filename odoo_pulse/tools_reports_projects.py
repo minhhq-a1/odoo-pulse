@@ -19,7 +19,6 @@ Caveats for callers:
 
 from __future__ import annotations
 
-from .odoo_client import OdooError
 from .runtime import get_client, mcp, safe
 from .workflow_helpers import (
     build_report,
@@ -28,7 +27,6 @@ from .workflow_helpers import (
     fetch_with_truncation,
     gather_strict,
     optional_fields,
-    parse_when,
     today_in_tz,
 )
 from .project_shared import (  # noqa: F401  (re-export for tests/back-compat)
@@ -38,22 +36,20 @@ from .project_shared import (  # noqa: F401  (re-export for tests/back-compat)
     _THEORETICAL_CANDIDATES,
     _budget_by_project,
     _budget_sources,
-    analytic_money,
 )
+from .project_shared import _parse_ymd, account_ids_by_project, analytic_money
 
 _TIMESHEET_HINT = ("Timesheets require the hr_timesheet app; install it to "
                    "report delivery hours.")
 
 
 def _validate_date(value: str | None, param: str) -> str | None:
-    """YYYY-MM-DD passthrough; garbage -> clean OdooError (parse_when raises
-    ValueError, which safe() would render as an ugly 'internal error:')."""
+    """YYYY-MM-DD passthrough; garbage -> clean OdooError. Delegates the
+    actual parsing to project_shared._parse_ymd (same helper periods_domain
+    uses) instead of a second, independently-maintained validator."""
     if not value:
         return None
-    try:
-        parse_when(value)
-    except ValueError:
-        raise OdooError(f"Invalid {param} {value!r}: expected YYYY-MM-DD")
+    _parse_ymd(value, param)
     return str(value)[:10]
 
 
@@ -133,11 +129,8 @@ def project_budget(
                     *acct_fields],
             limit=200, order="name")
 
-        acct_field = acct_fields[0] if acct_fields else None
         ids = [p["id"] for p in projects]
-        acct_by_project = {
-            p["id"]: p[acct_field][0]
-            for p in projects if acct_field and p.get(acct_field)}
+        acct_by_project = account_ids_by_project(projects, acct_fields)
         account_ids = sorted(set(acct_by_project.values()))
         drill_id = ids[0] if len(ids) == 1 else None
 
@@ -525,16 +518,10 @@ def project_profitability(
                     *extra_fields],
             limit=200, order="name")
 
-        # Analytic account moved analytic_account_id -> account_id in 18.
-        acct_field = next(
-            (f for f in ("account_id", "analytic_account_id")
-             if f in extra_fields), None)
         has_alloc_field = "allocated_hours" in extra_fields
 
         ids = [p["id"] for p in projects]
-        acct_by_project = {
-            p["id"]: p[acct_field][0]
-            for p in projects if acct_field and p.get(acct_field)}
+        acct_by_project = account_ids_by_project(projects, extra_fields)
         account_ids = sorted(set(acct_by_project.values()))
         drill_id = ids[0] if len(ids) == 1 else None
 

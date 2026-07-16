@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import datetime, time as dt_time, timedelta
 
 from .odoo_client import OdooError
-from .workflow_helpers import optional_fields, parse_when
+from .workflow_helpers import optional_fields, parse_when, utc_bound
 
 # (model, analytic-account field candidates, planned-amount field candidates,
 #  extra domain). Order below fits Odoo 18+; it is reversed for <= 17.
@@ -33,13 +33,15 @@ _BUDGET_CANDIDATES = [
 _PRACTICAL_CANDIDATES = ["practical_amount", "achieved_amount"]
 # Odoo spells the crossovered-era field "theoritical" in some series.
 _THEORETICAL_CANDIDATES = ["theoretical_amount", "theoritical_amount"]
-_PARENT_CANDIDATES = ["crossovered_budget_id", "budget_analytic_id"]
 
 # parent m2o field on a budget line -> the parent budget model it points to
 _PARENT_MODEL = {
     "crossovered_budget_id": "crossovered.budget",
     "budget_analytic_id": "budget.analytic",
 }
+# Derived from _PARENT_MODEL's keys (not hand-duplicated) so a new parent
+# field only needs adding in one place.
+_PARENT_CANDIDATES = list(_PARENT_MODEL)
 
 
 def _budget_sources(client, account_ids: list[int]):
@@ -153,12 +155,8 @@ def periods_domain(
         leaves: list = []
         if d_from:
             day = _parse_ymd(d_from, f"periods[{i}].date_from")
-            if as_datetime:
-                low = (datetime.combine(day, dt_time.min)
-                       - timedelta(hours=timezone_offset)
-                       ).strftime("%Y-%m-%d %H:%M:%S")
-            else:
-                low = day.isoformat()
+            low = (utc_bound(day, timezone_offset)
+                   if as_datetime else day.isoformat())
             leaves.append((field, ">=", low))
         if d_to:
             day = _parse_ymd(d_to, f"periods[{i}].date_to")
@@ -366,3 +364,35 @@ def analytic_money(
                 acc[m2o[0]] = abs(row.get("amount:sum") or 0.0)
         out.append(acc)
     return out[0], out[1]
+
+
+# project.project's analytic account field was renamed analytic_account_id
+# -> account_id in Odoo 18; this order tries the current name first.
+_ACCOUNT_FIELD_CANDIDATES = ("account_id", "analytic_account_id")
+
+
+def account_field_of(opt: list[str]) -> str | None:
+    """Which analytic-account field exists on this project.project schema.
+
+    `opt` is any optional_fields(...) result that included the candidates
+    (it may also contain unrelated fields — only the account ones matter
+    here). Single source of truth for the field-name pick so a future Odoo
+    rename only needs updating in _ACCOUNT_FIELD_CANDIDATES.
+    """
+    return next((f for f in _ACCOUNT_FIELD_CANDIDATES if f in opt), None)
+
+
+def account_id_of(project_row: dict, opt: list[str]) -> int | None:
+    """The project's own analytic account id, or None if it has none."""
+    field = account_field_of(opt)
+    m2o = project_row.get(field) if field else None
+    return m2o[0] if m2o else None
+
+
+def account_ids_by_project(projects: list[dict], opt: list[str]
+                           ) -> dict[int, int]:
+    """{project_id: account_id} for every project in `projects` that has
+    an analytic account set."""
+    field = account_field_of(opt)
+    return {p["id"]: p[field][0] for p in projects
+            if field and p.get(field)}

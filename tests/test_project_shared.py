@@ -282,3 +282,35 @@ def test_analytic_money_signs_and_domains(fake_client):
             if c["method"] == "aggregate_records"]
     assert ("amount", "<", 0) in aggs[0]["domain"]
     assert ("amount", ">", 0) in aggs[1]["domain"]
+
+
+# -- account_field_of / account_id_of / account_ids_by_project ---------------
+
+from odoo_pulse.project_shared import (
+    account_field_of,
+    account_id_of,
+    account_ids_by_project,
+)
+
+
+def test_account_field_of_prefers_account_id_over_analytic_account_id():
+    assert account_field_of(["account_id", "analytic_account_id"]) \
+        == "account_id"
+    assert account_field_of(["analytic_account_id"]) == "analytic_account_id"
+    assert account_field_of(["allocated_hours"]) is None
+
+
+def test_account_id_of_single_row():
+    row = {"id": 59, "account_id": [5, "AA TBS"]}
+    assert account_id_of(row, ["account_id"]) == 5
+    assert account_id_of({"id": 60}, ["account_id"]) is None
+    assert account_id_of(row, ["allocated_hours"]) is None  # field absent
+
+
+def test_account_ids_by_project_skips_projects_without_account():
+    projects = [
+        {"id": 1, "account_id": [5, "AA-1"]},
+        {"id": 2, "account_id": False},
+        {"id": 3},
+    ]
+    assert account_ids_by_project(projects, ["account_id"]) == {1: 5}

@@ -22,6 +22,8 @@ from .project_shared import (
     _PRACTICAL_CANDIDATES,
     _budget_by_project,
     _budget_sources,
+    account_id_of,
+    account_ids_by_project,
     analytic_money,
     derive_project_health,
     fetch_subtasks,
@@ -107,13 +109,6 @@ def project_subtask_hours(
         return report
 
     return safe(run)
-
-
-def _acct_id_of(project_row: dict, opt: list[str]) -> int | None:
-    field = next((f for f in ("account_id", "analytic_account_id")
-                  if f in opt), None)
-    m2o = project_row.get(field) if field else None
-    return m2o[0] if m2o else None
 
 
 def _weekly_logged(client, project_id: int, today) -> list[dict]:
@@ -217,7 +212,7 @@ def _core_section(client, project_id: int, timezone_offset: int,
 
     section_errors: dict[str, str] = {}
     try:
-        acct_id = _acct_id_of(p, opt)
+        acct_id = account_id_of(p, opt)
         cost_by, rev_by = analytic_money(
             client, [acct_id] if acct_id is not None else [])
         cost = cost_by.get(acct_id, 0.0) if acct_id is not None else 0.0
@@ -288,7 +283,7 @@ def _budget_context(client, project_id: int) -> dict:
         fields=["id", *opt], limit=1)
     if not rows:
         raise OdooError(f"No project.project with id {project_id}")
-    acct_id = _acct_id_of(rows[0], opt)
+    acct_id = account_id_of(rows[0], opt)
     account_ids = [acct_id] if acct_id is not None else []
 
     for model, link, acct, amount, extra_domain in _budget_sources(
@@ -651,11 +646,7 @@ def portfolio_health(
             limit=200, order="name")
 
         ids = [p["id"] for p in projects]
-        acct_field = next((f for f in ("account_id",
-                                       "analytic_account_id")
-                           if f in opt), None)
-        acct_by_project = {p["id"]: p[acct_field][0] for p in projects
-                           if acct_field and p.get(acct_field)}
+        acct_by_project = account_ids_by_project(projects, opt)
         account_ids = sorted(set(acct_by_project.values()))
         has_alloc = "allocated_hours" in opt
 
