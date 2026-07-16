@@ -141,8 +141,25 @@ def _weekly_logged(client, project_id: int, today) -> list[dict]:
             for d, h in sorted(buckets.items())]
 
 
+def _error_message(exc: Exception) -> str:
+    """OdooError -> its message as-is; anything else -> a prefixed, classed
+    message so a programming bug isn't mistaken for a data/instance issue
+    (e.g. "field X does not exist")."""
+    if isinstance(exc, OdooError):
+        return str(exc)
+    return f"internal error: {type(exc).__name__}: {exc}"
+
+
 def _core_section(client, project_id: int, timezone_offset: int,
                   lookahead_days: int) -> dict:
+    """project + milestones + finance + weekly_logged for one project.
+
+    project/milestones always return together if the project itself exists
+    (a fault fetching either one is a genuine failure of the whole section,
+    same as the project not existing). finance and weekly_logged are each
+    their own try/except: a fault in one (e.g. a missing module) must not
+    take out the other or the project/milestones data already computed.
+    """
     today = today_in_tz(timezone_offset)
     cutoff = today + timedelta(days=lookahead_days)
     opt = optional_fields(client, "project.project",
@@ -168,13 +185,7 @@ def _core_section(client, project_id: int, timezone_offset: int,
     h = derive_project_health(p, milestones, today, cutoff,
                               timezone_offset)
 
-    acct_id = _acct_id_of(p, opt)
-    cost_by, rev_by = analytic_money(
-        client, [acct_id] if acct_id is not None else [])
-    cost = cost_by.get(acct_id, 0.0) if acct_id is not None else 0.0
-    revenue = rev_by.get(acct_id, 0.0) if acct_id is not None else 0.0
-
-    return {
+    result: dict = {
         "project": {
             "id": p["id"], "name": p["name"],
             "manager": p["user_id"][1] if p.get("user_id") else None,
@@ -201,14 +212,32 @@ def _core_section(client, project_id: int, timezone_offset: int,
                 "is_reached": bool(m.get("is_reached")),
             } for m in milestones],
         },
-        "finance": {
+        "warnings": warnings,
+    }
+
+    section_errors: dict[str, str] = {}
+    try:
+        acct_id = _acct_id_of(p, opt)
+        cost_by, rev_by = analytic_money(
+            client, [acct_id] if acct_id is not None else [])
+        cost = cost_by.get(acct_id, 0.0) if acct_id is not None else 0.0
+        revenue = rev_by.get(acct_id, 0.0) if acct_id is not None else 0.0
+        result["finance"] = {
             "revenue": round(revenue, 2),
             "cost_all_time": round(cost, 2),
             "margin": round(revenue - cost, 2),
-        },
-        "weekly_logged": _weekly_logged(client, project_id, today),
-        "warnings": warnings,
-    }
+        }
+    except Exception as exc:
+        section_errors["finance"] = _error_message(exc)
+
+    try:
+        result["weekly_logged"] = _weekly_logged(client, project_id, today)
+    except Exception as exc:
+        section_errors["weekly_logged"] = _error_message(exc)
+
+    if section_errors:
+        result["errors"] = section_errors
+    return result
 
 
 def _hours_section(client, project_id: int, only_closed_stages: bool,
@@ -485,14 +514,8 @@ def project_dashboard(
             # the FakeClient's per-model queues stay deterministic.
             try:
                 return fn()
-            except OdooError as exc:
-                errors[name] = str(exc)
-                return None
             except Exception as exc:
-                # Not an OdooError -> a programming bug, not an
-                # instance-config/data issue. Prefix so it isn't mistaken
-                # for the latter (e.g. "field X does not exist").
-                errors[name] = f"internal error: {type(exc).__name__}: {exc}"
+                errors[name] = _error_message(exc)
                 return None
 
         if "core" in wanted:
@@ -501,9 +524,12 @@ def project_dashboard(
             if core is not None:
                 report["project"] = core["project"]
                 report["milestones"] = core["milestones"]
-                report["finance"] = core["finance"]
-                report["weekly_logged"] = core["weekly_logged"]
+                if "finance" in core:
+                    report["finance"] = core["finance"]
+                if "weekly_logged" in core:
+                    report["weekly_logged"] = core["weekly_logged"]
                 warnings += core["warnings"]
+                errors.update(core.get("errors", {}))
 
         if "hours" in wanted:
             hours = attempt("hours", lambda: _hours_section(

@@ -170,6 +170,39 @@ def test_core_section_missing_delivery_hours_warns(fake_client):
         ["field delivery_hours does not exist on project.project"]
 
 
+def test_core_section_finance_soft_fails_independently(fake_client):
+    _seed_core(fake_client)
+    # malformed aggregate row -> TypeError inside analytic_money, NOT an
+    # OdooError; weekly_logged reads account.analytic.line via search_read
+    # (a separate FakeClient queue) so it is unaffected.
+    fake_client.aggregate_responses_seq["account.analytic.line"] = [
+        [{"account_id": [5, "AA TBS"], "amount:sum": "not-a-number"}],
+    ]
+    core = _core_section(fake_client, 59, 7, 7)
+    assert "project" in core and core["project"]["id"] == 59
+    assert "milestones" in core
+    assert "finance" not in core
+    assert core["errors"]["finance"].startswith("internal error: TypeError")
+    assert core["weekly_logged"] == [
+        {"week_start": "2026-07-06", "hours": 8.0},
+        {"week_start": "2026-07-13", "hours": 7.5},
+    ]
+
+
+def test_core_section_weekly_logged_soft_fails_independently(fake_client):
+    _seed_core(fake_client)
+    fake_client.error_models.add("account.analytic.line")
+    core = _core_section(fake_client, 59, 7, 7)
+    assert "project" in core and core["project"]["id"] == 59
+    assert "milestones" in core
+    assert "weekly_logged" not in core
+    assert core["errors"]["weekly_logged"] == \
+        "Object account.analytic.line doesn't exist"
+    # finance uses aggregate_records, which error_models does not gate
+    assert core["finance"] == {"revenue": 200.0, "cost_all_time": 1000.0,
+                               "margin": -800.0}
+
+
 def test_weekly_logged_iso_monday_buckets(fake_client):
     import datetime as dt
     fake_client.search_responses["account.analytic.line"] = [
@@ -453,6 +486,21 @@ def test_dashboard_prefixes_non_odoo_errors_as_internal(fake_client):
     ]
     out = json.loads(project_dashboard(project_id=59, include=["core"]))
     assert out["errors"]["core"].startswith("internal error: ValueError")
+
+
+def test_dashboard_core_finance_and_weekly_logged_fail_independently(
+        fake_client):
+    _seed_dashboard(fake_client)
+    fake_client.error_models.add("account.analytic.line")
+    out = json.loads(project_dashboard(project_id=59, include=["core"]))
+    # project + milestones still return: the project itself was found
+    assert out["project"]["id"] == 59
+    assert "milestones" in out
+    assert "weekly_logged" not in out
+    assert "finance" in out            # aggregate_records untouched
+    assert "core" not in out["errors"]
+    assert out["errors"]["weekly_logged"] == \
+        "Object account.analytic.line doesn't exist"
 
 
 from odoo_pulse.tools_project_detail import portfolio_health
