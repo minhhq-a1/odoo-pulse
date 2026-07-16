@@ -38,6 +38,7 @@ from .project_shared import (  # noqa: F401  (re-export for tests/back-compat)
     _THEORETICAL_CANDIDATES,
     _budget_by_project,
     _budget_sources,
+    analytic_money,
 )
 
 _TIMESHEET_HINT = ("Timesheets require the hr_timesheet app; install it to "
@@ -564,18 +565,8 @@ def project_profitability(
                     "account.analytic.line", group_by=["project_id"],
                     measures=[("unit_amount", "sum")],
                     domain=[("project_id", "in", ids), *date_dom])
-                cost = revenue = None
-                if account_ids:
-                    cost = client.aggregate_records(
-                        "account.analytic.line", group_by=["account_id"],
-                        measures=[("amount", "sum")],
-                        domain=[("account_id", "in", account_ids),
-                                ("amount", "<", 0), *date_dom])
-                    revenue = client.aggregate_records(
-                        "account.analytic.line", group_by=["account_id"],
-                        measures=[("amount", "sum")],
-                        domain=[("account_id", "in", account_ids),
-                                ("amount", ">", 0), *date_dom])
+                cost_by, revenue_by = analytic_money(
+                    client, account_ids, extra_domain=date_dom)
                 emp = task = None
                 if drill_id is not None:
                     emp = client.aggregate_records(
@@ -588,14 +579,14 @@ def project_profitability(
                         measures=[("unit_amount", "sum")],
                         domain=[("project_id", "=", drill_id), *date_dom],
                         limit=top_n, order="unit_amount:sum desc")
-                return hours, cost, revenue, emp, task
+                return hours, cost_by, revenue_by, emp, task
 
             fetched = gather_strict({
                 "analytic": analytic_calls,
                 "budget": lambda: _budget_by_project(
                     client, ids, acct_by_project),
             })
-            hours_agg, cost_agg, revenue_agg, emp_agg, task_agg = \
+            hours_agg, cost_by_account, revenue_by_account, emp_agg, task_agg = \
                 fetched["analytic"]
             budgets, budgets_available = fetched["budget"]
 
@@ -604,12 +595,6 @@ def project_profitability(
                 if m2o:
                     hours_by_project[m2o[0]] = (
                         row.get("unit_amount:sum") or 0.0)
-            for agg, target in ((cost_agg, cost_by_account),
-                                (revenue_agg, revenue_by_account)):
-                for row in (agg.get("rows", []) if agg else []):
-                    m2o = row.get("account_id")
-                    if m2o:
-                        target[m2o[0]] = row.get("amount:sum") or 0.0
             for agg, target, key, label in (
                     (emp_agg, by_employee, "employee_id", "employee"),
                     (task_agg, by_task, "task_id", "task")):
@@ -630,7 +615,7 @@ def project_profitability(
             alloc = ((p.get("allocated_hours") or 0.0)
                      if has_alloc_field else 0.0)
             acct_id = acct_by_project.get(pid)
-            cost = (abs(cost_by_account.get(acct_id, 0.0))
+            cost = (cost_by_account.get(acct_id, 0.0)
                     if acct_id is not None else 0.0)
             revenue = (revenue_by_account.get(acct_id, 0.0)
                        if acct_id is not None else 0.0)
