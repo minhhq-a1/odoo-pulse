@@ -191,6 +191,11 @@ month. Replaces ~12 separate calls. Output is the spec's free-form schema,
 **not** the standard report envelope — this tool feeds a dashboard, not a
 reader. Sections run sequentially and fail soft: a broken section's error
 message lands under `errors` while the rest of the report still returns.
+Within `core`, `finance` and `weekly_logged` each fail independently —
+a fault in one (e.g. a missing app) drops just that key into `errors`
+without discarding `project`/`milestones`, which return whenever the
+project itself was found. `core` as a whole only fails if the project id
+doesn't exist.
 
 - `project_id`: `project.project` id (required).
 - `only_closed_stages` / `closed_stage_names` / `single_assignee_only`:
@@ -200,7 +205,11 @@ message lands under `errors` while the rest of the report still returns.
   the `budget_detail` section. **Omit (`null`) to select ALL budgets** of
   the project; **pass `[]` to select NONE** — `budget_detail` then reports
   all-time cost only, unscoped to any budget period. These two states are
-  deliberately distinct; do not send `[]` to mean "all".
+  deliberately distinct; do not send `[]` to mean "all". Any id that
+  matches no budget of the project is dropped and reported back —
+  `budget_detail.unknown_budget_ids` lists it, and a `warnings` entry
+  flags it — regardless of which budget section was requested, so a
+  stale/typo'd id is never silently indistinguishable from "select none".
 - `include`: Subset of `["core", "hours", "budgets", "budget_detail",
   "delivery_monthly"]`; omitted = all. Use it to re-fetch only what
   changed — a checkbox toggle needs `["hours", "delivery_monthly"]`; a
@@ -215,7 +224,10 @@ Portfolio overview: one row per project, joined by id server-side.
 Replaces the `project_status_report` + `project_profitability` pair the
 overview tab used to join by name client-side, which broke on duplicate
 project names. Returns raw signals only — the client computes its own
-health score from user-configured thresholds.
+health score from user-configured thresholds. If the portfolio's
+milestones exceed the fetch cap, the report still returns (never a hard
+error) with a `truncated_milestone_data` risk entry — same pattern as
+`project_status_report`.
 
 - `manager`: Optional project-manager filter (`user_id.name` ilike).
 - `customer`: Optional customer filter (`partner_id.name` ilike).
