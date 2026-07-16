@@ -209,6 +209,10 @@ def _core_section(client, project_id: int, timezone_offset: int,
             } for m in milestones],
         },
         "warnings": warnings,
+        # internal only -- never copied into the tool's output; lets
+        # project_dashboard hand this row to _budget_context instead of
+        # it re-fetching project.project (finding #8).
+        "_raw_project_row": p,
     }
 
     section_errors: dict[str, str] = {}
@@ -281,20 +285,30 @@ def _hours_section(client, project_id: int, only_closed_stages: bool,
     }
 
 
-def _budget_context(client, project_id: int) -> dict:
+def _budget_context(client, project_id: int,
+                    project_row: dict | None = None) -> dict:
     """One shared fetch of budget lines + parent budgets for a project.
 
     Abstracts crossovered.budget.lines vs budget.line exactly like
     project_budget does (same _budget_sources helper — spec rule #7).
+
+    project_row, when given, is a project.project row the caller already
+    fetched (e.g. _core_section's) — must carry "id" and whichever of
+    account_id/analytic_account_id exists on this instance. None means
+    fetch it here (self-sufficient default). A resolved account id can
+    legitimately be None (no account set), so it can't double as the
+    "already fetched" sentinel — the row itself is.
     """
     opt = optional_fields(client, "project.project",
                           ["account_id", "analytic_account_id"])
-    rows = client.search_read(
-        "project.project", domain=[("id", "=", project_id)],
-        fields=["id", *opt], limit=1)
-    if not rows:
-        raise OdooError(f"No project.project with id {project_id}")
-    acct_id = account_id_of(rows[0], opt)
+    if project_row is None:
+        rows = client.search_read(
+            "project.project", domain=[("id", "=", project_id)],
+            fields=["id", *opt], limit=1)
+        if not rows:
+            raise OdooError(f"No project.project with id {project_id}")
+        project_row = rows[0]
+    acct_id = account_id_of(project_row, opt)
     account_ids = [acct_id] if acct_id is not None else []
 
     for model, link, acct, amount, extra_domain in _budget_sources(
@@ -536,6 +550,7 @@ def project_dashboard(
                 errors[name] = _error_message(exc)
                 return None
 
+        core = None
         if "core" in wanted:
             core = attempt("core", lambda: _core_section(
                 client, project_id, timezone_offset, lookahead_days))
@@ -585,8 +600,14 @@ def project_dashboard(
                            if s in wanted]
         ctx = None
         if budget_sections:
+            # Reuse core's already-fetched project.project row instead of
+            # _budget_context fetching it again (finding #8); None when
+            # core wasn't requested or failed, so _budget_context just
+            # falls back to its own self-sufficient fetch.
+            core_row = core.get("_raw_project_row") if core else None
             ctx = attempt(budget_sections[0],
-                          lambda: _budget_context(client, project_id))
+                          lambda: _budget_context(client, project_id,
+                                                  core_row))
         if ctx is not None:
             if "budgets" in wanted:
                 report["budgets"] = ctx["budgets"]

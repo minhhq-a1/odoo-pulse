@@ -297,6 +297,21 @@ def test_budget_context_lists_budgets(fake_client):
     assert ctx["parent_field"] == "crossovered_budget_id"
 
 
+def test_budget_context_accepts_prefetched_project_row(fake_client):
+    _seed_budget(fake_client)
+    row = {"id": 59, "name": "The Body Shop", "account_id": [5, "AA TBS"]}
+    ctx = _budget_context(fake_client, 59, project_row=row)
+    assert ctx["available"] is True
+    assert ctx["budgets"] == [{"id": 12, "name": "PASX TBS",
+                               "date_from": "2025-03-01",
+                               "date_to": "2026-07-31",
+                               "state": "validate"}]
+    proj_reads = [c for c in fake_client.calls
+                  if c["method"] == "search_read"
+                  and c["model"] == "project.project"]
+    assert proj_reads == []              # no re-fetch: the row was given
+
+
 def test_selected_none_vs_empty_list(fake_client):
     _seed_budget(fake_client)
     ctx = _budget_context(fake_client, 59)
@@ -414,6 +429,12 @@ def test_dashboard_full_load_all_sections(fake_client):
     assert out["project"]["id"] == 59
     assert out["budgets"][0]["id"] == 12
     assert out["budget_detail"]["selected_budget_ids"] == [12]
+    # core's project.project row is reused by _budget_context instead of
+    # being fetched a second time (finding #8).
+    proj_reads = [c for c in fake_client.calls
+                  if c["method"] == "search_read"
+                  and c["model"] == "project.project"]
+    assert len(proj_reads) == 1
 
 
 def test_dashboard_include_subset_only_requested_sections(fake_client):
