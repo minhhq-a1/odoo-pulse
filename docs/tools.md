@@ -23,7 +23,7 @@ Set `ODOO_TOOL_GROUPS` (comma-separated) to choose what the server exposes:
 | `niche` | Enterprise & specialised apps |
 | `all` | Everything |
 
-Default (`core,reports`) is 28 tools plus the `odoo://{model}/{id}` MCP
+Default (`core,reports`) is 31 tools plus the `odoo://{model}/{id}` MCP
 resource (one record as JSON, all stored fields) — reports are the front
 door, the domain wrappers below are "power user mode".
 
@@ -158,6 +158,71 @@ analytic spend the budget lines do not capture.
 - `burn_pct_at_risk` (default `80`) / `burn_pct_off_track` (default `100`):
   Burn % thresholds for the per-project verdict.
 - `timezone_offset` (default `7`): UTC offset for "today".
+
+### `project_subtask_hours`
+
+Total sub-task hours for one project, filtered server-side, in one call.
+Sums delivery/allocated/effective hours over the project's sub-tasks
+(`project.task` with `parent_id` set) instead of paginating `search_read`
+client-side — especially useful for the "exactly one assignee" condition,
+which Odoo domains cannot express.
+
+- `project_id`: `project.project` id (required).
+- `only_closed_stages` (default `false`): Count only tasks whose stage name
+  is in `closed_stage_names`. Cancelled tasks still count toward delivery
+  hours (business decision, not a bug).
+- `closed_stage_names` (default `["Done", "Cancelled", "Delivered"]`):
+  Stage names treated as closed.
+- `single_assignee_only` (default `false`): Count only tasks with exactly
+  one user in `user_ids`.
+- `group_by_month` (default `false`): Also bucket totals by the local-time
+  month of `date_end`; tasks without `date_end` are excluded from the
+  buckets and summarised separately under `no_date_end`.
+- `periods`: Optional list of `{"date_from": "YYYY-MM-DD", "date_to":
+  "YYYY-MM-DD"}` ranges applied to `date_end`, OR-combined (matching
+  per-budget-period filtering, not a union). Omitted = no date filter.
+- `timezone_offset` (default `7`): UTC offset for dates.
+
+### `project_dashboard`
+
+Everything a project-detail page needs in one call: status, milestones,
+finance, weekly logged hours, budgets, budget-line detail, and delivery by
+month. Replaces ~12 separate calls. Output is the spec's free-form schema,
+**not** the standard report envelope — this tool feeds a dashboard, not a
+reader. Sections run sequentially and fail soft: a broken section's error
+message lands under `errors` while the rest of the report still returns.
+
+- `project_id`: `project.project` id (required).
+- `only_closed_stages` / `closed_stage_names` / `single_assignee_only`:
+  sub-task filters, same as `project_subtask_hours`; shape the `hours` and
+  `delivery_monthly` sections.
+- `budget_ids`: `crossovered.budget` / `budget.analytic` ids to select for
+  the `budget_detail` section. **Omit (`null`) to select ALL budgets** of
+  the project; **pass `[]` to select NONE** — `budget_detail` then reports
+  all-time cost only, unscoped to any budget period. These two states are
+  deliberately distinct; do not send `[]` to mean "all".
+- `include`: Subset of `["core", "hours", "budgets", "budget_detail",
+  "delivery_monthly"]`; omitted = all. Use it to re-fetch only what
+  changed — a checkbox toggle needs `["hours", "delivery_monthly"]`; a
+  budget chip change needs `["budget_detail", "delivery_monthly"]`.
+  `core` covers project, milestones, finance and weekly_logged.
+- `lookahead_days` (default `7`): "due soon" window for derived health.
+- `timezone_offset` (default `7`): UTC offset for dates.
+
+### `portfolio_health`
+
+Portfolio overview: one row per project, joined by id server-side.
+Replaces the `project_status_report` + `project_profitability` pair the
+overview tab used to join by name client-side, which broke on duplicate
+project names. Returns raw signals only — the client computes its own
+health score from user-configured thresholds.
+
+- `manager`: Optional project-manager filter (`user_id.name` ilike).
+- `customer`: Optional customer filter (`partner_id.name` ilike).
+- `include_on_hold` (default `true`): Keep on_hold projects.
+- `include_done` (default `false`): Keep done projects.
+- `lookahead_days` (default `7`): "due soon" window for derived health.
+- `timezone_offset` (default `7`): UTC offset for dates.
 
 ### `team_workload` · `project_status_report` · `standup_digest`
 
