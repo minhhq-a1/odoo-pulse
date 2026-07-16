@@ -27,6 +27,7 @@ from .project_shared import (
     analytic_money,
     derive_project_health,
     fetch_subtasks,
+    filter_subtasks_by_periods,
     paged_search_read,
     periods_domain,
     subtasks_by_month,
@@ -238,12 +239,22 @@ def _core_section(client, project_id: int, timezone_offset: int,
 def _hours_section(client, project_id: int, only_closed_stages: bool,
                    closed_stage_names: list[str] | None,
                    single_assignee_only: bool,
-                   timezone_offset: int) -> dict:
-    tasks, available, warnings = fetch_subtasks(
-        client, project_id, only_closed_stages=only_closed_stages,
-        closed_stage_names=closed_stage_names,
-        single_assignee_only=single_assignee_only,
-        timezone_offset=timezone_offset)
+                   timezone_offset: int,
+                   prefetched: tuple[list[dict], list[str], list[str]]
+                   | None = None) -> dict:
+    """prefetched, when given, is the (tasks, available, warnings) tuple
+    fetch_subtasks would otherwise compute itself -- lets project_dashboard
+    fetch sub-tasks once and hand the same result to both this section and
+    _delivery_monthly_section instead of two separate RPCs for the same
+    unfiltered set."""
+    if prefetched is not None:
+        tasks, available, warnings = prefetched
+    else:
+        tasks, available, warnings = fetch_subtasks(
+            client, project_id, only_closed_stages=only_closed_stages,
+            closed_stage_names=closed_stage_names,
+            single_assignee_only=single_assignee_only,
+            timezone_offset=timezone_offset)
     totals = sum_hours(tasks, available)
 
     def leaderboard(group_field: str, id_key: str, label_key: str):
@@ -422,13 +433,25 @@ def _delivery_monthly_section(client, project_id: int,
                               closed_stage_names: list[str] | None,
                               single_assignee_only: bool,
                               periods: list[dict],
-                              timezone_offset: int
+                              timezone_offset: int,
+                              prefetched: tuple[list[dict], list[str], list[str]]
+                              | None = None
                               ) -> tuple[list[dict], list[str]]:
-    tasks, available, warnings = fetch_subtasks(
-        client, project_id, only_closed_stages=only_closed_stages,
-        closed_stage_names=closed_stage_names,
-        single_assignee_only=single_assignee_only,
-        periods=periods, timezone_offset=timezone_offset)
+    """periods are applied in Python via filter_subtasks_by_periods, not as
+    a fetch_subtasks(periods=...) domain -- so this section can share the
+    same unfiltered prefetch as _hours_section instead of re-fetching with
+    its own date_end domain (fetch_subtasks' own periods= kwarg stays as
+    the server-side path for the public project_subtask_hours tool, which
+    is not touched here)."""
+    if prefetched is not None:
+        tasks, available, warnings = prefetched
+    else:
+        tasks, available, warnings = fetch_subtasks(
+            client, project_id, only_closed_stages=only_closed_stages,
+            closed_stage_names=closed_stage_names,
+            single_assignee_only=single_assignee_only,
+            timezone_offset=timezone_offset)
+    tasks = filter_subtasks_by_periods(tasks, periods, timezone_offset)
     by_month, _no_date_end = subtasks_by_month(tasks, available,
                                                timezone_offset)
     return ([{"month": r["month"], "delivery_hours": r["delivery_hours"]}
@@ -526,11 +549,33 @@ def project_dashboard(
                 warnings += core["warnings"]
                 errors.update(core.get("errors", {}))
 
-        if "hours" in wanted:
+        # hours and delivery_monthly both start from the SAME unfiltered
+        # sub-task fetch (delivery_monthly applies its period filter in
+        # Python — see _delivery_monthly_section), so it's fetched once
+        # here and handed to both instead of two identical RPCs. A fault
+        # here is recorded under BOTH names since neither section can run
+        # without it (mirrors attempt()'s soft-fail, just fanned out).
+        shared_tasks = None
+        if "hours" in wanted or "delivery_monthly" in wanted:
+            try:
+                shared_tasks = fetch_subtasks(
+                    client, project_id,
+                    only_closed_stages=only_closed_stages,
+                    closed_stage_names=closed_stage_names,
+                    single_assignee_only=single_assignee_only,
+                    timezone_offset=timezone_offset)
+            except Exception as exc:
+                msg = _error_message(exc)
+                if "hours" in wanted:
+                    errors["hours"] = msg
+                if "delivery_monthly" in wanted:
+                    errors["delivery_monthly"] = msg
+
+        if "hours" in wanted and shared_tasks is not None:
             hours = attempt("hours", lambda: _hours_section(
                 client, project_id, only_closed_stages,
                 closed_stage_names, single_assignee_only,
-                timezone_offset))
+                timezone_offset, prefetched=shared_tasks))
             if hours is not None:
                 report["hours"] = hours["hours"]
                 warnings += hours["warnings"]
@@ -557,14 +602,14 @@ def project_dashboard(
                         warnings.append(
                             f"budget_ids {stale} match no budget of "
                             f"project {project_id}")
-            if "delivery_monthly" in wanted:
+            if "delivery_monthly" in wanted and shared_tasks is not None:
                 _ids, periods, _unknown = _selected(ctx, budget_ids)
 
                 def deliver():
                     rows, warns = _delivery_monthly_section(
                         client, project_id, only_closed_stages,
                         closed_stage_names, single_assignee_only,
-                        periods, timezone_offset)
+                        periods, timezone_offset, prefetched=shared_tasks)
                     warnings.extend(warns)
                     return rows
 

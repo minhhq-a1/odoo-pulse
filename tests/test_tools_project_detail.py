@@ -452,17 +452,61 @@ def test_dashboard_section_soft_fail(fake_client):
 
 def test_dashboard_delivery_monthly_respects_selected_budget_periods(
         fake_client):
+    # NOTE: this test previously asserted a date_end domain leaf on the
+    # project.task search_read. As of the shared-subtask-fetch refactor
+    # (finding #6), delivery_monthly filters by period in Python
+    # (filter_subtasks_by_periods) instead of via a fetch_subtasks(periods=)
+    # domain, so it can share one unfiltered fetch with the hours section.
+    # This test now asserts the filtered RESULT and the single-fetch
+    # guarantee instead of the (now nonexistent) domain leaf.
     _seed_dashboard(fake_client)
+    fake_client.search_responses["project.task"] = [
+        {"id": 1, "user_ids": [11], "date_end": "2025-10-05 10:00:00",
+         "delivery_hours": 10.0, "allocated_hours": 8.0,
+         "effective_hours": 9.5},
+        {"id": 2, "user_ids": [11], "date_end": "2024-01-01 10:00:00",
+         "delivery_hours": 3.0, "allocated_hours": 2.0,
+         "effective_hours": 2.5},   # before the PASX TBS period: excluded
+    ]
     fake_client.aggregate_responses_seq["account.analytic.line"] = []
-    json.loads(project_dashboard(
+    out = json.loads(project_dashboard(
         project_id=59, include=["budgets", "delivery_monthly"]))
+    # PASX TBS period is 2025-03-01..2026-07-31 (+7): only the in-period
+    # task contributes.
+    assert out["delivery_monthly"] == [
+        {"month": "2025-10", "delivery_hours": 10.0}]
     task_reads = [c for c in fake_client.calls
                   if c["method"] == "search_read"
                   and c["model"] == "project.task"]
-    dom = task_reads[-1]["domain"]
-    # PASX TBS period 2025-03-01..2026-07-31 applied to date_end (+7)
-    assert ("date_end", ">=", "2025-02-28 17:00:00") in dom
-    assert ("date_end", "<=", "2026-07-31 16:59:59") in dom
+    assert len(task_reads) == 1          # one shared fetch, not re-fetched
+    assert not any(leaf[0] == "date_end" for leaf in task_reads[0]["domain"]
+                   if isinstance(leaf, tuple))
+
+
+def test_dashboard_shared_subtask_fetch_fails_both_sections(fake_client):
+    _seed_dashboard(fake_client)
+    fake_client.error_models.add("project.task")
+    out = json.loads(project_dashboard(
+        project_id=59, include=["hours", "delivery_monthly"]))
+    assert "hours" not in out and "delivery_monthly" not in out
+    assert out["errors"]["hours"] == out["errors"]["delivery_monthly"]
+    assert out["errors"]["hours"] == "Object project.task doesn't exist"
+
+
+def test_dashboard_hours_and_delivery_monthly_share_one_fetch(fake_client):
+    _seed_dashboard(fake_client)
+    fake_client.aggregate_responses_seq["account.analytic.line"] = [
+        [{"account_id": [5, "AA TBS"], "amount:sum": -1000.0}],
+        [{"account_id": [5, "AA TBS"], "amount:sum": 200.0}],
+        [{"employee_id": [155, "A"], "unit_amount:sum": 320.5}],
+        [{"task_id": [8554, "T"], "unit_amount:sum": 84.0}],
+    ]
+    json.loads(project_dashboard(
+        project_id=59, include=["core", "hours", "delivery_monthly"]))
+    task_reads = [c for c in fake_client.calls
+                  if c["method"] == "search_read"
+                  and c["model"] == "project.task"]
+    assert len(task_reads) == 1
 
 
 def test_dashboard_warns_on_unknown_budget_ids(fake_client):

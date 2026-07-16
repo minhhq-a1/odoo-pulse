@@ -202,6 +202,69 @@ def test_subtasks_by_month_buckets_and_no_date_end(fake_client):
                            "allocated_hours": 1.0, "effective_hours": 1.5}
 
 
+# -- filter_subtasks_by_periods -----------------------------------------------
+
+from odoo_pulse.project_shared import filter_subtasks_by_periods
+
+
+def test_filter_subtasks_by_periods_no_periods_keeps_all(fake_client):
+    _seed_tasks(fake_client)
+    tasks, _, _ = fetch_subtasks(fake_client, 59)
+    assert filter_subtasks_by_periods(tasks, None, 7) == tasks
+    assert filter_subtasks_by_periods(tasks, [], 7) == tasks
+
+
+def test_filter_subtasks_by_periods_excludes_falsy_date_end(fake_client):
+    _seed_tasks(fake_client)
+    tasks, _, _ = fetch_subtasks(fake_client, 59)
+    out = filter_subtasks_by_periods(
+        tasks, [{"date_from": "2025-01-01", "date_to": "2025-12-31"}], 7)
+    # id=3 has date_end=False -> excluded once a period filter is active,
+    # even though a server-side "no filter" would have kept it
+    assert 3 not in {t["id"] for t in out}
+
+
+def test_filter_subtasks_by_periods_or_not_union(fake_client):
+    _seed_tasks(fake_client)
+    tasks, _, _ = fetch_subtasks(fake_client, 59)
+    # id=1: 2025-10-05, id=2: 2025-10-20, id=4: 2025-11-01 02:00 UTC (+7
+    # -> 2025-11-01 local). Two non-adjacent periods: October only, and a
+    # single day in December. Nothing in the gap (Nov) should survive, and
+    # nothing matches the December-only period either.
+    out = filter_subtasks_by_periods(
+        tasks,
+        [{"date_from": "2025-10-01", "date_to": "2025-10-31"},
+         {"date_from": "2025-12-01", "date_to": "2025-12-31"}],
+        7)
+    assert {t["id"] for t in out} == {1, 2}   # id=4 (November) excluded
+
+
+def test_filter_subtasks_by_periods_timezone_crossing_day_boundary(
+        fake_client):
+    _seed_tasks(fake_client)
+    tasks, _, _ = fetch_subtasks(fake_client, 59)
+    # id=4's date_end is 2025-11-01 02:00:00 UTC; at +7 that's 2025-11-01
+    # 09:00 local -> the October-31 period must NOT match, November-1 must.
+    october_31 = filter_subtasks_by_periods(
+        tasks, [{"date_from": "2025-10-31", "date_to": "2025-10-31"}], 7)
+    assert 4 not in {t["id"] for t in october_31}
+    november_1 = filter_subtasks_by_periods(
+        tasks, [{"date_from": "2025-11-01", "date_to": "2025-11-01"}], 7)
+    assert 4 in {t["id"] for t in november_1}
+
+
+def test_filter_subtasks_by_periods_utc_to_local_month_shift():
+    # literal guardrail example: date_end 2025-03-31 18:30:00 UTC + tz 7 ->
+    # local 2025-04-01 -> belongs to the April period, not March.
+    tasks = [{"id": 1, "date_end": "2025-03-31 18:30:00"}]
+    march = filter_subtasks_by_periods(
+        tasks, [{"date_from": "2025-03-01", "date_to": "2025-03-31"}], 7)
+    assert march == []
+    april = filter_subtasks_by_periods(
+        tasks, [{"date_from": "2025-04-01", "date_to": "2025-04-30"}], 7)
+    assert april == tasks
+
+
 # -- derive_project_health ----------------------------------------------------
 
 import datetime as dt

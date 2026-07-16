@@ -282,6 +282,38 @@ def subtasks_by_month(
     return by_month, sum_hours(undated, available)
 
 
+def filter_subtasks_by_periods(
+    tasks: list[dict], periods: list[dict] | None, timezone_offset: int
+) -> list[dict]:
+    """Python-side equivalent of adding periods_domain("date_end", periods,
+    timezone_offset) to fetch_subtasks' domain.
+
+    Same semantics as the server-side domain: OR-of-ranges (a task matching
+    ANY period is kept, not just tasks inside the min..max span across all
+    periods), no periods -> no filter at all, and — once a period filter IS
+    active — tasks without date_end are excluded (a domain comparison
+    against a null date_end matches nothing server-side; here that has to
+    be done explicitly rather than falling out of the comparison).
+    """
+    if not periods:
+        return list(tasks)
+    ranges = [
+        (_parse_ymd(p["date_from"], "date_from") if p.get("date_from")
+         else None,
+         _parse_ymd(p["date_to"], "date_to") if p.get("date_to") else None)
+        for p in periods
+    ]
+    out = []
+    for t in tasks:
+        day = parse_when(t.get("date_end"), timezone_offset)
+        if day is None:
+            continue
+        if any((lo is None or day >= lo) and (hi is None or day <= hi)
+               for lo, hi in ranges):
+            out.append(t)
+    return out
+
+
 def derive_project_health(
     project_row: dict,
     milestones: list[dict],
