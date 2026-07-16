@@ -568,3 +568,26 @@ def test_portfolio_health_sorts_riskiest_first_and_filters(fake_client):
     assert ("user_id.name", "ilike", "PM") in proj_call["domain"]
     assert ("last_update_status", "!=", "done") in proj_call["domain"]
     assert any(r["code"] == "overdue_milestones" for r in out["risks"])
+
+
+def test_portfolio_health_degrades_on_milestone_truncation(fake_client):
+    fake_client.fields_responses["project.project"] = dict(_PROJECT_SCHEMA)
+    fake_client.search_responses["project.project"] = [
+        {"id": 1, "name": "Alpha", "user_id": False, "partner_id": False,
+         "date": False, "task_count": 1,
+         "last_update_status": "on_track", "account_id": False},
+    ]
+    fake_client.search_responses["project.milestone"] = [
+        {"id": 100 + i, "name": f"M{i}", "deadline": "2026-12-01",
+         "is_reached": True, "project_id": [1, "Alpha"]}
+        for i in range(200)
+    ]
+    fake_client.search_count_responses["project.milestone"] = 205
+    fake_client.aggregate_responses_seq["account.analytic.line"] = [[]]
+    fake_client.error_models.add("budget.line")
+    fake_client.error_models.add("crossovered.budget.lines")
+    out = json.loads(portfolio_health())
+    assert "error" not in out                   # degrades, does not fail
+    assert len(out["projects"]) == 1
+    codes = {r["code"]: r for r in out["risks"]}
+    assert codes["truncated_milestone_data"]["count"] == 5

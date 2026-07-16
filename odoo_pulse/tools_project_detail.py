@@ -665,13 +665,14 @@ def portfolio_health(
         rev_by: dict[int, float] = {}
         budgets: dict[int, float] = {}
         budgets_available = False
+        milestones_truncation = None
         if ids:
-            milestones = paged_search_read(
+            milestones, milestones_truncation = fetch_with_truncation(
                 client, "project.milestone",
                 [("project_id", "in", ids)],
                 fields=["id", "name", "deadline", "is_reached",
                         "project_id"],
-                order="deadline")
+                limit=200, order="deadline")
             for m in milestones:
                 pid = m["project_id"][0] if m.get("project_id") else None
                 if pid is not None:
@@ -749,6 +750,15 @@ def portfolio_health(
                 "message": (
                     f"Report covers only {truncation['fetched']} of "
                     f"{truncation['total_matching']} matching projects.")})
+        if milestones_truncation:
+            risks.append({
+                "code": "truncated_milestone_data",
+                "count": milestones_truncation["missing"],
+                "message": (
+                    f"Report covers only {milestones_truncation['fetched']} "
+                    f"of {milestones_truncation['total_matching']} matching "
+                    "milestone(s); per-project milestone counts may be "
+                    "incomplete.")})
         if off_track:
             risks.append({"code": "off_track_projects", "count": off_track,
                           "message": f"{off_track} project(s) off track"})
