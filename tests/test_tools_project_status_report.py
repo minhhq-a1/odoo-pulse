@@ -244,3 +244,14 @@ def test_watch_verdict_when_only_at_risk(fake_client, monkeypatch):
     assert out["summary"]["verdict"] == "watch"
     assert out["summary"]["at_risk"] == 1
     assert out["summary"]["divergent"] == 0
+
+
+def test_rows_carry_project_id(fake_client):
+    fake_client.search_responses["project.project"] = [
+        {"id": 59, "name": "The Body Shop", "user_id": [7, "PM"],
+         "partner_id": False, "date_start": False, "date": False,
+         "last_update_status": "on_track", "task_count": 744},
+    ]
+    fake_client.search_responses["project.milestone"] = []
+    out = json.loads(tools_workflows.project_status_report())
+    assert out["breakdown"]["by_project"][0]["project_id"] == 59

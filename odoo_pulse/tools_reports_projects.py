@@ -282,6 +282,7 @@ def project_budget(
             t_uncaptured += uncaptured or 0.0
 
             rows_out.append({
+                "project_id": pid,
                 "project": p["name"],
                 "manager": p["user_id"][1] if p.get("user_id") else None,
                 "customer": (p["partner_id"][1]
@@ -667,6 +668,7 @@ def project_profitability(
                 t_budget += budget
 
             rows_out.append({
+                "project_id": pid,
                 "project": p["name"],
                 "manager": p["user_id"][1] if p.get("user_id") else None,
                 "customer": p["partner_id"][1] if p.get("partner_id") else None,

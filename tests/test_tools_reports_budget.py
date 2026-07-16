@@ -143,6 +143,7 @@ def test_rows_sorted_and_shaped(fake_client):
     rows = out["breakdown"]["projects"]
     assert [r["project"] for r in rows] == ["Alpha", "Beta"]  # at_risk first
     assert rows[0] == {
+        "project_id": 1,
         "project": "Alpha", "manager": "Mai", "customer": "Acme",
         "budgets": ["PASX A"], "lines": 2,
         "planned": 1500.0, "practical": 1300.0, "burn_pct": 86.7,
@@ -270,3 +271,13 @@ def test_envelope_shape(fake_client, monkeypatch):
     assert out["highlights"][0] == (
         "1400.0 spent of 1900.0 planned across 2 project(s)")
     assert "worst burn: Alpha at 86.7%" in out["highlights"]
+
+
+def test_budget_rows_carry_project_id(fake_client):
+    _seed(fake_client)
+    out = json.loads(tools_reports_projects.project_budget())
+    first = out["breakdown"]["projects"][0]
+    assert isinstance(first["project_id"], int)
+    seeded = {p["id"] for p in
+              fake_client.search_responses["project.project"]}
+    assert first["project_id"] in seeded

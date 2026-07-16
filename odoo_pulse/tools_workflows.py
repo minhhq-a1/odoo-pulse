@@ -334,6 +334,7 @@ def project_status_report(
                 divergent += 1
 
             rows.append({
+                "project_id": p["id"],
                 "project": p["name"],
                 "manager": p["user_id"][1] if p.get("user_id") else None,
                 "customer": p["partner_id"][1] if p.get("partner_id") else None,

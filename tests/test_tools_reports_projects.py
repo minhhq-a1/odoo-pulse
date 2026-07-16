@@ -231,6 +231,7 @@ def test_rows_sorted_by_verdict_then_burn(fake_client):
     assert [r["project"] for r in rows] == ["Alpha", "Beta"]
     alpha = rows[0]
     assert alpha == {
+        "project_id": 1,
         "project": "Alpha", "manager": "Mai", "customer": "Acme",
         "hours_logged": 90.0, "hours_allocated": 100.0,
         "hours_burn_pct": 90.0, "cost": 8000.0, "revenue": 12000.0,
@@ -446,3 +447,13 @@ def test_allocated_hours_field_absent(fake_client):
     assert row["hours_burn_pct"] is None
     assert row["verdict"] == "on_track"  # nothing to burn against
     assert "no_allocation" in {r["code"] for r in out["risks"]}
+
+
+def test_profitability_rows_carry_project_id(fake_client):
+    _seed_portfolio(fake_client)
+    out = json.loads(tools_reports_projects.project_profitability())
+    first = out["breakdown"]["projects"][0]
+    assert isinstance(first["project_id"], int)
+    seeded = {p["id"] for p in
+              fake_client.search_responses["project.project"]}
+    assert first["project_id"] in seeded
