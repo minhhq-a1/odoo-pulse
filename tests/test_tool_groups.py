@@ -28,7 +28,7 @@ def test_modules_to_load_default(monkeypatch):
         "tools_generic", "tools_write", "resources", "tools_workflows",
         "tools_reports_sales", "tools_reports_finance", "tools_reports_inventory",
         "tools_reports_hr", "tools_reports_pulse", "tools_reports_ops",
-        "tools_reports_projects",
+        "tools_reports_projects", "tools_project_detail",
     ]
 
 
@@ -42,7 +42,7 @@ def test_modules_to_load_deduplicates():
         "tools_generic", "tools_write", "resources", "tools_workflows",
         "tools_reports_sales", "tools_reports_finance", "tools_reports_inventory",
         "tools_reports_hr", "tools_reports_pulse", "tools_reports_ops",
-        "tools_reports_projects",
+        "tools_reports_projects", "tools_project_detail",
     ]
 
 
