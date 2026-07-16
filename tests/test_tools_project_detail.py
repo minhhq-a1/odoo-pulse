@@ -410,3 +410,70 @@ def test_dashboard_delivery_monthly_respects_selected_budget_periods(
     # PASX TBS period 2025-03-01..2026-07-31 applied to date_end (+7)
     assert ("date_end", ">=", "2025-02-28 17:00:00") in dom
     assert ("date_end", "<=", "2026-07-31 16:59:59") in dom
+
+
+from odoo_pulse.tools_project_detail import portfolio_health
+
+
+def test_portfolio_health_joins_by_id_two_projects_same_name(fake_client):
+    fake_client.fields_responses["project.project"] = dict(_PROJECT_SCHEMA)
+    fake_client.search_responses["project.project"] = [
+        {"id": 1, "name": "Internal", "user_id": [7, "PM A"],
+         "partner_id": False, "date": False, "task_count": 5,
+         "last_update_status": "on_track", "delivery_hours": 0.0,
+         "account_id": [101, "AA-1"]},
+        {"id": 2, "name": "Internal", "user_id": [8, "PM B"],
+         "partner_id": False, "date": False, "task_count": 9,
+         "last_update_status": "on_track", "delivery_hours": 0.0,
+         "account_id": [102, "AA-2"]},
+    ]
+    fake_client.search_responses["project.milestone"] = []
+    # order: hours by project, then analytic_money (cost, revenue)
+    fake_client.aggregate_responses_seq["account.analytic.line"] = [
+        [{"project_id": [1, "Internal"], "unit_amount:sum": 10.0},
+         {"project_id": [2, "Internal"], "unit_amount:sum": 20.0}],
+        [{"account_id": [101, "AA-1"], "amount:sum": -500.0}],
+        [{"account_id": [102, "AA-2"], "amount:sum": 700.0}],
+    ]
+    # no usable budget model
+    fake_client.error_models.add("budget.line")
+    fake_client.error_models.add("crossovered.budget.lines")
+    out = json.loads(portfolio_health())
+    rows = out["projects"]
+    assert len(rows) == 2                       # NOT merged by name
+    assert {r["project_id"] for r in rows} == {1, 2}
+    assert all(r["project"] == "Internal" for r in rows)
+    by_id = {r["project_id"]: r for r in rows}
+    assert by_id[1]["cost"] == 500.0            # positive cost
+    assert by_id[2]["revenue"] == 700.0
+    assert by_id[1]["budget"] is None           # budgets unavailable
+    assert out["tool"] == "portfolio_health"
+
+
+def test_portfolio_health_sorts_riskiest_first_and_filters(fake_client):
+    fake_client.fields_responses["project.project"] = dict(_PROJECT_SCHEMA)
+    fake_client.search_responses["project.project"] = [
+        {"id": 1, "name": "Alpha", "user_id": False, "partner_id": False,
+         "date": False, "task_count": 1,
+         "last_update_status": "on_track", "account_id": False},
+        {"id": 2, "name": "Beta", "user_id": False, "partner_id": False,
+         "date": False, "task_count": 1,
+         "last_update_status": "on_track", "account_id": False},
+    ]
+    fake_client.search_responses["project.milestone"] = [
+        {"id": 9, "name": "Late", "deadline": "2020-01-01",
+         "is_reached": False, "project_id": [2, "Beta"]},
+    ]
+    fake_client.aggregate_responses_seq["account.analytic.line"] = [[]]
+    fake_client.error_models.add("budget.line")
+    fake_client.error_models.add("crossovered.budget.lines")
+    out = json.loads(portfolio_health(manager="PM", include_done=False))
+    rows = out["projects"]
+    assert rows[0]["project_id"] == 2           # off_track first
+    assert rows[0]["derived_health"] == "off_track"
+    proj_call = next(c for c in fake_client.calls
+                     if c["method"] == "search_read"
+                     and c["model"] == "project.project")
+    assert ("user_id.name", "ilike", "PM") in proj_call["domain"]
+    assert ("last_update_status", "!=", "done") in proj_call["domain"]
+    assert any(r["code"] == "overdue_milestones" for r in out["risks"])

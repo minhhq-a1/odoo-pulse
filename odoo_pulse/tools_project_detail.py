@@ -20,6 +20,7 @@ from .project_shared import (
     _PARENT_CANDIDATES,
     _PARENT_MODEL,
     _PRACTICAL_CANDIDATES,
+    _budget_by_project,
     _budget_sources,
     analytic_money,
     derive_project_health,
@@ -30,7 +31,12 @@ from .project_shared import (
     sum_hours,
 )
 from .runtime import get_client, mcp, safe
-from .workflow_helpers import optional_fields, parse_when, today_in_tz
+from .workflow_helpers import (
+    fetch_with_truncation,
+    optional_fields,
+    parse_when,
+    today_in_tz,
+)
 
 
 @mcp.tool()
@@ -547,5 +553,181 @@ def project_dashboard(
         if errors:
             report["errors"] = errors
         return report
+
+    return safe(run)
+
+
+@mcp.tool()
+def portfolio_health(
+    manager: str | None = None,
+    customer: str | None = None,
+    include_on_hold: bool = True,
+    include_done: bool = False,
+    lookahead_days: int = 7,
+    timezone_offset: int = 7,
+) -> str:
+    """Portfolio overview: one row per project, joined by id server-side.
+
+    Replaces the project_status_report + project_profitability pair the
+    overview tab used to call and join BY NAME in JS (which broke on
+    duplicate project names). Returns raw signals only — the client
+    computes its own health score from user-configured thresholds.
+
+    Args:
+        manager: Optional project-manager filter (user_id.name ilike).
+        customer: Optional customer filter (partner_id.name ilike).
+        include_on_hold: Keep on_hold projects (default True).
+        include_done: Keep done projects (default False).
+        lookahead_days: "due soon" window for derived health (default 7).
+        timezone_offset: UTC offset for dates (default 7).
+    """
+
+    def run() -> dict:
+        client = get_client()
+        today = today_in_tz(timezone_offset)
+        cutoff = today + timedelta(days=lookahead_days)
+
+        domain: list = [("active", "=", True)]
+        if manager:
+            domain.append(("user_id.name", "ilike", manager))
+        if customer:
+            domain.append(("partner_id.name", "ilike", customer))
+        if not include_done:
+            domain.append(("last_update_status", "!=", "done"))
+        if not include_on_hold:
+            domain.append(("last_update_status", "!=", "on_hold"))
+
+        opt = optional_fields(client, "project.project",
+                              ["allocated_hours", "account_id",
+                               "analytic_account_id"])
+        projects, truncation = fetch_with_truncation(
+            client, "project.project", domain,
+            fields=["id", "name", "user_id", "partner_id", "date",
+                    "task_count", "last_update_status", *opt],
+            limit=200, order="name")
+
+        ids = [p["id"] for p in projects]
+        acct_field = next((f for f in ("account_id",
+                                       "analytic_account_id")
+                           if f in opt), None)
+        acct_by_project = {p["id"]: p[acct_field][0] for p in projects
+                           if acct_field and p.get(acct_field)}
+        account_ids = sorted(set(acct_by_project.values()))
+        has_alloc = "allocated_hours" in opt
+
+        ms_by_project: dict[int, list] = {}
+        hours_by_project: dict[int, float] = {}
+        cost_by: dict[int, float] = {}
+        rev_by: dict[int, float] = {}
+        budgets: dict[int, float] = {}
+        budgets_available = False
+        if ids:
+            milestones = paged_search_read(
+                client, "project.milestone",
+                [("project_id", "in", ids)],
+                fields=["id", "name", "deadline", "is_reached",
+                        "project_id"],
+                order="deadline")
+            for m in milestones:
+                pid = m["project_id"][0] if m.get("project_id") else None
+                if pid is not None:
+                    ms_by_project.setdefault(pid, []).append(m)
+            hours_agg = client.aggregate_records(
+                "account.analytic.line", group_by=["project_id"],
+                measures=[("unit_amount", "sum")],
+                domain=[("project_id", "in", ids)])
+            for row in hours_agg.get("rows", []):
+                m2o = row.get("project_id")
+                if m2o:
+                    hours_by_project[m2o[0]] = (
+                        row.get("unit_amount:sum") or 0.0)
+            cost_by, rev_by = analytic_money(client, account_ids)
+            budgets, budgets_available = _budget_by_project(
+                client, ids, acct_by_project)
+
+        rows_out: list[dict] = []
+        off_track = total_overdue = divergent = past_end = 0
+        for p in projects:
+            pid = p["id"]
+            h = derive_project_health(
+                p, ms_by_project.get(pid, []), today, cutoff,
+                timezone_offset)
+            acct_id = acct_by_project.get(pid)
+            cost = cost_by.get(acct_id, 0.0) if acct_id is not None else 0.0
+            revenue = (rev_by.get(acct_id, 0.0)
+                       if acct_id is not None else 0.0)
+            budget = budgets.get(pid) if budgets_available else None
+            alloc = (p.get("allocated_hours") or 0.0) if has_alloc else 0.0
+            hours = hours_by_project.get(pid, 0.0)
+
+            if h["derived_health"] == "off_track":
+                off_track += 1
+            total_overdue += h["overdue"]
+            if h["divergent"]:
+                divergent += 1
+            if h["past_end"]:
+                past_end += 1
+
+            rows_out.append({
+                "project_id": pid,
+                "project": p["name"],
+                "manager": p["user_id"][1] if p.get("user_id") else None,
+                "customer": (p["partner_id"][1]
+                             if p.get("partner_id") else None),
+                "end_date": p.get("date") or None,
+                "task_count": p.get("task_count", 0),
+                "milestones": {"reached": h["reached"],
+                               "total": h["total"]},
+                "overdue_milestones": h["overdue"],
+                "next_milestone": h["next_milestone"],
+                "native_status": h["native_status"],
+                "derived_health": h["derived_health"],
+                "divergent": h["divergent"],
+                "revenue": round(revenue, 2),
+                "cost": round(cost, 2),
+                "margin": round(revenue - cost, 2),
+                "budget": round(budget, 2) if budget is not None else None,
+                "budget_burn_pct": (round(cost / budget * 100, 1)
+                                    if budget else None),
+                "hours_burn_pct": (round(hours / alloc * 100, 1)
+                                   if alloc else None),
+            })
+
+        rank = {"off_track": 0, "at_risk": 1, "on_track": 2}
+        rows_out.sort(key=lambda r: (rank[r["derived_health"]],
+                                     -r["overdue_milestones"],
+                                     r["project"]))
+
+        risks: list[dict] = []
+        if truncation:
+            risks.append({
+                "code": "truncated_data", "count": truncation["missing"],
+                "message": (
+                    f"Report covers only {truncation['fetched']} of "
+                    f"{truncation['total_matching']} matching projects.")})
+        if off_track:
+            risks.append({"code": "off_track_projects", "count": off_track,
+                          "message": f"{off_track} project(s) off track"})
+        if total_overdue:
+            risks.append({
+                "code": "overdue_milestones", "count": total_overdue,
+                "message": (f"{total_overdue} milestone(s) overdue and "
+                            "unreached")})
+        if past_end:
+            risks.append({
+                "code": "past_end_projects", "count": past_end,
+                "message": f"{past_end} project(s) past their end date"})
+        if divergent:
+            risks.append({
+                "code": "health_divergence", "count": divergent,
+                "message": (f"{divergent} project(s) declared healthier "
+                            "than the data")})
+
+        return {"tool": "portfolio_health", "as_of": today.isoformat(),
+                "filters": {"manager": manager, "customer": customer,
+                            "include_on_hold": include_on_hold,
+                            "include_done": include_done},
+                "budgets_available": budgets_available,
+                "projects": rows_out, "risks": risks}
 
     return safe(run)
