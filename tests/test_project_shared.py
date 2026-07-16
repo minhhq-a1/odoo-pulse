@@ -2,7 +2,14 @@
 import pytest
 
 from odoo_pulse.odoo_client import OdooError
-from odoo_pulse.project_shared import paged_search_read, periods_domain
+from odoo_pulse.project_shared import (
+    DEFAULT_CLOSED_STAGES,
+    fetch_subtasks,
+    paged_search_read,
+    periods_domain,
+    subtasks_by_month,
+    sum_hours,
+)
 
 
 # -- periods_domain ----------------------------------------------------------
@@ -85,3 +92,111 @@ def test_paged_search_read_runaway_guard(fake_client):
     with pytest.raises(OdooError, match="more than"):
         paged_search_read(fake_client, "project.task", [], ["id"],
                           max_pages=3)
+
+
+# -- fetch_subtasks, sum_hours, subtasks_by_month ----------------------------
+
+_TASK_SCHEMA = {
+    "name": {"type": "char"}, "user_ids": {"type": "many2many"},
+    "date_end": {"type": "datetime"}, "delivery_hours": {"type": "float"},
+    "allocated_hours": {"type": "float"}, "effective_hours": {"type": "float"},
+}
+
+
+def _seed_tasks(fake, schema=None):
+    fake.fields_responses["project.task"] = schema or dict(_TASK_SCHEMA)
+    fake.search_responses["project.task"] = [
+        {"id": 1, "user_ids": [11], "date_end": "2025-10-05 10:00:00",
+         "delivery_hours": 10.0, "allocated_hours": 8.0,
+         "effective_hours": 9.5},
+        {"id": 2, "user_ids": [11, 12], "date_end": "2025-10-20 10:00:00",
+         "delivery_hours": 5.0, "allocated_hours": 4.0,
+         "effective_hours": 4.5},
+        {"id": 3, "user_ids": [], "date_end": False,
+         "delivery_hours": 2.0, "allocated_hours": 1.0,
+         "effective_hours": 1.5},
+        {"id": 4, "user_ids": [13], "date_end": "2025-11-01 02:00:00",
+         "delivery_hours": 7.0, "allocated_hours": 6.0,
+         "effective_hours": 6.5},
+    ]
+
+
+def test_fetch_subtasks_domain_and_no_filters(fake_client):
+    _seed_tasks(fake_client)
+    tasks, available, warnings = fetch_subtasks(fake_client, 59)
+    call = fake_client.last("search_read")
+    assert call["model"] == "project.task"
+    assert ("project_id", "=", 59) in call["domain"]
+    assert ("parent_id", "!=", False) in call["domain"]
+    assert len(tasks) == 4
+    assert available == ["delivery_hours", "allocated_hours",
+                         "effective_hours"]
+    assert warnings == []
+
+
+def test_fetch_subtasks_closed_stage_domain_default_and_custom(fake_client):
+    _seed_tasks(fake_client)
+    fetch_subtasks(fake_client, 59, only_closed_stages=True)
+    call = fake_client.last("search_read")
+    assert ("stage_id.name", "in", list(DEFAULT_CLOSED_STAGES)) \
+        in call["domain"]
+    fetch_subtasks(fake_client, 59, only_closed_stages=True,
+                   closed_stage_names=["Hoàn thành"])
+    call = fake_client.last("search_read")
+    assert ("stage_id.name", "in", ["Hoàn thành"]) in call["domain"]
+
+
+def test_fetch_subtasks_single_assignee_zero_one_two(fake_client):
+    _seed_tasks(fake_client)
+    tasks, _, _ = fetch_subtasks(fake_client, 59,
+                                 single_assignee_only=True)
+    # id=1 (one assignee) and id=4 kept; id=2 (two) and id=3 (zero) dropped
+    assert [t["id"] for t in tasks] == [1, 4]
+
+
+def test_fetch_subtasks_periods_land_on_date_end(fake_client):
+    _seed_tasks(fake_client)
+    fetch_subtasks(
+        fake_client, 59,
+        periods=[{"date_from": "2025-10-01", "date_to": "2025-10-31"}],
+        timezone_offset=7)
+    call = fake_client.last("search_read")
+    assert ("date_end", ">=", "2025-09-30 17:00:00") in call["domain"]
+    assert ("date_end", "<=", "2025-10-31 16:59:59") in call["domain"]
+
+
+def test_fetch_subtasks_missing_delivery_hours_degrades(fake_client):
+    schema = dict(_TASK_SCHEMA)
+    del schema["delivery_hours"]
+    _seed_tasks(fake_client, schema=schema)
+    # canned rows still carry the key; availability is schema-driven
+    tasks, available, warnings = fetch_subtasks(fake_client, 59)
+    assert "delivery_hours" not in available
+    assert warnings == \
+        ["field delivery_hours does not exist on project.task"]
+    totals = sum_hours(tasks, available)
+    assert totals["delivery_hours"] is None
+    assert totals["allocated_hours"] == 19.0
+
+
+def test_sum_hours_totals(fake_client):
+    _seed_tasks(fake_client)
+    tasks, available, _ = fetch_subtasks(fake_client, 59)
+    totals = sum_hours(tasks, available)
+    assert totals == {"task_count": 4, "delivery_hours": 24.0,
+                      "allocated_hours": 19.0, "effective_hours": 22.0}
+
+
+def test_subtasks_by_month_buckets_and_no_date_end(fake_client):
+    _seed_tasks(fake_client)
+    tasks, available, _ = fetch_subtasks(fake_client, 59)
+    by_month, no_date_end = subtasks_by_month(tasks, available, 7)
+    assert [r["month"] for r in by_month] == ["2025-10", "2025-11"]
+    oct_row = by_month[0]
+    assert oct_row["task_count"] == 2
+    assert oct_row["delivery_hours"] == 15.0
+    # id=4 ends 2025-11-01 02:00 UTC -> 09:00 local (+7), stays November
+    assert by_month[1]["task_count"] == 1
+    # id=3 has no date_end -> excluded from months, reported separately
+    assert no_date_end == {"task_count": 1, "delivery_hours": 2.0,
+                           "allocated_hours": 1.0, "effective_hours": 1.5}
