@@ -2,7 +2,7 @@
 
 Importing a tool module registers its @mcp.tool() / @mcp.resource()
 functions as a side effect, so choosing which modules server.py imports
-IS the tool filter. Default surface is core + reports (28 tools + the
+IS the tool filter. Default surface is core + reports (31 tools + the
 odoo://{model}/{id} resource); the breadth wrappers are opt-in groups so
 they don't bloat the client's context window.
 """
