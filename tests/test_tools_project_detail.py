@@ -543,6 +543,20 @@ def test_dashboard_warns_on_unknown_budget_ids(fake_client):
     assert any("999" in w for w in out["warnings"])
 
 
+def test_dashboard_warns_on_unknown_budget_ids_without_budget_detail(
+        fake_client):
+    # The warning must fire regardless of which budget_ids-consuming
+    # section was requested -- a stale id should not go unnoticed just
+    # because budget_detail wasn't in `include` this call.
+    _seed_dashboard(fake_client)
+    fake_client.aggregate_responses_seq["account.analytic.line"] = []
+    out = json.loads(project_dashboard(
+        project_id=59, budget_ids=[12, 999],
+        include=["budgets", "delivery_monthly"]))
+    assert "budget_detail" not in out
+    assert any("999" in w for w in out["warnings"])
+
+
 def test_dashboard_prefixes_non_odoo_errors_as_internal(fake_client):
     _seed_dashboard(fake_client)
     fake_client.search_responses["project.milestone"] = [

@@ -609,6 +609,16 @@ def project_dashboard(
                           lambda: _budget_context(client, project_id,
                                                   core_row))
         if ctx is not None:
+            # Unknown budget_ids matter regardless of which budget section
+            # was requested -- a stale/typo'd id should not silently look
+            # like "select none" just because budget_detail wasn't in
+            # `include` this call (finding #1's guarantee must hold for
+            # every budget_ids-consuming section, not only budget_detail).
+            _sel_ids, _sel_periods, unknown_ids = _selected(ctx, budget_ids)
+            if unknown_ids:
+                warnings.append(
+                    f"budget_ids {unknown_ids} match no budget of "
+                    f"project {project_id}")
             if "budgets" in wanted:
                 report["budgets"] = ctx["budgets"]
             if "budget_detail" in wanted:
@@ -618,11 +628,6 @@ def project_dashboard(
                                      budget_ids, timezone_offset))
                 if detail is not None:
                     report["budget_detail"] = detail
-                    stale = detail.get("unknown_budget_ids")
-                    if stale:
-                        warnings.append(
-                            f"budget_ids {stale} match no budget of "
-                            f"project {project_id}")
             if "delivery_monthly" in wanted and shared_tasks is not None:
                 _ids, periods, _unknown = _selected(ctx, budget_ids)
 
