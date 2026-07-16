@@ -10,6 +10,8 @@ practical figures — spec rule #7).
 
 from __future__ import annotations
 
+from datetime import datetime, time as dt_time, timedelta
+
 from .odoo_client import OdooError
 from .workflow_helpers import optional_fields
 
@@ -119,3 +121,93 @@ def _budget_by_project(
         budgets.update(by_project)
         return budgets, True
     return {}, False
+
+
+def _parse_ymd(value, param: str):
+    try:
+        return datetime.strptime(str(value)[:10], "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        raise OdooError(f"Invalid {param} {value!r}: expected YYYY-MM-DD")
+
+
+def periods_domain(
+    field: str,
+    periods: list[dict] | None,
+    timezone_offset: int,
+    as_datetime: bool = True,
+) -> list:
+    """OR-of-closed-ranges domain on `field` (spec: OR between periods,
+    NOT a union — gaps between non-adjacent budgets stay excluded).
+
+    as_datetime=True: bounds are local 00:00:00 / 23:59:59 at
+    timezone_offset, converted to UTC datetime strings. False: plain
+    YYYY-MM-DD strings for date (not datetime) fields.
+    """
+    subs: list[list] = []
+    for i, period in enumerate(periods or []):
+        d_from = (period or {}).get("date_from")
+        d_to = (period or {}).get("date_to")
+        if not d_from and not d_to:
+            raise OdooError(
+                f"periods[{i}] needs date_from and/or date_to")
+        leaves: list = []
+        if d_from:
+            day = _parse_ymd(d_from, f"periods[{i}].date_from")
+            if as_datetime:
+                low = (datetime.combine(day, dt_time.min)
+                       - timedelta(hours=timezone_offset)
+                       ).strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                low = day.isoformat()
+            leaves.append((field, ">=", low))
+        if d_to:
+            day = _parse_ymd(d_to, f"periods[{i}].date_to")
+            if as_datetime:
+                high = (datetime.combine(day, dt_time(23, 59, 59))
+                        - timedelta(hours=timezone_offset)
+                        ).strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                high = day.isoformat()
+            leaves.append((field, "<=", high))
+        subs.append(leaves)
+    if not subs:
+        return []
+    if len(subs) == 1:
+        return subs[0]
+    out: list = ["|"] * (len(subs) - 1)
+    for leaves in subs:
+        if len(leaves) == 2:
+            out.append("&")
+        out.extend(leaves)
+    return out
+
+
+def paged_search_read(
+    client,
+    model: str,
+    domain: list,
+    fields: list[str],
+    page: int = 500,
+    max_pages: int = 50,
+    order: str = "id",
+) -> list[dict]:
+    """Fetch ALL matching rows by offset pagination, server-side.
+
+    The MCP client still sees one tool call; only this process talks to
+    Odoo repeatedly. Page size respects client.config.max_records the same
+    way client.search_read caps limits. A stable `order` keeps pages
+    non-overlapping. Stops on the first short page; raises past max_pages
+    so a runaway filter cannot loop forever.
+    """
+    step = min(page, client.config.max_records)
+    rows: list[dict] = []
+    for i in range(max_pages):
+        batch = client.search_read(
+            model, domain=domain, fields=fields,
+            limit=step, offset=i * step, order=order)
+        rows.extend(batch)
+        if len(batch) < step:
+            return rows
+    raise OdooError(
+        f"{model}: more than {max_pages * step} rows match; "
+        "narrow the filters.")
