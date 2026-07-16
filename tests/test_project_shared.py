@@ -239,18 +239,18 @@ def test_filter_subtasks_by_periods_or_not_union(fake_client):
     assert {t["id"] for t in out} == {1, 2}   # id=4 (November) excluded
 
 
-def test_filter_subtasks_by_periods_timezone_crossing_day_boundary(
-        fake_client):
-    _seed_tasks(fake_client)
-    tasks, _, _ = fetch_subtasks(fake_client, 59)
-    # id=4's date_end is 2025-11-01 02:00:00 UTC; at +7 that's 2025-11-01
-    # 09:00 local -> the October-31 period must NOT match, November-1 must.
+def test_filter_subtasks_by_periods_timezone_crossing_day_boundary():
+    # date_end 2025-10-31 18:30:00 UTC crosses midnight at +7 -> local
+    # 2025-11-01 01:30:00. The October-31 period must NOT match; the
+    # November-1 period must -- this only holds if the UTC->local shift is
+    # actually applied before comparing against the period bounds.
+    tasks = [{"id": 4, "date_end": "2025-10-31 18:30:00"}]
     october_31 = filter_subtasks_by_periods(
         tasks, [{"date_from": "2025-10-31", "date_to": "2025-10-31"}], 7)
-    assert 4 not in {t["id"] for t in october_31}
+    assert october_31 == []
     november_1 = filter_subtasks_by_periods(
         tasks, [{"date_from": "2025-11-01", "date_to": "2025-11-01"}], 7)
-    assert 4 in {t["id"] for t in november_1}
+    assert november_1 == tasks
 
 
 def test_filter_subtasks_by_periods_utc_to_local_month_shift():
