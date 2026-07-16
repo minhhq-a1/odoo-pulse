@@ -44,13 +44,15 @@ _TIMESHEET_HINT = ("Timesheets require the hr_timesheet app; install it to "
 
 
 def _validate_date(value: str | None, param: str) -> str | None:
-    """YYYY-MM-DD passthrough; garbage -> clean OdooError. Delegates the
-    actual parsing to project_shared._parse_ymd (same helper periods_domain
-    uses) instead of a second, independently-maintained validator."""
+    """YYYY-MM-DD normalising validator; garbage -> clean OdooError.
+    Delegates the actual parsing to project_shared._parse_ymd (same helper
+    periods_domain uses) instead of a second, independently-maintained
+    validator. Returns the PARSED date, not a slice of the raw input:
+    _parse_ymd tolerates surrounding whitespace, so slicing " 2026-07-01"
+    would leak the garbage " 2026-07-0" into a domain."""
     if not value:
         return None
-    _parse_ymd(value, param)
-    return str(value)[:10]
+    return _parse_ymd(value, param).isoformat()
 
 
 def _verdict(

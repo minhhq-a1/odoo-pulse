@@ -23,6 +23,10 @@ def test_validate_date_passthrough_and_error():
         _validate_date("notadate", "date_from")
     with pytest.raises(OdooError, match="Invalid date_from"):
         _validate_date("2026-07-01xyz", "date_from")
+    # surrounding whitespace passes validation (parse strips it), so the
+    # returned string must be the parsed date -- not a slice of the raw
+    # input, which for " 2026-07-01" would be the garbage " 2026-07-0".
+    assert _validate_date(" 2026-07-01 ", "date_from") == "2026-07-01"
 
 
 def test_verdict_boundaries_and_worst_of_two():

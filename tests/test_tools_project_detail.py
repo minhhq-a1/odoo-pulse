@@ -557,6 +557,25 @@ def test_dashboard_warns_on_unknown_budget_ids_without_budget_detail(
     assert any("999" in w for w in out["warnings"])
 
 
+def test_dashboard_budget_context_failure_lands_on_every_budget_section(
+        fake_client):
+    # _budget_context feeds budgets, budget_detail AND delivery_monthly;
+    # when it fails, every requested one must land in errors -- a
+    # requested section must never vanish from both the report and
+    # errors (same fan-out contract as the shared sub-task fetch).
+    _seed_dashboard(fake_client)
+    # no core in include -> _budget_context self-fetches project.project,
+    # which is the call made to fail here.
+    fake_client.error_models.add("project.project")
+    out = json.loads(project_dashboard(
+        project_id=59,
+        include=["budgets", "budget_detail", "delivery_monthly"]))
+    for section in ("budgets", "budget_detail", "delivery_monthly"):
+        assert section not in out
+        assert out["errors"][section] == \
+            "Object project.project doesn't exist"
+
+
 def test_dashboard_prefixes_non_odoo_errors_as_internal(fake_client):
     _seed_dashboard(fake_client)
     fake_client.search_responses["project.milestone"] = [

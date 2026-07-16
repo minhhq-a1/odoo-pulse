@@ -605,9 +605,16 @@ def project_dashboard(
             # core wasn't requested or failed, so _budget_context just
             # falls back to its own self-sufficient fetch.
             core_row = core.get("_raw_project_row") if core else None
-            ctx = attempt(budget_sections[0],
-                          lambda: _budget_context(client, project_id,
-                                                  core_row))
+            try:
+                ctx = _budget_context(client, project_id, core_row)
+            except Exception as exc:
+                # Every budget section needs this context, so a failure is
+                # recorded under ALL requested ones — a requested section
+                # must never vanish from both the report and errors (same
+                # fan-out as the shared sub-task fetch above).
+                msg = _error_message(exc)
+                for name in budget_sections:
+                    errors[name] = msg
         if ctx is not None:
             # Unknown budget_ids matter regardless of which budget section
             # was requested -- a stale/typo'd id should not silently look
