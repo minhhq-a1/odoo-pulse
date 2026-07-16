@@ -320,3 +320,93 @@ def test_budget_detail_empty_selection_all_time_cost(fake_client):
     call = fake_client.last("search_read")
     assert not any(leaf[0] == "date" for leaf in call["domain"]
                    if isinstance(leaf, tuple))
+
+
+from odoo_pulse.tools_project_detail import project_dashboard
+
+
+def _seed_dashboard(fake):
+    _seed_core(fake)
+    _seed_budget(fake)          # overwrites project.project rows: re-seed
+    fake.search_responses["project.project"] = [
+        {"id": 59, "name": "The Body Shop", "user_id": [7, "Minh"],
+         "partner_id": False, "date": "2026-07-31", "task_count": 744,
+         "last_update_status": "off_track", "delivery_hours": 1500.0,
+         "account_id": [5, "AA TBS"]},
+    ]
+    fake.fields_responses["project.task"] = dict(_TASK_SCHEMA)
+    fake.search_responses["project.task"] = [
+        {"id": 1, "user_ids": [11], "date_end": "2025-10-05 10:00:00",
+         "delivery_hours": 10.0, "allocated_hours": 8.0,
+         "effective_hours": 9.5},
+    ]
+
+
+def test_dashboard_full_load_all_sections(fake_client):
+    _seed_dashboard(fake_client)
+    # analytic aggregates consumed in fixed order:
+    # core.finance (cost, revenue), hours (by_employee, by_task)
+    fake_client.aggregate_responses_seq["account.analytic.line"] = [
+        [{"account_id": [5, "AA TBS"], "amount:sum": -1000.0}],
+        [{"account_id": [5, "AA TBS"], "amount:sum": 200.0}],
+        [{"employee_id": [155, "A"], "unit_amount:sum": 320.5}],
+        [{"task_id": [8554, "T"], "unit_amount:sum": 84.0}],
+    ]
+    out = json.loads(project_dashboard(project_id=59))
+    assert out["tool"] == "project_dashboard"
+    for key in ("project", "milestones", "finance", "weekly_logged",
+                "hours", "budgets", "budget_detail", "delivery_monthly"):
+        assert key in out, key
+    assert "errors" not in out
+    assert out["project"]["id"] == 59
+    assert out["budgets"][0]["id"] == 12
+    assert out["budget_detail"]["selected_budget_ids"] == [12]
+
+
+def test_dashboard_include_subset_only_requested_sections(fake_client):
+    _seed_dashboard(fake_client)
+    fake_client.aggregate_responses_seq["account.analytic.line"] = [
+        [{"employee_id": [155, "A"], "unit_amount:sum": 320.5}],
+        [{"task_id": [8554, "T"], "unit_amount:sum": 84.0}],
+    ]
+    out = json.loads(project_dashboard(
+        project_id=59, include=["hours", "delivery_monthly"]))
+    assert "hours" in out and "delivery_monthly" in out
+    assert "project" not in out and "budget_detail" not in out
+    assert "finance" not in out
+
+
+def test_dashboard_unknown_include_is_clean_error(fake_client):
+    out = json.loads(project_dashboard(project_id=59,
+                                       include=["bogus"]))
+    assert "error" in out and "bogus" in out["error"]
+
+
+def test_dashboard_section_soft_fail(fake_client):
+    _seed_dashboard(fake_client)
+    # core fails BEFORE its finance aggregates run (milestone fetch
+    # raises), so the queue below is consumed by the hours section only.
+    fake_client.aggregate_responses_seq["account.analytic.line"] = [
+        [{"employee_id": [155, "A"], "unit_amount:sum": 320.5}],
+        [{"task_id": [8554, "T"], "unit_amount:sum": 84.0}],
+    ]
+    fake_client.error_models.add("project.milestone")
+    out = json.loads(project_dashboard(project_id=59))
+    assert "core" in out["errors"]
+    assert "hours" in out            # other sections still present
+    assert "budgets" in out
+
+
+def test_dashboard_delivery_monthly_respects_selected_budget_periods(
+        fake_client):
+    _seed_dashboard(fake_client)
+    fake_client.aggregate_responses_seq["account.analytic.line"] = []
+    json.loads(project_dashboard(
+        project_id=59, include=["budgets", "delivery_monthly"]))
+    task_reads = [c for c in fake_client.calls
+                  if c["method"] == "search_read"
+                  and c["model"] == "project.task"]
+    dom = task_reads[-1]["domain"]
+    # PASX TBS period 2025-03-01..2026-07-31 applied to date_end (+7)
+    assert ("date_end", ">=", "2025-02-28 17:00:00") in dom
+    assert ("date_end", "<=", "2026-07-31 16:59:59") in dom

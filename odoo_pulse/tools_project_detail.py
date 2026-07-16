@@ -396,3 +396,156 @@ def _delivery_monthly_section(client, project_id: int,
                                                timezone_offset)
     return ([{"month": r["month"], "delivery_hours": r["delivery_hours"]}
              for r in by_month], warnings)
+
+
+_SECTIONS = ("core", "hours", "budgets", "budget_detail",
+             "delivery_monthly")
+
+
+@mcp.tool()
+def project_dashboard(
+    project_id: int,
+    only_closed_stages: bool = False,
+    closed_stage_names: list[str] | None = None,
+    single_assignee_only: bool = False,
+    budget_ids: list[int] | None = None,
+    include: list[str] | None = None,
+    lookahead_days: int = 7,
+    timezone_offset: int = 7,
+) -> str:
+    """Everything the project-detail page needs, in one call.
+
+    Replaces ~12 separate calls (status, profitability, milestones,
+    weekly hours, budgets, budget lines, cost breakdowns, delivery by
+    month). Use `include` to re-fetch only what changed: checkbox toggles
+    -> ["hours", "delivery_monthly"]; budget chip changes ->
+    ["budget_detail", "delivery_monthly"].
+
+    Sections fail soft: a broken section lands in "errors" while the
+    rest return.
+
+    Args:
+        project_id: project.project id.
+        only_closed_stages / closed_stage_names / single_assignee_only:
+            sub-task filters, as in project_subtask_hours; they shape the
+            "hours" and "delivery_monthly" sections.
+        budget_ids: crossovered.budget / budget.analytic ids to select.
+            OMIT (null) for ALL budgets of the project; pass [] for NO
+            selection (budget_detail then shows all-time cost only).
+            These two states are different on purpose — do not send []
+            to mean "all".
+        include: Subset of ["core", "hours", "budgets", "budget_detail",
+            "delivery_monthly"]; omitted = all. "core" covers project,
+            milestones, finance and weekly_logged.
+        lookahead_days: "due soon" window for derived health (default 7).
+        timezone_offset: UTC offset for dates (default 7).
+    """
+
+    def run() -> dict:
+        client = get_client()
+        today = today_in_tz(timezone_offset)
+        wanted = list(_SECTIONS) if include is None else list(include)
+        unknown = [s for s in wanted if s not in _SECTIONS]
+        if unknown:
+            raise OdooError(
+                f"Unknown include section(s): {', '.join(unknown)}. "
+                f"Valid: {', '.join(_SECTIONS)}")
+
+        report: dict = {
+            "tool": "project_dashboard",
+            "as_of": today.isoformat(),
+            "project_id": project_id,
+            "filters": {
+                "only_closed_stages": only_closed_stages,
+                "closed_stage_names": list(
+                    closed_stage_names or DEFAULT_CLOSED_STAGES),
+                "single_assignee_only": single_assignee_only,
+                "budget_ids": budget_ids,
+                "include": wanted,
+            },
+        }
+        errors: dict[str, str] = {}
+        warnings: list[str] = []
+
+        def attempt(name: str, fn):
+            # Soft-fail per spec rule #6; sections run sequentially so
+            # the FakeClient's per-model queues stay deterministic.
+            try:
+                return fn()
+            except Exception as exc:
+                errors[name] = str(exc)
+                return None
+
+        if "core" in wanted:
+            core = attempt("core", lambda: _core_section(
+                client, project_id, timezone_offset, lookahead_days))
+            if core is not None:
+                report["project"] = core["project"]
+                report["milestones"] = core["milestones"]
+                report["finance"] = core["finance"]
+                report["weekly_logged"] = core["weekly_logged"]
+                warnings += core["warnings"]
+
+        if "hours" in wanted:
+            hours = attempt("hours", lambda: _hours_section(
+                client, project_id, only_closed_stages,
+                closed_stage_names, single_assignee_only,
+                timezone_offset))
+            if hours is not None:
+                report["hours"] = hours["hours"]
+                warnings += hours["warnings"]
+
+        budget_sections = [s for s in
+                           ("budgets", "budget_detail", "delivery_monthly")
+                           if s in wanted]
+        ctx = None
+        if budget_sections:
+            ctx = attempt(budget_sections[0],
+                          lambda: _budget_context(client, project_id))
+        if ctx is not None:
+            if "budgets" in wanted:
+                report["budgets"] = ctx["budgets"]
+            if "budget_detail" in wanted:
+                detail = attempt("budget_detail",
+                                 lambda: _budget_detail_section(
+                                     client, project_id, ctx,
+                                     budget_ids, timezone_offset))
+                if detail is not None:
+                    report["budget_detail"] = detail
+            if "delivery_monthly" in wanted:
+                _ids, periods = _selected(ctx, budget_ids)
+
+                def deliver():
+                    rows, warns = _delivery_monthly_section(
+                        client, project_id, only_closed_stages,
+                        closed_stage_names, single_assignee_only,
+                        periods, timezone_offset)
+                    warnings.extend(warns)
+                    return rows
+
+                rows = attempt("delivery_monthly", deliver)
+                if rows is not None:
+                    report["delivery_monthly"] = rows
+
+        risks: list[dict] = []
+        ms = report.get("milestones")
+        if ms and ms["overdue"]:
+            risks.append({
+                "code": "overdue_milestones", "count": ms["overdue"],
+                "message": f"{ms['overdue']} milestone(s) overdue and "
+                           "unreached"})
+        proj = report.get("project")
+        if proj and proj["divergent"]:
+            risks.append({
+                "code": "health_divergence", "count": 1,
+                "message": "declared status is healthier than the "
+                           "milestone/end-date data supports"})
+        report["risks"] = risks
+        deduped = sorted(set(warnings))
+        if deduped:
+            report["warnings"] = deduped
+        if errors:
+            report["errors"] = errors
+        return report
+
+    return safe(run)
