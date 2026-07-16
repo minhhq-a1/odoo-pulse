@@ -267,12 +267,22 @@ def test_budget_context_lists_budgets(fake_client):
 def test_selected_none_vs_empty_list(fake_client):
     _seed_budget(fake_client)
     ctx = _budget_context(fake_client, 59)
-    ids_all, periods_all = _selected(ctx, None)
+    ids_all, periods_all, unknown_all = _selected(ctx, None)
     assert ids_all == [12]
     assert periods_all == [{"date_from": "2025-03-01",
                             "date_to": "2026-07-31"}]
-    ids_none, periods_none = _selected(ctx, [])
-    assert ids_none == [] and periods_none == []
+    assert unknown_all == []
+    ids_none, periods_none, unknown_none = _selected(ctx, [])
+    assert ids_none == [] and periods_none == [] and unknown_none == []
+
+
+def test_selected_reports_unknown_ids(fake_client):
+    _seed_budget(fake_client)
+    ctx = _budget_context(fake_client, 59)
+    selected, periods, unknown = _selected(ctx, [12, 999])
+    assert selected == [12]
+    assert unknown == [999]
+    assert periods == [{"date_from": "2025-03-01", "date_to": "2026-07-31"}]
 
 
 def test_budget_detail_signs_and_periods(fake_client):
@@ -320,6 +330,16 @@ def test_budget_detail_empty_selection_all_time_cost(fake_client):
     call = fake_client.last("search_read")
     assert not any(leaf[0] == "date" for leaf in call["domain"]
                    if isinstance(leaf, tuple))
+    assert "unknown_budget_ids" not in detail    # nothing stale to report
+
+
+def test_budget_detail_surfaces_unknown_budget_ids(fake_client):
+    _seed_budget(fake_client)
+    ctx = _budget_context(fake_client, 59)
+    fake_client.search_responses["account.analytic.line"] = []
+    detail = _budget_detail_section(fake_client, 59, ctx, [12, 999], 7)
+    assert detail["selected_budget_ids"] == [12]
+    assert detail["unknown_budget_ids"] == [999]
 
 
 from odoo_pulse.tools_project_detail import project_dashboard
@@ -410,6 +430,29 @@ def test_dashboard_delivery_monthly_respects_selected_budget_periods(
     # PASX TBS period 2025-03-01..2026-07-31 applied to date_end (+7)
     assert ("date_end", ">=", "2025-02-28 17:00:00") in dom
     assert ("date_end", "<=", "2026-07-31 16:59:59") in dom
+
+
+def test_dashboard_warns_on_unknown_budget_ids(fake_client):
+    _seed_dashboard(fake_client)
+    fake_client.aggregate_responses_seq["account.analytic.line"] = [
+        [{"account_id": [5, "AA TBS"], "amount:sum": -1000.0}],
+        [{"account_id": [5, "AA TBS"], "amount:sum": 200.0}],
+        [{"employee_id": [155, "A"], "unit_amount:sum": 320.5}],
+        [{"task_id": [8554, "T"], "unit_amount:sum": 84.0}],
+    ]
+    out = json.loads(project_dashboard(project_id=59, budget_ids=[12, 999]))
+    assert out["budget_detail"]["unknown_budget_ids"] == [999]
+    assert any("999" in w for w in out["warnings"])
+
+
+def test_dashboard_prefixes_non_odoo_errors_as_internal(fake_client):
+    _seed_dashboard(fake_client)
+    fake_client.search_responses["project.milestone"] = [
+        {"id": 1, "name": "Bad", "deadline": "not-a-date",
+         "is_reached": False},
+    ]
+    out = json.loads(project_dashboard(project_id=59, include=["core"]))
+    assert out["errors"]["core"].startswith("internal error: ValueError")
 
 
 from odoo_pulse.tools_project_detail import portfolio_health

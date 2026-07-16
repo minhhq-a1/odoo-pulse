@@ -306,25 +306,29 @@ def _budget_context(client, project_id: int) -> dict:
 
 
 def _selected(ctx: dict, budget_ids: list[int] | None
-              ) -> tuple[list[int], list[dict]]:
-    """(selected budget ids, their periods). None = all budgets of the
-    project; [] = none selected (the two states are deliberately distinct
-    — spec Rev 2; both branches are test-locked)."""
+              ) -> tuple[list[int], list[dict], list[int]]:
+    """(selected budget ids, their periods, unknown ids). None = all budgets
+    of the project; [] = none selected (the two states are deliberately
+    distinct — spec Rev 2; both branches are test-locked). unknown_ids are
+    entries in budget_ids that match no budget of this project — a stale or
+    typo'd id would otherwise look identical to "select none"."""
     if budget_ids is None:
         selected = [b["id"] for b in ctx["budgets"]]
+        unknown: list[int] = []
     else:
         known = {b["id"] for b in ctx["budgets"]}
         selected = [bid for bid in budget_ids if bid in known]
+        unknown = [bid for bid in budget_ids if bid not in known]
     chosen = [b for b in ctx["budgets"] if b["id"] in set(selected)]
     periods = [{"date_from": b["date_from"], "date_to": b["date_to"]}
                for b in chosen if b["date_from"] or b["date_to"]]
-    return selected, periods
+    return selected, periods, unknown
 
 
 def _budget_detail_section(client, project_id: int, ctx: dict,
                            budget_ids: list[int] | None,
                            timezone_offset: int) -> dict:
-    selected, periods = _selected(ctx, budget_ids)
+    selected, periods, unknown_budget_ids = _selected(ctx, budget_ids)
     sel = set(selected)
     parent_field = ctx["parent_field"]
     amount_field = ctx["amount_field"]
@@ -364,7 +368,7 @@ def _budget_detail_section(client, project_id: int, ctx: dict,
                   lambda r: (r["employee_id"][0], r["employee_id"][1]))
     tasks = bucket([r for r in rows if r.get("task_id")],
                    lambda r: (r["task_id"][0], r["task_id"][1]))
-    return {
+    detail = {
         "selected_budget_ids": selected,
         "planned": planned, "practical": practical,
         "date_from": froms[0] if froms else None,
@@ -384,6 +388,9 @@ def _budget_detail_section(client, project_id: int, ctx: dict,
                     for k, (c, h) in sorted(tasks.items(),
                                             key=lambda kv: -kv[1][0])],
     }
+    if unknown_budget_ids:
+        detail["unknown_budget_ids"] = unknown_budget_ids
+    return detail
 
 
 def _delivery_monthly_section(client, project_id: int,
@@ -478,8 +485,14 @@ def project_dashboard(
             # the FakeClient's per-model queues stay deterministic.
             try:
                 return fn()
-            except Exception as exc:
+            except OdooError as exc:
                 errors[name] = str(exc)
+                return None
+            except Exception as exc:
+                # Not an OdooError -> a programming bug, not an
+                # instance-config/data issue. Prefix so it isn't mistaken
+                # for the latter (e.g. "field X does not exist").
+                errors[name] = f"internal error: {type(exc).__name__}: {exc}"
                 return None
 
         if "core" in wanted:
@@ -518,8 +531,13 @@ def project_dashboard(
                                      budget_ids, timezone_offset))
                 if detail is not None:
                     report["budget_detail"] = detail
+                    stale = detail.get("unknown_budget_ids")
+                    if stale:
+                        warnings.append(
+                            f"budget_ids {stale} match no budget of "
+                            f"project {project_id}")
             if "delivery_monthly" in wanted:
-                _ids, periods = _selected(ctx, budget_ids)
+                _ids, periods, _unknown = _selected(ctx, budget_ids)
 
                 def deliver():
                     rows, warns = _delivery_monthly_section(
