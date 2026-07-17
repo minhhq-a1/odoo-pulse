@@ -174,6 +174,8 @@ class FakeClient:
             }
         )
         self._maybe_raise()
+        if model in self.error_models:
+            raise OdooError(f"Object {model} doesn't exist")
         method = (
             "formatted_read_group"
             if self.major is not None and self.major >= 19

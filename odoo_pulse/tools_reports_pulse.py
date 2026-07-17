@@ -20,6 +20,41 @@ from .workflow_helpers import (
 )
 
 
+def _currency_aggregate(
+    client,
+    model: str,
+    domain: list,
+    amount_field: str,
+    count_key: str,
+    amount_key: str,
+) -> dict:
+    result = client.aggregate_records(
+        model,
+        group_by=["currency_id"],
+        measures=[(amount_field, "sum")],
+        domain=domain,
+        limit=200,
+    )
+    count = 0
+    total = 0.0
+    by_currency: dict[str, float] = {}
+    for row in result.get("rows", []):
+        currency = row.get("currency_id")
+        name = currency[1] if currency else "(unknown)"
+        amount = row.get(f"{amount_field}:sum") or 0.0
+        count += row.get("__count") or 0
+        total += amount
+        by_currency[name] = round(by_currency.get(name, 0.0) + amount, 2)
+    payload = {count_key: count, amount_key: round(total, 2)}
+    if len(by_currency) == 1:
+        payload["currency"] = next(iter(by_currency))
+    elif len(by_currency) > 1:
+        payload["by_currency"] = by_currency
+        payload["mixed_currencies"] = True
+        payload["totals_comparable"] = False
+    return payload
+
+
 @mcp.tool()
 def business_pulse(
     timezone_offset: int = 7,
@@ -51,17 +86,13 @@ def business_pulse(
         sections: dict[str, dict] = {}
 
         def sales_yesterday() -> dict:
-            rows = client.search_read(
-                "sale.order",
-                domain=[("state", "in", ["sale", "done"]),
-                        ("date_order", ">=", y_lo),
-                        ("date_order", "<", y_hi),
-                        *company_domain],
-                fields=["id", "amount_total"], limit=200,
-            )
-            return {"orders": len(rows),
-                    "revenue": round(sum(r.get("amount_total") or 0.0
-                                         for r in rows), 2)}
+            sales_domain = [("state", "in", ["sale", "done"]),
+                             ("date_order", ">=", y_lo),
+                             ("date_order", "<", y_hi),
+                             *company_domain]
+            return _currency_aggregate(
+                client, "sale.order", sales_domain,
+                "amount_total", "orders", "revenue")
 
         def new_leads() -> dict:
             n = client.search_count("crm.lead", [
@@ -71,18 +102,14 @@ def business_pulse(
             return {"new_leads": n}
 
         def overdue_invoices() -> dict:
-            rows = client.search_read(
-                "account.move",
-                domain=[("move_type", "=", "out_invoice"),
-                        ("state", "=", "posted"),
-                        ("payment_state", "in", ["not_paid", "partial"]),
-                        ("invoice_date_due", "<", today.isoformat()),
-                        *company_domain],
-                fields=["id", "amount_residual"], limit=200,
-            )
-            return {"overdue_invoices": len(rows),
-                    "overdue_amount": round(sum(r.get("amount_residual") or 0.0
-                                                for r in rows), 2)}
+            invoice_domain = [("move_type", "=", "out_invoice"),
+                               ("state", "=", "posted"),
+                               ("payment_state", "in", ["not_paid", "partial"]),
+                               ("invoice_date_due", "<", today.isoformat()),
+                               *company_domain]
+            return _currency_aggregate(
+                client, "account.move", invoice_domain,
+                "amount_residual", "overdue_invoices", "overdue_amount")
 
         def overdue_tasks() -> dict:
             # date_deadline is a Date field on most versions; kept as a plain date bound deliberately (see plan Task 2) — do not "fix" to utc_bound.
@@ -174,6 +201,18 @@ def business_pulse(
             risks.append({
                 "code": "section_unavailable", "count": 1,
                 "message": f"{name}: {sections[name]['reason']}",
+            })
+        mixed_sections = [
+            name for name in ("sales", "receivables")
+            if sections[name].get("mixed_currencies")
+        ]
+        if mixed_sections:
+            risks.append({
+                "code": "mixed_currencies",
+                "count": len(mixed_sections),
+                "message": (
+                    "Monetary scalars mix document currencies in section(s): "
+                    f"{', '.join(mixed_sections)}; use by_currency."),
             })
 
         return build_report(

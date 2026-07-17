@@ -198,9 +198,13 @@ def test_core_section_weekly_logged_soft_fails_independently(fake_client):
     assert "weekly_logged" not in core
     assert core["errors"]["weekly_logged"] == \
         "Object account.analytic.line doesn't exist"
-    # finance uses aggregate_records, which error_models does not gate
-    assert core["finance"] == {"revenue": 200.0, "cost_all_time": 1000.0,
-                               "margin": -800.0}
+    # finance also reads account.analytic.line via aggregate_records, which
+    # now honors error_models too (matching real Odoo: an uninstalled
+    # module's model fails read_group/formatted_read_group the same as
+    # search_read) -- so it soft-fails alongside weekly_logged.
+    assert "finance" not in core
+    assert core["errors"]["finance"] == \
+        "Object account.analytic.line doesn't exist"
 
 
 def test_weekly_logged_iso_monday_buckets(fake_client):
@@ -609,9 +613,15 @@ def test_dashboard_core_finance_and_weekly_logged_fail_independently(
     assert out["project"]["id"] == 59
     assert "milestones" in out
     assert "weekly_logged" not in out
-    assert "finance" in out            # aggregate_records untouched
+    # finance also reads account.analytic.line via aggregate_records, which
+    # now honors error_models too (matching real Odoo: an uninstalled
+    # module's model fails read_group/formatted_read_group the same as
+    # search_read) -- so it soft-fails alongside weekly_logged.
+    assert "finance" not in out
     assert "core" not in out["errors"]
     assert out["errors"]["weekly_logged"] == \
+        "Object account.analytic.line doesn't exist"
+    assert out["errors"]["finance"] == \
         "Object account.analytic.line doesn't exist"
 
 
