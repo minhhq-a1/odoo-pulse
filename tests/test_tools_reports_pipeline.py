@@ -84,6 +84,48 @@ def test_pipeline_review_win_rate_respects_owner_filter(fake_client, monkeypatch
         assert ("team_id.name", "ilike", "Direct") in call["domain"]
 
 
+def test_pipeline_review_open_domain_excludes_probability_100(
+    fake_client, monkeypatch
+):
+    _fix_today(monkeypatch)
+    fake_client.search_responses["crm.lead"] = []
+    fake_client.search_count_responses["crm.lead"] = 0
+    tools_reports_sales.pipeline_review()
+    read = next(c for c in fake_client.calls
+                if c["method"] == "search_read" and c["model"] == "crm.lead")
+    assert ("probability", "<", 100) in read["domain"]
+    # Win-rate queries are identified by their date_closed leaf; they keep
+    # their independent Won/Lost domains and must NOT gain the open bound.
+    for call in fake_client.calls:
+        if call.get("model") != "crm.lead" or call["method"] not in {
+                "aggregate_records", "search_count"}:
+            continue
+        leaves = [leaf for leaf in (call.get("domain") or [])
+                  if isinstance(leaf, tuple)]
+        if any(leaf[0] == "date_closed" for leaf in leaves):
+            assert ("probability", "<", 100) not in leaves
+        else:
+            assert ("probability", "<", 100) in leaves
+
+
+def test_pipeline_review_truncated_recomputes_use_open_domain(
+    fake_client, monkeypatch
+):
+    _fix_today(monkeypatch)
+    fake_client.search_responses["crm.lead"] = _many_leads(200)
+    fake_client.search_count_responses["crm.lead"] = 350
+    tools_reports_sales.pipeline_review()
+    recomputes = [
+        c for c in fake_client.calls
+        if c.get("model") == "crm.lead"
+        and c["method"] in {"aggregate_records", "search_count"}
+        and not any(isinstance(leaf, tuple) and leaf[0] == "date_closed"
+                    for leaf in (c.get("domain") or []))]
+    assert recomputes, "expected truncation recompute calls"
+    for call in recomputes:
+        assert ("probability", "<", 100) in call["domain"]
+
+
 def test_pipeline_review_breakdown_and_risks(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     fake_client.search_responses["crm.lead"] = LEADS

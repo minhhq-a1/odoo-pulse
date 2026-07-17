@@ -73,6 +73,23 @@ def test_sales_snapshot_top_products_via_aggregate(fake_client, monkeypatch):
     assert top[0] == {"product": "Widget", "revenue": 800.0}
 
 
+def test_sales_snapshot_products_and_trend_share_period_upper_bound(
+    fake_client, monkeypatch
+):
+    _fix_today(monkeypatch)
+    _prime(fake_client)
+    json.loads(tools_reports_sales.sales_snapshot(timezone_offset=7))
+    product = next(c for c in fake_client.calls
+                   if c["method"] == "aggregate_records"
+                   and c["model"] == "sale.order.line")
+    trend = next(c for c in fake_client.calls
+                 if c["method"] == "search_read"
+                 and c["model"] == "sale.order")
+    assert ("order_id.date_order", "<", "2026-06-30 17:00:00") \
+        in product["domain"]
+    assert ("date_order", "<", "2026-06-30 17:00:00") in trend["domain"]
+
+
 def test_sales_snapshot_top_customers_via_aggregate(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _prime(fake_client)

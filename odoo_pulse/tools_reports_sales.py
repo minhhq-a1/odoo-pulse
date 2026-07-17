@@ -73,7 +73,11 @@ def pipeline_review(
             owner_filter.append(("team_id.name", "ilike", team))
         if company_id:
             owner_filter.append(("company_id", "=", company_id))
-        domain: list = [("type", "=", "opportunity"), *owner_filter]
+        domain: list = [
+            ("type", "=", "opportunity"),
+            ("probability", "<", 100),
+            *owner_filter,
+        ]
 
         leads, truncation = fetch_with_truncation(
             client, "crm.lead", domain,
@@ -376,6 +380,7 @@ def sales_snapshot(
                 measures=[("price_subtotal", "sum")],
                 domain=[("order_id.state", "in", ["sale", "done"]),
                         ("order_id.date_order", ">=", cur_lo),
+                        ("order_id.date_order", "<", cur_hi),
                         *([("order_id.company_id", "=", company_id)]
                           if company_id else [])],
                 limit=top_n,
@@ -398,6 +403,7 @@ def sales_snapshot(
                 client, "sale.order",
                 [("state", "in", ["sale", "done"]),
                  ("date_order", ">=", utc_bound(trend_start, timezone_offset)),
+                 ("date_order", "<", cur_hi),
                  *company_domain],
                 fields=["id", "amount_total", "date_order"],
                 limit=200,
