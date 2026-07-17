@@ -274,16 +274,24 @@ error) with a `truncated_milestone_data` risk entry — same pattern as
 
 Project delivery reports — per-assignee workload, portfolio-wide project health, and a daily stand-up digest. Same composition style as the reports above (filters, thresholds, `timezone_offset`); see the docstrings in `odoo_pulse/tools_workflows.py` for the full argument list.
 
-`team_workload`'s `done_stages` and `standup_digest`'s `exclude_stages`
-classify a task as closed the same schema-aware way as
+`team_workload`'s `exclude_stages` (default `["Cancelled"]`) and
+`standup_digest`'s `exclude_stages` (default `["Done", "Cancelled",
+"Delivered"]`) are always applied as their own unconditional
+`stage_id.name not in exclude_stages` domain leaf, regardless of schema. On
+instances with `project.task.state` (or `is_closed`), that leaf is ANDed
+together with the stable closed-state filter — so `exclude_stages` always
+has an effect, layered on top of the state-based scoping rather than
+replaced by it.
+
+`team_workload` additionally takes `done_stages` (default `["Done",
+"Delivered"]`), which selects which tasks count as "done" for load
+purposes. Unlike `exclude_stages`, it is routed entirely through the same
+schema-aware `task_closed_scope`/`task_matches_scope` machinery as
 `project_subtask_hours`'s `only_closed_stages` above: `project.task.state`
-is checked first (the stable closed set), then `is_closed`, and only then
-the stage-name list itself. The stage-name parameter remains a compatible
-fallback/exclusion filter on every schema — it just stops being the sole
-signal once a stabler field exists. Unlike `project_subtask_hours` /
-`project_dashboard`'s `closed_stage_names`, these two parameters are not
-additionally ANDed onto the state-based filter; they only narrow via the
-stage-name path itself.
+is checked first, then `is_closed`, and the stage-name list is consulted
+only when neither field exists. On a `state`/`is_closed` schema,
+`done_stages` is therefore inert — it has no effect, since the stage-name
+list is never read outside that fallback branch.
 
 ### Multi-company / multi-currency
 
