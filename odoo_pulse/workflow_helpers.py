@@ -89,6 +89,37 @@ def fetch_with_truncation(
     }
 
 
+def paged_search_read(
+    client: Any,
+    model: str,
+    domain: list,
+    fields: list[str],
+    page: int = 500,
+    max_pages: int = 50,
+    order: str = "id",
+) -> list[dict]:
+    """Fetch every matching row with stable, bounded offset pagination."""
+    step = min(page, client.config.max_records)
+    if step <= 0:
+        raise OdooError(
+            f"{model}: pagination requires a positive page size, got {step}")
+    rows: list[dict] = []
+    for index in range(max_pages):
+        batch = client.search_read(
+            model,
+            domain=domain,
+            fields=fields,
+            limit=step,
+            offset=index * step,
+            order=order,
+        )
+        rows.extend(batch)
+        if len(batch) < step:
+            return rows
+    raise OdooError(
+        f"{model}: more than {max_pages * step} rows match; narrow the filters.")
+
+
 def ensure_field(client: Any, model: str, field: str, hint: str = "") -> None:
     """Raise OdooError when `field` is absent from `model`'s schema.
 

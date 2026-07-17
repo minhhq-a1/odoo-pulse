@@ -12,6 +12,7 @@ from odoo_pulse.workflow_helpers import (
     ensure_field,
     distinct_companies,
     optional_fields,
+    paged_search_read,
     parse_when,
     resolve_company_id,
     resolve_user_names,
@@ -253,3 +254,44 @@ def test_gather_strict_reraises_first_exception_in_key_order():
     with pytest.raises(ValueError) as exc:
         gather_strict({"a": raise_first, "b": raise_second, "c": lambda: 3})
     assert exc.value is first
+
+
+# -- paged_search_read --------------------------------------------------------
+
+def test_paged_search_read_single_short_page(fake_client):
+    fake_client.search_responses["project.task"] = [{"id": 1}, {"id": 2}]
+    rows = paged_search_read(fake_client, "project.task", [], ["id"])
+    assert rows == [{"id": 1}, {"id": 2}]
+    call = fake_client.last("search_read")
+    assert call["limit"] == 200  # min(page=500, fake max_records=200)
+    assert call["offset"] == 0
+
+
+def test_paged_search_read_pages_until_short_page(fake_client):
+    full = [{"id": i} for i in range(200)]
+    fake_client.search_responses_seq["project.task"] = [full, [{"id": 999}]]
+    rows = paged_search_read(fake_client, "project.task", [], ["id"])
+    assert len(rows) == 201
+    offsets = [c["offset"] for c in fake_client.calls
+               if c["method"] == "search_read"]
+    assert offsets == [0, 200]
+
+
+def test_paged_search_read_runaway_guard(fake_client):
+    full = [{"id": i} for i in range(200)]
+    fake_client.search_responses_seq["project.task"] = [full] * 3
+    with pytest.raises(OdooError, match="more than"):
+        paged_search_read(fake_client, "project.task", [], ["id"],
+                          max_pages=3)
+
+
+def test_paged_search_read_rejects_non_positive_step(fake_client):
+    fake_client.config.max_records = 0
+    with pytest.raises(OdooError, match="positive page size"):
+        paged_search_read(fake_client, "project.task", [], ["id"])
+    assert fake_client.calls == []
+
+
+def test_project_shared_reexports_paged_search_read():
+    from odoo_pulse.project_shared import paged_search_read as project_pager
+    assert project_pager is paged_search_read

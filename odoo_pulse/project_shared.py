@@ -13,7 +13,12 @@ from __future__ import annotations
 from datetime import datetime, time as dt_time, timedelta
 
 from .odoo_client import OdooError
-from .workflow_helpers import optional_fields, parse_when, utc_bound
+from .workflow_helpers import (
+    optional_fields,
+    paged_search_read,
+    parse_when,
+    utc_bound,
+)
 
 # (model, analytic-account field candidates, planned-amount field candidates,
 #  extra domain). Order below fits Odoo 18+; it is reversed for <= 17.
@@ -192,37 +197,6 @@ def periods_domain(
             out.append("&")
         out.extend(leaves)
     return out
-
-
-def paged_search_read(
-    client,
-    model: str,
-    domain: list,
-    fields: list[str],
-    page: int = 500,
-    max_pages: int = 50,
-    order: str = "id",
-) -> list[dict]:
-    """Fetch ALL matching rows by offset pagination, server-side.
-
-    The MCP client still sees one tool call; only this process talks to
-    Odoo repeatedly. Page size respects client.config.max_records the same
-    way client.search_read caps limits. A stable `order` keeps pages
-    non-overlapping. Stops on the first short page; raises past max_pages
-    so a runaway filter cannot loop forever.
-    """
-    step = min(page, client.config.max_records)
-    rows: list[dict] = []
-    for i in range(max_pages):
-        batch = client.search_read(
-            model, domain=domain, fields=fields,
-            limit=step, offset=i * step, order=order)
-        rows.extend(batch)
-        if len(batch) < step:
-            return rows
-    raise OdooError(
-        f"{model}: more than {max_pages * step} rows match; "
-        "narrow the filters.")
 
 
 # -- subtask fetch/filter/aggregate helpers ----------------------------------

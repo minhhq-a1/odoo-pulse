@@ -5,7 +5,6 @@ from odoo_pulse.odoo_client import OdooError
 from odoo_pulse.project_shared import (
     DEFAULT_CLOSED_STAGES,
     fetch_subtasks,
-    paged_search_read,
     periods_domain,
     subtasks_by_month,
     sum_hours,
@@ -71,35 +70,6 @@ def test_periods_domain_rejects_trailing_garbage_after_valid_date():
     with pytest.raises(OdooError, match="date_from"):
         periods_domain(
             "date", [{"date_from": "2025-01-01xyz"}], 7)
-
-
-# -- paged_search_read --------------------------------------------------------
-
-def test_paged_search_read_single_short_page(fake_client):
-    fake_client.search_responses["project.task"] = [{"id": 1}, {"id": 2}]
-    rows = paged_search_read(fake_client, "project.task", [], ["id"])
-    assert rows == [{"id": 1}, {"id": 2}]
-    call = fake_client.last("search_read")
-    assert call["limit"] == 200  # min(page=500, fake max_records=200)
-    assert call["offset"] == 0
-
-
-def test_paged_search_read_pages_until_short_page(fake_client):
-    full = [{"id": i} for i in range(200)]
-    fake_client.search_responses_seq["project.task"] = [full, [{"id": 999}]]
-    rows = paged_search_read(fake_client, "project.task", [], ["id"])
-    assert len(rows) == 201
-    offsets = [c["offset"] for c in fake_client.calls
-               if c["method"] == "search_read"]
-    assert offsets == [0, 200]
-
-
-def test_paged_search_read_runaway_guard(fake_client):
-    full = [{"id": i} for i in range(200)]
-    fake_client.search_responses_seq["project.task"] = [full] * 3
-    with pytest.raises(OdooError, match="more than"):
-        paged_search_read(fake_client, "project.task", [], ["id"],
-                          max_pages=3)
 
 
 # -- fetch_subtasks, sum_hours, subtasks_by_month ----------------------------
