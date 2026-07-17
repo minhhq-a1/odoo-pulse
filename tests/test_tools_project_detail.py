@@ -548,6 +548,32 @@ def test_dashboard_hours_and_delivery_monthly_share_one_fetch(fake_client):
     assert len(task_reads) == 1
 
 
+def test_dashboard_only_closed_stages_uses_state_domain_shared_fetch(
+        fake_client):
+    _seed_dashboard(fake_client)
+    fake_client.fields_responses["project.task"] = {
+        **_TASK_SCHEMA, "state": {"type": "selection"}}
+    fake_client.search_responses["project.task"] = [
+        {"id": 1, "user_ids": [11], "date_end": "2025-10-05 10:00:00",
+         "state": "1_done",
+         "delivery_hours": 10.0, "allocated_hours": 8.0,
+         "effective_hours": 9.5},
+    ]
+    fake_client.aggregate_responses_seq["account.analytic.line"] = [
+        [{"employee_id": [155, "A"], "unit_amount:sum": 320.5}],
+        [{"task_id": [8554, "T"], "unit_amount:sum": 84.0}],
+    ]
+    json.loads(project_dashboard(
+        project_id=59, only_closed_stages=True,
+        include=["hours", "delivery_monthly"]))
+    task_reads = [c for c in fake_client.calls
+                  if c["method"] == "search_read"
+                  and c["model"] == "project.task"]
+    assert len(task_reads) == 1          # hours + delivery share one fetch
+    assert ("state", "in", ["1_done", "1_canceled"]) \
+        in task_reads[0]["domain"]
+
+
 def test_dashboard_warns_on_unknown_budget_ids(fake_client):
     _seed_dashboard(fake_client)
     fake_client.aggregate_responses_seq["account.analytic.line"] = [

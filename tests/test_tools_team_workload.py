@@ -102,12 +102,19 @@ def test_team_workload_overload_threshold_flags_member(fake_client, monkeypatch)
 
 def test_team_workload_balanced_when_clean(fake_client, monkeypatch):
     _fix_today(monkeypatch)
+    # carries "state" so the balanced/no-risk scenario this test targets
+    # isn't muddied by the unrelated stage-name-fallback warning (task 9).
+    fake_client.fields_responses["project.task"] = {
+        "state": {"type": "selection"}}
     clean = [
         {"id": 1, "name": "A", "user_ids": [10], "stage_id": [1, "Done"],
+         "state": "1_done",
          "date_deadline": "2026-06-20", "priority": "0", "parent_id": [99, "P"]},
         {"id": 2, "name": "B", "user_ids": [11], "stage_id": [3, "To Do"],
+         "state": "1_in_progress",
          "date_deadline": "2026-07-02", "priority": "0", "parent_id": [99, "P"]},
         {"id": 3, "name": "C", "user_ids": [12], "stage_id": [2, "In Progress"],
+         "state": "1_in_progress",
          "date_deadline": "2026-07-05", "priority": "0", "parent_id": [99, "P"]},
     ]
     _setup(fake_client, clean)
@@ -152,3 +159,16 @@ def test_team_workload_no_truncation_when_under_cap(fake_client, monkeypatch):
     assert "truncated" not in out["summary"]
     assert all(r["code"] != "truncated_data" for r in out["risks"])
     assert all(c["method"] != "search_count" for c in fake_client.calls)
+
+
+def test_team_workload_excludes_localized_closed_state(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    fake_client.fields_responses["project.task"] = {
+        "state": {"type": "selection"}}
+    _setup(fake_client, [{
+        "id": 8, "name": "Closed", "user_ids": [10],
+        "stage_id": [9, "Hoàn tất"], "state": "1_done",
+        "date_deadline": False, "priority": "0", "parent_id": [99, "P"],
+    }])
+    out = json.loads(tools_workflows.team_workload())
+    assert out["summary"]["open_tasks"] == 0

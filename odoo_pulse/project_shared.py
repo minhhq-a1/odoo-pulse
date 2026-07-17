@@ -17,6 +17,9 @@ from .workflow_helpers import (
     optional_fields,
     paged_search_read,
     parse_when,
+    task_closed_scope,
+    task_matches_scope,
+    task_scope_warning,
     utc_bound,
 )
 
@@ -227,14 +230,28 @@ def fetch_subtasks(
                 for f in HOUR_FIELDS if f not in available]
     domain: list = [("project_id", "=", project_id),
                     ("parent_id", "!=", False)]
+    scope_fields: list[str] = []
+    scope_strategy: str | None = None
+    names: list[str] = []
     if only_closed_stages:
         names = list(closed_stage_names or DEFAULT_CLOSED_STAGES)
-        domain.append(("stage_id.name", "in", names))
+        scope_domain, scope_fields, scope_strategy = task_closed_scope(
+            client, closed=True, stage_names=names)
+        domain.extend(scope_domain)
+        if closed_stage_names is not None and scope_strategy != "stage":
+            domain.append(("stage_id.name", "in", closed_stage_names))
+        scope_warning = task_scope_warning(scope_strategy)
+        if scope_warning:
+            warnings.append(scope_warning)
     domain += periods_domain("date_end", periods, timezone_offset,
                              as_datetime=True)
     tasks = paged_search_read(
         client, "project.task", domain,
-        fields=["id", "user_ids", "date_end", *available])
+        fields=["id", "user_ids", "date_end", "stage_id",
+                *available, *scope_fields])
+    if only_closed_stages and scope_strategy == "is_closed":
+        tasks = [t for t in tasks if task_matches_scope(
+            t, scope_strategy, closed=True, stage_names=names)]
     if single_assignee_only:
         tasks = [t for t in tasks if len(t.get("user_ids") or []) == 1]
     return tasks, available, warnings

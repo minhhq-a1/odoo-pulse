@@ -19,6 +19,9 @@ from .workflow_helpers import (
     fetch_with_truncation,
     parse_when,
     resolve_user_names,
+    task_closed_scope,
+    task_matches_scope,
+    task_scope_warning,
     today_in_tz,
 )
 
@@ -57,9 +60,7 @@ def team_workload(
     def run() -> dict:
         client = get_client()
         ex = exclude_stages if exclude_stages is not None else ["Cancelled"]
-        done_set = {
-            s.lower() for s in (done_stages if done_stages is not None else ["Done", "Delivered"])
-        }
+        done_names = done_stages if done_stages is not None else ["Done", "Delivered"]
 
         domain: list = []
         if subtasks_only:
@@ -69,6 +70,10 @@ def team_workload(
         if ex:
             domain.append(("stage_id.name", "not in", ex))
 
+        scope_domain, scope_fields, scope_strategy = task_closed_scope(
+            client, closed=False, stage_names=done_names)
+        domain.extend(scope_domain)
+
         tasks, truncation = fetch_with_truncation(
             client,
             "project.task",
@@ -76,6 +81,7 @@ def team_workload(
             fields=[
                 "id", "name", "user_ids", "stage_id",
                 "date_deadline", "priority", "parent_id",
+                *scope_fields,
             ],
             limit=200,
             order="date_deadline",
@@ -96,8 +102,8 @@ def team_workload(
             )
 
         for t in tasks:
-            stage = t["stage_id"][1] if t.get("stage_id") else "(none)"
-            if stage.lower() in done_set:
+            if not task_matches_scope(
+                    t, scope_strategy, closed=False, stage_names=done_names):
                 continue
 
             open_tasks += 1
@@ -189,6 +195,13 @@ def team_workload(
         if unassigned:
             risks.append({"code": "unassigned_open_tasks", "count": unassigned,
                           "message": f"{unassigned} open task(s) with no assignee"})
+        scope_warning = task_scope_warning(scope_strategy)
+        if scope_warning:
+            risks.append({
+                "code": "task_state_fallback",
+                "count": truncation["missing"] if truncation else 1,
+                "message": scope_warning,
+            })
 
         return build_report(
             "team_workload",
@@ -436,12 +449,22 @@ def standup_digest(
             ("stage_id.name", "not in", exclude_stages),
         ]
 
+        scope_domain, scope_fields, scope_strategy = task_closed_scope(
+            client, closed=False, stage_names=exclude_stages)
+        domain.extend(scope_domain)
+        scope_warning = task_scope_warning(scope_strategy)
+
         tasks, truncation = fetch_with_truncation(
             client, "project.task", domain,
             fields=["id", "name", "user_ids", "stage_id",
-                    "date_deadline", "priority"],
+                    "date_deadline", "priority", *scope_fields],
             limit=200, order="date_deadline",
         )
+
+        # Defensively re-filter client-side (stable state/is_closed schemas
+        # already filter server-side; the stage-name fallback needs this).
+        tasks = [t for t in tasks if task_matches_scope(
+            t, scope_strategy, closed=False, stage_names=exclude_stages)]
 
         # Resolve user names including archived users (shared helper).
         all_uid = {uid for t in tasks for uid in t.get("user_ids", [])}
@@ -497,7 +520,10 @@ def standup_digest(
                 out.append(f"| #{t['id']} | {name} | {t['assignee']} | {deadline_fn(t)} |")
             return out
 
-        lines = [f"## 🗓️ Daily Standup — {project}", f"**{today_str}**", ""]
+        lines = [f"## 🗓️ Daily Standup — {project}", f"**{today_str}**"]
+        if scope_warning:
+            lines.append(f"> ⚠️ {scope_warning}")
+        lines.append("")
 
         if truncation:
             lines.append(

@@ -124,6 +124,22 @@ def test_fetch_subtasks_closed_stage_domain_default_and_custom(fake_client):
     assert ("stage_id.name", "in", ["Hoàn thành"]) in call["domain"]
 
 
+def test_fetch_subtasks_uses_state_for_localized_closed_stage(fake_client):
+    fake_client.fields_responses["project.task"] = {
+        **_TASK_SCHEMA, "state": {"type": "selection"}}
+    fake_client.search_responses["project.task"] = [{
+        "id": 1, "user_ids": [11], "stage_id": [9, "Hoàn tất"],
+        "state": "1_done", "date_end": False,
+        "delivery_hours": 2.0, "allocated_hours": 2.0,
+        "effective_hours": 2.0,
+    }]
+    tasks, _, _ = fetch_subtasks(
+        fake_client, 59, only_closed_stages=True)
+    assert [task["id"] for task in tasks] == [1]
+    assert ("state", "in", ["1_done", "1_canceled"]) \
+        in fake_client.last("search_read")["domain"]
+
+
 def test_fetch_subtasks_single_assignee_zero_one_two(fake_client):
     _seed_tasks(fake_client)
     tasks, _, _ = fetch_subtasks(fake_client, 59,

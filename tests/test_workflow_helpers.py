@@ -16,6 +16,9 @@ from odoo_pulse.workflow_helpers import (
     parse_when,
     resolve_company_id,
     resolve_user_names,
+    task_closed_scope,
+    task_matches_scope,
+    task_scope_warning,
     today_in_tz,
     totals_by_currency,
     trend_direction,
@@ -191,6 +194,42 @@ def test_optional_fields_empty_when_none_present():
 def test_optional_fields_all_present_preserves_order():
     client = _RichSchemaClient(["b", "a", "c"])
     assert optional_fields(client, "x", ["a", "b"]) == ["a", "b"]
+
+
+def test_task_closed_scope_prefers_stored_state(fake_client):
+    fake_client.fields_responses["project.task"] = {
+        "state": {"type": "selection", "store": True},
+        "is_closed": {"type": "boolean"},
+    }
+    domain, fields, strategy = task_closed_scope(
+        fake_client, closed=False, stage_names=["Done"])
+    assert strategy == "state"
+    assert domain == [("state", "not in", ["1_done", "1_canceled"])]
+    assert fields == ["state"]
+
+
+def test_task_closed_scope_uses_client_side_is_closed_fallback(fake_client):
+    fake_client.fields_responses["project.task"] = {
+        "is_closed": {"type": "boolean"}}
+    domain, fields, strategy = task_closed_scope(
+        fake_client, closed=True, stage_names=["Done"])
+    assert domain == []
+    assert fields == ["is_closed"]
+    assert strategy == "is_closed"
+    assert task_matches_scope(
+        {"is_closed": True}, strategy, closed=True, stage_names=["Done"])
+
+
+def test_task_closed_scope_falls_back_to_casefolded_stage_names(fake_client):
+    fake_client.fields_responses["project.task"] = {
+        "stage_id": {"type": "many2one"}}
+    domain, fields, strategy = task_closed_scope(
+        fake_client, closed=True, stage_names=["Hoàn tất"])
+    assert strategy == "stage"
+    assert domain == [("stage_id.name", "in", ["Hoàn tất"])]
+    assert task_matches_scope(
+        {"stage_id": [4, "HOÀN TẤT"]}, strategy,
+        closed=True, stage_names=["Hoàn tất"])
 
 
 def test_gather_returns_values_in_key_order():

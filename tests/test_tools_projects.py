@@ -91,6 +91,19 @@ def test_standup_digest_warns_on_truncation(fake_client):
     assert "10" in out
 
 
+def test_standup_digest_uses_stable_state_not_localized_stage_name(fake_client):
+    fake_client.fields_responses["project.task"] = {
+        "state": {"type": "selection"}}
+    fake_client.search_responses["project.task"] = [{
+        "id": 1, "name": "Closed", "user_ids": [10],
+        "stage_id": [9, "Hoàn tất"], "state": "1_done",
+        "date_deadline": False, "priority": "0",
+    }]
+    tools_workflows.standup_digest("Acme")
+    call = fake_client.last("search_read")
+    assert ("state", "not in", ["1_done", "1_canceled"]) in call["domain"]
+
+
 def test_standup_digest_shaping_bug_returns_json_error(fake_client):
     import json
     from odoo_pulse import tools_workflows
