@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import threading
 
+import pytest
+
 from odoo_pulse import runtime
 
 
@@ -36,6 +38,21 @@ def test_date_domain():
         ("date", ">=", "2026-01-01"),
         ("date", "<=", "2026-12-31"),
     ]
+
+
+def test_datetime_domain_uses_exclusive_next_day():
+    assert runtime.date_domain(
+        "date_order", "2026-01-01", "2026-06-30", as_datetime=True
+    ) == [
+        ("date_order", ">=", "2026-01-01"),
+        ("date_order", "<", "2026-07-01"),
+    ]
+
+
+def test_date_domain_rejects_invalid_iso_date():
+    from odoo_pulse.odoo_client import OdooError
+    with pytest.raises(OdooError, match="date_to"):
+        runtime.date_domain("date", None, "2026-06-30 trailing")
 
 
 def test_safe_serialises_result():

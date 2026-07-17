@@ -32,17 +32,18 @@ def list_events(
         date_to: Inclusive upper bound on the event start date (YYYY-MM-DD).
         limit: Max results.
     """
-    domain = name_domain(query, ["name"])
-    domain += date_domain("date_begin", date_from, date_to)
-    return safe(
-        lambda: get_client().search_read(
+    def run():
+        domain = name_domain(query, ["name"])
+        domain.extend(date_domain("date_begin", date_from, date_to, as_datetime=True))
+        return get_client().search_read(
             "event.event",
             domain=domain,
             fields=["name", "date_begin", "date_end", "seats_expected", "seats_limited", "address_id"],
             limit=limit,
             order="date_begin desc",
         )
-    )
+
+    return safe(run)
 
 
 @mcp.tool()
@@ -90,17 +91,18 @@ def list_calendar_events(
         date_to: Inclusive upper bound on the start datetime (YYYY-MM-DD).
         limit: Max results.
     """
-    domain = name_domain(query, ["name"])
-    domain += date_domain("start", date_from, date_to)
-    return safe(
-        lambda: get_client().search_read(
+    def run():
+        domain = name_domain(query, ["name"])
+        domain.extend(date_domain("start", date_from, date_to, as_datetime=True))
+        return get_client().search_read(
             "calendar.event",
             domain=domain,
             fields=["name", "start", "stop", "user_id", "partner_ids", "location"],
             limit=limit,
             order="start desc",
         )
-    )
+
+    return safe(run)
 
 
 # --- Activities ---------------------------------------------------------------

@@ -81,14 +81,14 @@ def list_time_off(
         date_to: Inclusive upper bound on the leave start date (YYYY-MM-DD).
         limit: Max results.
     """
-    domain: list = []
-    if employee:
-        domain.append(("employee_id.name", "ilike", employee))
-    if state:
-        domain.append(("state", "=", state))
-    domain += date_domain("date_from", date_from, date_to)
-    return safe(
-        lambda: get_client().search_read(
+    def run():
+        domain: list = []
+        if employee:
+            domain.append(("employee_id.name", "ilike", employee))
+        if state:
+            domain.append(("state", "=", state))
+        domain.extend(date_domain("date_from", date_from, date_to, as_datetime=True))
+        return get_client().search_read(
             "hr.leave",
             domain=domain,
             fields=[
@@ -102,7 +102,8 @@ def list_time_off(
             limit=limit,
             order="date_from desc",
         )
-    )
+
+    return safe(run)
 
 
 @mcp.tool()
@@ -200,16 +201,17 @@ def list_attendances(
         date_to: Inclusive upper bound on check-in (YYYY-MM-DD).
         limit: Max results.
     """
-    domain: list = []
-    if employee:
-        domain.append(("employee_id.name", "ilike", employee))
-    domain += date_domain("check_in", date_from, date_to)
-    return safe(
-        lambda: get_client().search_read(
+    def run():
+        domain: list = []
+        if employee:
+            domain.append(("employee_id.name", "ilike", employee))
+        domain.extend(date_domain("check_in", date_from, date_to, as_datetime=True))
+        return get_client().search_read(
             "hr.attendance",
             domain=domain,
             fields=["employee_id", "check_in", "check_out", "worked_hours"],
             limit=limit,
             order="check_in desc",
         )
-    )
+
+    return safe(run)

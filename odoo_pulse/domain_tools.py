@@ -129,14 +129,14 @@ def list_sale_orders(
         date_to: Inclusive upper bound on order date (YYYY-MM-DD).
         limit: Max results.
     """
-    domain: list = []
-    if customer:
-        domain.append(("partner_id.name", "ilike", customer))
-    if state and state in _SALE_STATES:
-        domain.append(("state", "=", state))
-    domain += date_domain("date_order", date_from, date_to)
-    return safe(
-        lambda: get_client().search_read(
+    def run():
+        domain: list = []
+        if customer:
+            domain.append(("partner_id.name", "ilike", customer))
+        if state and state in _SALE_STATES:
+            domain.append(("state", "=", state))
+        domain.extend(date_domain("date_order", date_from, date_to, as_datetime=True))
+        return get_client().search_read(
             "sale.order",
             domain=domain,
             fields=[
@@ -150,7 +150,8 @@ def list_sale_orders(
             limit=limit,
             order="date_order desc",
         )
-    )
+
+    return safe(run)
 
 
 @mcp.tool()
@@ -316,14 +317,14 @@ def list_invoices(
         date_to: Inclusive upper bound on invoice date (YYYY-MM-DD).
         limit: Max results.
     """
-    domain: list = [("move_type", "=", move_type), ("state", "=", "posted")]
-    if customer:
-        domain.append(("partner_id.name", "ilike", customer))
-    if unpaid_only:
-        domain.append(("payment_state", "in", ("not_paid", "partial")))
-    domain += date_domain("invoice_date", date_from, date_to)
-    return safe(
-        lambda: get_client().search_read(
+    def run():
+        domain: list = [("move_type", "=", move_type), ("state", "=", "posted")]
+        if customer:
+            domain.append(("partner_id.name", "ilike", customer))
+        if unpaid_only:
+            domain.append(("payment_state", "in", ("not_paid", "partial")))
+        domain.extend(date_domain("invoice_date", date_from, date_to))
+        return get_client().search_read(
             "account.move",
             domain=domain,
             fields=[
@@ -339,7 +340,8 @@ def list_invoices(
             limit=limit,
             order="invoice_date desc",
         )
-    )
+
+    return safe(run)
 
 
 @mcp.tool()
@@ -412,21 +414,22 @@ def list_payments(
         date_to: Inclusive upper bound on payment date (YYYY-MM-DD).
         limit: Max results.
     """
-    domain: list = []
-    if partner:
-        domain.append(("partner_id.name", "ilike", partner))
-    if payment_type in ("inbound", "outbound"):
-        domain.append(("payment_type", "=", payment_type))
-    domain += date_domain("date", date_from, date_to)
-    return safe(
-        lambda: get_client().search_read(
+    def run():
+        domain: list = []
+        if partner:
+            domain.append(("partner_id.name", "ilike", partner))
+        if payment_type in ("inbound", "outbound"):
+            domain.append(("payment_type", "=", payment_type))
+        domain.extend(date_domain("date", date_from, date_to))
+        return get_client().search_read(
             "account.payment",
             domain=domain,
             fields=["name", "partner_id", "payment_type", "amount", "date", "state", "journal_id"],
             limit=limit,
             order="date desc",
         )
-    )
+
+    return safe(run)
 
 
 # --- Purchase (supplement) ----------------------------------------------------

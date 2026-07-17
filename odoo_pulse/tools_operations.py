@@ -94,19 +94,20 @@ def list_pos_orders(
         state: draft, paid, done, invoiced or cancel.
         limit: Max results.
     """
-    domain: list = []
-    if state:
-        domain.append(("state", "=", state))
-    domain += date_domain("date_order", date_from, date_to)
-    return safe(
-        lambda: get_client().search_read(
+    def run():
+        domain: list = []
+        if state:
+            domain.append(("state", "=", state))
+        domain.extend(date_domain("date_order", date_from, date_to, as_datetime=True))
+        return get_client().search_read(
             "pos.order",
             domain=domain,
             fields=["name", "partner_id", "date_order", "amount_total", "state", "session_id"],
             limit=limit,
             order="date_order desc",
         )
-    )
+
+    return safe(run)
 
 
 @mcp.tool()
