@@ -14,6 +14,8 @@ from .workflow_helpers import (
     build_report,
     fetch_with_truncation,
     gather_strict,
+    optional_fields,
+    paged_search_read,
     parse_when,
     resolve_company_id,
     today_in_tz,
@@ -53,12 +55,27 @@ def procurement_watch(
         company_domain: list = (
             [("company_id", "=", company_id)] if company_id else [])
 
+        order_schema = client.fields_get("purchase.order")
+        has_receipt_status = "receipt_status" in order_schema
+        line_fields = optional_fields(
+            client,
+            "purchase.order.line",
+            ["order_id", "product_qty", "qty_received", "price_total"],
+        )
+        has_remaining_lines = set(line_fields) == {
+            "order_id", "product_qty", "qty_received", "price_total"}
+        order_fields = [
+            "id", "name", "partner_id", "date_planned",
+            "amount_total", "state", "currency_id",
+        ]
+        if has_receipt_status:
+            order_fields.append("receipt_status")
+
         fetched = gather_strict({
             "orders": lambda: fetch_with_truncation(
                 client, "purchase.order",
                 [("state", "=", "purchase"), *company_domain],
-                fields=["id", "name", "partner_id", "date_planned",
-                        "amount_total", "state", "currency_id"],
+                fields=order_fields,
                 limit=200, order="date_planned",
             ),
             "stale_rfqs": lambda: client.search_count("purchase.order", [
@@ -72,12 +89,47 @@ def procurement_watch(
         orders, truncation = fetched["orders"]
         stale_rfqs = fetched["stale_rfqs"]
 
+        lines: list[dict] = []
+        if has_remaining_lines and orders:
+            lines = paged_search_read(
+                client,
+                "purchase.order.line",
+                [("order_id", "in", [po["id"] for po in orders])],
+                ["order_id", "product_qty", "qty_received", "price_total"],
+            )
+        remaining_by_order: dict[int, float] = {}
+        for line in lines:
+            order = line.get("order_id")
+            quantity = line.get("product_qty") or 0.0
+            received = line.get("qty_received") or 0.0
+            if not order or quantity <= 0:
+                continue
+            ratio = max(quantity - received, 0.0) / quantity
+            remaining_by_order[order[0]] = (
+                remaining_by_order.get(order[0], 0.0)
+                + (line.get("price_total") or 0.0) * ratio)
+
+        open_orders: list[dict] = []
+        for po in orders:
+            if has_remaining_lines:
+                amount = remaining_by_order.get(po["id"], 0.0)
+                include = amount > 0
+            elif has_receipt_status:
+                include = po.get("receipt_status") != "full"
+                amount = po.get("amount_total") or 0.0
+            else:
+                include = True
+                amount = po.get("amount_total") or 0.0
+            if not include:
+                continue
+            open_orders.append({**po, "open_value": amount})
+
         late_cutoff = today - timedelta(days=late_grace_days)
         open_value = 0.0
         late: list[dict] = []
         vendors: dict[str, dict] = {}
-        for po in orders:
-            amount = po.get("amount_total") or 0.0
+        for po in open_orders:
+            amount = po["open_value"]
             open_value += amount
             vendor = po["partner_id"][1] if po.get("partner_id") else "(unknown)"
             vrec = vendors.setdefault(
@@ -103,13 +155,15 @@ def procurement_watch(
             verdict = "healthy"
 
         summary = {
-            "open_pos": len(orders),
+            "open_pos": len(open_orders),
             "open_value": round(open_value, 2),
             "late_receipts": len(late),
             "stale_rfqs": stale_rfqs,
+            "receipt_tracking_available": has_receipt_status or has_remaining_lines,
+            "remaining_value_available": has_remaining_lines,
             "verdict": verdict,
         }
-        by_currency = totals_by_currency(orders, "amount_total")
+        by_currency = totals_by_currency(open_orders, "open_value")
         if len(by_currency) == 1:
             summary["currency"] = next(iter(by_currency))
         elif len(by_currency) > 1:
@@ -125,7 +179,7 @@ def procurement_watch(
         )[:top_n]
 
         highlights = [
-            f"{len(orders)} confirmed PO(s) worth {round(open_value, 2)} open"]
+            f"{len(open_orders)} confirmed PO(s) worth {round(open_value, 2)} open"]
         if late:
             worst = late[0]
             highlights.append(
@@ -161,6 +215,22 @@ def procurement_watch(
                 "message": (
                     "Open-value totals mix currencies "
                     f"({', '.join(sorted(by_currency))}); read by_currency."),
+            })
+        if has_receipt_status and not has_remaining_lines:
+            risks.append({
+                "code": "partial_receipt_value_estimated",
+                "count": len(open_orders),
+                "message": (
+                    "Partial PO open values use full order totals; "
+                    "remaining line values are unavailable."),
+            })
+        elif not has_receipt_status and not has_remaining_lines:
+            risks.append({
+                "code": "receipt_tracking_unavailable",
+                "count": len(open_orders),
+                "message": (
+                    "Receipt fields are unavailable; confirmed PO "
+                    "population and values may include received goods."),
             })
 
         return build_report(

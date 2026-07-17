@@ -14,6 +14,13 @@ POS = [
      "state": "purchase", "currency_id": [1, "USD"]},   # on time
 ]
 
+LINE_SCHEMA = {
+    "order_id": {"type": "many2one"},
+    "product_qty": {"type": "float"},
+    "qty_received": {"type": "float"},
+    "price_total": {"type": "monetary"},
+}
+
 
 def _fix_today(monkeypatch):
     monkeypatch.setattr(
@@ -145,3 +152,64 @@ def test_procurement_watch_fetches_concurrently(fake_client, monkeypatch):
     out = json.loads(tools_reports_ops.procurement_watch())
     assert out["summary"]["open_pos"] == 2
     assert out["summary"]["stale_rfqs"] == 3
+
+
+def test_procurement_watch_uses_paginated_remaining_line_value(
+    fake_client, monkeypatch
+):
+    _fix_today(monkeypatch)
+    fake_client.fields_responses["purchase.order"] = {
+        "receipt_status": {"type": "selection"}}
+    fake_client.fields_responses["purchase.order.line"] = dict(LINE_SCHEMA)
+    fake_client.search_responses["purchase.order"] = [
+        dict(POS[0], receipt_status="partial"),
+        dict(POS[1], receipt_status="full"),
+    ]
+    fake_client.search_responses["purchase.order.line"] = [
+        {"order_id": [1, "PO1"], "product_qty": 10.0,
+         "qty_received": 6.0, "price_total": 500.0},
+        {"order_id": [2, "PO2"], "product_qty": 5.0,
+         "qty_received": 5.0, "price_total": 900.0},
+    ]
+    fake_client.search_count_responses["purchase.order"] = 0
+    out = json.loads(tools_reports_ops.procurement_watch())
+    assert out["summary"]["open_pos"] == 1
+    assert out["summary"]["open_value"] == 200.0
+    assert out["summary"]["receipt_tracking_available"] is True
+    assert out["summary"]["remaining_value_available"] is True
+    line_call = next(c for c in fake_client.calls
+                     if c["method"] == "search_read"
+                     and c["model"] == "purchase.order.line")
+    assert ("order_id", "in", [1, 2]) in line_call["domain"]
+    assert line_call["order"] == "id"
+
+
+def test_procurement_watch_receipt_status_only_marks_value_estimated(
+    fake_client, monkeypatch
+):
+    _fix_today(monkeypatch)
+    fake_client.fields_responses["purchase.order"] = {
+        "receipt_status": {"type": "selection"}}
+    fake_client.fields_responses["purchase.order.line"] = {"name": {"type": "char"}}
+    fake_client.search_responses["purchase.order"] = [
+        dict(POS[0], receipt_status="partial")]
+    fake_client.search_count_responses["purchase.order"] = 0
+    out = json.loads(tools_reports_ops.procurement_watch())
+    assert out["summary"]["open_value"] == 500.0
+    assert out["summary"]["remaining_value_available"] is False
+    assert any(r["code"] == "partial_receipt_value_estimated"
+               for r in out["risks"])
+
+
+def test_procurement_watch_without_receipt_schema_keeps_late_fallback(
+    fake_client, monkeypatch
+):
+    _fix_today(monkeypatch)
+    fake_client.fields_responses["purchase.order"] = {"name": {"type": "char"}}
+    fake_client.fields_responses["purchase.order.line"] = {"name": {"type": "char"}}
+    fake_client.search_responses["purchase.order"] = [POS[0]]
+    fake_client.search_count_responses["purchase.order"] = 0
+    out = json.loads(tools_reports_ops.procurement_watch())
+    assert out["summary"]["late_receipts"] == 1
+    assert out["summary"]["receipt_tracking_available"] is False
+    assert any(r["code"] == "receipt_tracking_unavailable" for r in out["risks"])
