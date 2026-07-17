@@ -2,6 +2,8 @@
 import datetime as dt
 import json
 
+import pytest
+
 from odoo_pulse import tools_reports_pulse
 
 # today fixed at 2026-06-30 -> "yesterday" is 2026-06-29.
@@ -41,7 +43,7 @@ def test_business_pulse_sections_and_verdict(fake_client, monkeypatch):
                                        "overdue_amount": 700.0,
                                        "currency": "USD"}
     assert sections["projects"] == {"available": True, "overdue_tasks": 2}
-    assert sections["hr"] == {"available": True, "off_today": 7}
+    assert sections["hr"] == {"available": True, "off_today": 1}
     assert out["summary"]["verdict"] == "attention"   # overdue invoices + tasks
     codes = {r["code"] for r in out["risks"]}
     assert codes == {"overdue_invoices", "overdue_tasks"}
@@ -87,6 +89,8 @@ def test_business_pulse_survives_missing_apps(fake_client, monkeypatch):
 
 def test_business_pulse_company_filter(fake_client, monkeypatch):
     _fix_today(monkeypatch)
+    fake_client.fields_responses["project.task"] = {
+        "date_deadline": {"type": "datetime"}}
     fake_client.search_responses["res.company"] = [{"id": 5, "name": "Acme VN"}]
     fake_client.search_count_responses["res.company"] = 2
     tools_reports_pulse.business_pulse(company="acme")
@@ -94,14 +98,19 @@ def test_business_pulse_company_filter(fake_client, monkeypatch):
         call = next(c for c in fake_client.calls
                     if c["method"] == "aggregate_records" and c["model"] == model)
         assert ("company_id", "=", 5) in call["domain"], model
-    for model in ("crm.lead", "project.task", "hr.leave"):
+    for model in ("crm.lead", "project.task"):
         call = next(c for c in fake_client.calls
                     if c["method"] == "search_count" and c["model"] == model)
         assert ("company_id", "=", 5) in call["domain"], model
+    leave_call = next(c for c in fake_client.calls
+                       if c["method"] == "search_read" and c["model"] == "hr.leave")
+    assert ("company_id", "=", 5) in leave_call["domain"], "hr.leave"
 
 
 def test_business_pulse_multi_company_caveat(fake_client, monkeypatch):
     _fix_today(monkeypatch)
+    fake_client.fields_responses["project.task"] = {
+        "date_deadline": {"type": "datetime"}}
     fake_client.search_count_responses["res.company"] = 3
     out = json.loads(tools_reports_pulse.business_pulse())
     risk = next(r for r in out["risks"] if r["code"] == "multi_company_totals")
@@ -110,6 +119,8 @@ def test_business_pulse_multi_company_caveat(fake_client, monkeypatch):
 
 def test_business_pulse_single_company_no_caveat(fake_client, monkeypatch):
     _fix_today(monkeypatch)
+    fake_client.fields_responses["project.task"] = {
+        "date_deadline": {"type": "datetime"}}
     fake_client.search_count_responses["res.company"] = 1
     out = json.loads(tools_reports_pulse.business_pulse())
     assert "multi_company_totals" not in [r["code"] for r in out["risks"]]
@@ -132,7 +143,7 @@ def test_business_pulse_day_windows_are_utc_shifted(fake_client, monkeypatch):
     assert hi[2].endswith("17:00:00")
 
     leave_call = next(c for c in fake_client.calls
-                      if c["method"] == "search_count"
+                      if c["method"] == "search_read"
                       and c["model"] == "hr.leave")
     lv = leave_call["domain"]
     assert any(t[0] == "date_from" and t[1] == "<" and t[2].endswith("17:00:00")
@@ -196,3 +207,36 @@ def test_business_pulse_invoice_aggregate_exceeds_row_cap(fake_client, monkeypat
     receivables = out["breakdown"]["sections"]["receivables"]
     assert receivables["overdue_invoices"] == 305
     assert receivables["overdue_amount"] == 99000.0
+
+
+def test_business_pulse_off_today_counts_unique_employees(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    _setup(fake_client)
+    fake_client.search_responses["hr.leave"] = [
+        {"employee_id": [10, "Alice"]},
+        {"employee_id": [10, "Alice"]},
+        {"employee_id": [11, "Bob"]},
+    ]
+    out = json.loads(tools_reports_pulse.business_pulse())
+    assert out["breakdown"]["sections"]["hr"]["off_today"] == 2
+
+
+@pytest.mark.parametrize(
+    "field_type,expected",
+    [
+        ("datetime", ("date_deadline", "<", "2026-06-29 17:00:00")),
+        ("date", ("date_deadline", "<", "2026-06-30")),
+    ],
+)
+def test_business_pulse_deadline_bound_follows_schema(
+    fake_client, monkeypatch, field_type, expected
+):
+    _fix_today(monkeypatch)
+    _setup(fake_client)
+    fake_client.fields_responses["project.task"] = {
+        "date_deadline": {"type": field_type}}
+    tools_reports_pulse.business_pulse(timezone_offset=7)
+    call = next(c for c in fake_client.calls
+                if c["method"] == "search_count"
+                and c["model"] == "project.task")
+    assert expected in call["domain"]

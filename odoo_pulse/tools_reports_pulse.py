@@ -14,6 +14,7 @@ from .runtime import get_client, mcp, safe
 from .workflow_helpers import (
     build_report,
     gather,
+    paged_search_read,
     resolve_company_id,
     today_in_tz,
     utc_bound,
@@ -112,20 +113,37 @@ def business_pulse(
                 "amount_residual", "overdue_invoices", "overdue_amount")
 
         def overdue_tasks() -> dict:
-            # date_deadline is a Date field on most versions; kept as a plain date bound deliberately (see plan Task 2) — do not "fix" to utc_bound.
+            schema = client.fields_get("project.task", attributes=["type"])
+            deadline = schema.get("date_deadline")
+            if deadline is None:
+                raise OdooError(
+                    "Field 'date_deadline' does not exist on project.task.")
+            bound = (
+                utc_bound(today, timezone_offset)
+                if deadline.get("type") == "datetime"
+                else today.isoformat()
+            )
             n = client.search_count("project.task", [
-                ("date_deadline", "<", today.isoformat()),
+                ("date_deadline", "<", bound),
                 ("stage_id.fold", "=", False),
                 *company_domain])
             return {"overdue_tasks": n}
 
         def people_off() -> dict:
-            n = client.search_count("hr.leave", [
-                ("state", "=", "validate"),
-                ("date_from", "<", t_hi),
-                ("date_to", ">=", y_hi),
-                *company_domain])
-            return {"off_today": n}
+            rows = paged_search_read(
+                client,
+                "hr.leave",
+                [
+                    ("state", "=", "validate"),
+                    ("date_from", "<", t_hi),
+                    ("date_to", ">=", y_hi),
+                    *company_domain,
+                ],
+                fields=["employee_id"],
+            )
+            employee_ids = {
+                row["employee_id"][0] for row in rows if row.get("employee_id")}
+            return {"off_today": len(employee_ids)}
 
         outcomes = gather({
             "sales": sales_yesterday,
