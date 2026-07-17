@@ -90,26 +90,45 @@ class OdooError(RuntimeError):
     """Raised when Odoo returns a fault or authentication fails."""
 
 
-def _int_env(name: str, default: int) -> int:
-    """Parse an integer environment variable; fail loudly on invalid non-empty values."""
+def _int_env(
+    name: str, default: int, *, minimum: int | None = None
+) -> int:
+    """Parse an integer env var and enforce an optional inclusive minimum."""
     raw = os.environ.get(name, "").strip()
     if not raw:
         return default
     try:
-        return int(raw)
+        value = int(raw)
     except ValueError:
         raise OdooConfigError(f"{name} must be an integer, got {raw!r}")
+    if minimum is not None and value < minimum:
+        raise OdooConfigError(
+            f"{name} must be >= {minimum}, got {value!r}")
+    return value
 
 
-def _float_env(name: str, default: float) -> float:
-    """Parse a float environment variable; fail loudly on invalid non-empty values."""
+def _float_env(
+    name: str,
+    default: float,
+    *,
+    minimum: float | None = None,
+    strict: bool = False,
+) -> float:
+    """Parse a float env var and enforce an optional lower bound."""
     raw = os.environ.get(name, "").strip()
     if not raw:
         return default
     try:
-        return float(raw)
+        value = float(raw)
     except ValueError:
         raise OdooConfigError(f"{name} must be a number, got {raw!r}")
+    invalid = minimum is not None and (
+        value <= minimum if strict else value < minimum)
+    if invalid:
+        operator = ">" if strict else ">="
+        raise OdooConfigError(
+            f"{name} must be {operator} {minimum}, got {value!r}")
+    return value
 
 
 class _TimeoutTransport(xmlrpc.client.Transport):
@@ -188,7 +207,7 @@ class OdooConfig:
             "0",
             "no",
         )
-        max_records = _int_env("ODOO_MAX_RECORDS", 200)
+        max_records = _int_env("ODOO_MAX_RECORDS", 200, minimum=1)
 
         verify_ssl = os.environ.get("ODOO_VERIFY_SSL", "true").lower() not in (
             "false",
@@ -205,10 +224,11 @@ class OdooConfig:
             "1",
             "yes",
         )
-        schema_cache_ttl = _float_env("ODOO_SCHEMA_CACHE_TTL", 300.0)
-        schema_cache_max = _int_env("ODOO_SCHEMA_CACHE_MAX", 64)
-        max_attachment_bytes = _int_env("ODOO_MAX_ATTACHMENT_BYTES", 1048576)
-        timeout = _float_env("ODOO_TIMEOUT", 30.0)
+        schema_cache_ttl = _float_env("ODOO_SCHEMA_CACHE_TTL", 300.0, minimum=0.0)
+        schema_cache_max = _int_env("ODOO_SCHEMA_CACHE_MAX", 64, minimum=1)
+        max_attachment_bytes = _int_env(
+            "ODOO_MAX_ATTACHMENT_BYTES", 1048576, minimum=1)
+        timeout = _float_env("ODOO_TIMEOUT", 30.0, minimum=0.0, strict=True)
 
         return cls(
             url=url,

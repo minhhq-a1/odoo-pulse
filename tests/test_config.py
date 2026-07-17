@@ -142,3 +142,38 @@ def test_empty_numeric_env_uses_default(monkeypatch):
     _set_env(monkeypatch, ODOO_MAX_RECORDS="")
     assert OdooConfig.from_env().max_records == 200
 
+
+@pytest.mark.parametrize(
+    "name,value",
+    [
+        ("ODOO_MAX_RECORDS", "0"),
+        ("ODOO_MAX_RECORDS", "-1"),
+        ("ODOO_SCHEMA_CACHE_MAX", "0"),
+        ("ODOO_MAX_ATTACHMENT_BYTES", "0"),
+        ("ODOO_TIMEOUT", "0"),
+        ("ODOO_TIMEOUT", "-0.5"),
+        ("ODOO_SCHEMA_CACHE_TTL", "-1"),
+    ],
+)
+def test_numeric_env_rejects_out_of_range(monkeypatch, name, value):
+    _set_env(monkeypatch, **{name: value})
+    with pytest.raises(OdooConfigError, match=name):
+        OdooConfig.from_env()
+
+
+def test_numeric_env_accepts_documented_boundaries(monkeypatch):
+    _set_env(
+        monkeypatch,
+        ODOO_MAX_RECORDS="1",
+        ODOO_SCHEMA_CACHE_MAX="1",
+        ODOO_MAX_ATTACHMENT_BYTES="1",
+        ODOO_TIMEOUT="0.001",
+        ODOO_SCHEMA_CACHE_TTL="0",
+    )
+    cfg = OdooConfig.from_env()
+    assert cfg.max_records == 1
+    assert cfg.schema_cache_max == 1
+    assert cfg.max_attachment_bytes == 1
+    assert cfg.timeout == 0.001
+    assert cfg.schema_cache_ttl == 0.0
+
