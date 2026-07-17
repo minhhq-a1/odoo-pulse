@@ -3,6 +3,7 @@ import datetime as dt
 import json
 
 from odoo_pulse import tools_reports_projects
+from odoo_pulse.odoo_client import OdooError
 
 # -- fixtures ------------------------------------------------------------------
 
@@ -219,6 +220,33 @@ def test_no_budget_risk(fake_client):
     assert rows["Beta"]["planned"] is None
     assert rows["Beta"]["verdict"] == "n/a"
     assert out["summary"]["with_budget"] == 1
+
+
+def test_fetch_lines_recovers_from_faulting_first_candidate(fake_client, monkeypatch):
+    # budget.line becomes usable (schema resolves an amount field, the
+    # search_count existence probe succeeds) but its actual line read still
+    # faults on a real server (e.g. a dotted extra-domain field the instance
+    # doesn't support) -- fetch_lines() must catch that OdooError and fall
+    # through to the next candidate (mirroring _budget_by_project), not crash.
+    fake_client.fields_responses["budget.line"] = {
+        "project_id": {}, "account_id": {}, "planned_amount": {}}
+    _seed(fake_client)  # crossovered.budget.lines is the working fallback
+
+    real_search_read = fake_client.search_read
+
+    def faulting_search_read(model, *args, **kwargs):
+        if model == "budget.line":
+            raise OdooError("Invalid field budget_analytic_id.budget_type")
+        return real_search_read(model, *args, **kwargs)
+
+    monkeypatch.setattr(fake_client, "search_read", faulting_search_read)
+
+    out = json.loads(tools_reports_projects.project_budget())
+    assert out["budgets_available"] is True
+    lines_call = next(c for c in fake_client.calls
+                       if c["method"] == "search_read"
+                       and c["model"] == "crossovered.budget.lines")
+    assert lines_call is not None
 
 
 def test_budgets_unavailable_degrades(fake_client):
