@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from odoo_pulse import domain_tools, tools_generic
 
 
@@ -168,4 +170,26 @@ def test_find_partner_includes_mobile_when_present(fake_client):
         isinstance(t, (list, tuple)) and t and t[0] == "mobile"
         for t in call["domain"]
     )
+
+
+@pytest.mark.parametrize(
+    "func,kwargs",
+    [
+        (domain_tools.get_sale_order, {"order_id": 1}),
+        (domain_tools.get_invoice, {"move_id": 1}),
+        (domain_tools.get_purchase_order, {"order_id": 1}),
+    ],
+)
+def test_document_tool_serialises_client_construction_error(
+    monkeypatch, func, kwargs
+):
+    from odoo_pulse.odoo_client import OdooConfigError
+
+    def fail_client():
+        raise OdooConfigError("Missing required environment variables: ODOO_API_KEY")
+
+    monkeypatch.setattr(domain_tools, "get_client", fail_client)
+    out = json.loads(func(**kwargs))
+    assert out == {
+        "error": "Missing required environment variables: ODOO_API_KEY"}
 

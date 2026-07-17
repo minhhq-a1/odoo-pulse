@@ -161,9 +161,9 @@ def get_sale_order(order_id: int | None = None, order_name: str | None = None) -
     Provide either the numeric `order_id` or the `order_name` (e.g. 'S00042').
     Returns the order header plus its order lines (product, qty, price).
     """
-    client = get_client()
 
     def _run() -> dict[str, Any]:
+        client = get_client()
         oid = order_id
         if oid is None:
             if not order_name:
@@ -350,9 +350,9 @@ def get_invoice(move_id: int | None = None, number: str | None = None) -> str:
 
     Provide either the numeric `move_id` or the `number` (e.g. 'INV/2026/0001').
     """
-    client = get_client()
 
     def _run() -> dict[str, Any]:
+        client = get_client()
         mid = move_id
         if mid is None:
             if not number:
@@ -441,9 +441,9 @@ def get_purchase_order(order_id: int | None = None, order_name: str | None = Non
 
     Provide either the numeric `order_id` or the `order_name` (e.g. 'P00007').
     """
-    client = get_client()
 
     def _run() -> dict[str, Any]:
+        client = get_client()
         oid = order_id
         if oid is None:
             if not order_name:
