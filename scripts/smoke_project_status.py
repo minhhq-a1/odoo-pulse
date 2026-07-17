@@ -2,8 +2,8 @@
 """Read-only live baseline for the Project Status tool family.
 
 Prints the numbers the spec pins for The Body Shop (project_id=59,
-budget "PASX TBS", planned 1,593,314,320 / practical 1,735,766,746 —
-verified 2026-07-15) so they can be eyeballed against the artifact.
+budget "PASX TBS", planned 1,593,314,320 / practical 1,736,086,746 —
+verified 2026-07-17) so they can be eyeballed against the artifact.
 Never writes. Requires the usual ODOO_* env vars (see scripts/smoke_live.py).
 
 Usage: python scripts/smoke_project_status.py [PROJECT_ID]
