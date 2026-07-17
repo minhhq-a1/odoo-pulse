@@ -41,6 +41,17 @@ One-call company briefing: sales, leads, receivables, tasks, absences.
 - `timezone_offset` (default `7`): UTC offset for "today".
 - `company`: Optional company name (ilike) or id; scopes every section.
 
+The `sales` and `receivables` sections report a scalar `revenue` /
+`overdue_amount` plus either a single `currency` (all rows share one
+currency) or a `by_currency` breakdown with `mixed_currencies: true` and
+`totals_comparable: false` on the section — and a top-level `mixed_currencies`
+risk entry — when rows span more than one currency; see "Multi-company /
+multi-currency" below. `hr.off_today` counts
+unique employees with an approved leave covering today, not leave-request
+rows. `projects.overdue_tasks` compares `project.task.date_deadline` as a UTC
+datetime bound when that field is a `datetime` on this instance, or as a
+plain date otherwise (schema-aware).
+
 ### `pipeline_review`
 
 Report the health of the CRM pipeline, in one call.
@@ -117,6 +128,18 @@ Report purchasing health — late receipts and stale RFQs — in one call.
 - `timezone_offset` (default `7`): UTC offset for "today".
 - `company`: Optional company name (ilike) or id to scope the report.
 
+`summary.receipt_tracking_available` reports whether either receipt-tracking
+signal exists on this instance (`purchase.order.receipt_status`, or
+`qty_received` on `purchase.order.line`). `summary.remaining_value_available`
+reports specifically whether the line-level `qty_received` signal is
+available, which lets `open_value` reflect only the undelivered remainder of
+a partially received PO instead of its full order total. When only
+`receipt_status` is available (no line-level quantities), `risks` includes a
+`partial_receipt_value_estimated` entry — partially received POs are valued
+at their full order total. When neither signal is available, `risks`
+includes a `receipt_tracking_unavailable` entry — the confirmed-PO
+population and `open_value` may include goods already received.
+
 ### `production_health`
 
 Report manufacturing health — late starts and stuck orders — in one call.
@@ -168,11 +191,22 @@ client-side — especially useful for the "exactly one assignee" condition,
 which Odoo domains cannot express.
 
 - `project_id`: `project.project` id (required).
-- `only_closed_stages` (default `false`): Count only tasks whose stage name
-  is in `closed_stage_names`. Cancelled tasks still count toward delivery
+- `only_closed_stages` (default `false`): Count only tasks the schema
+  considers closed. State is primary: on instances with
+  `project.task.state`, "closed" means `state` in the stable closed set
+  (done/cancelled); with no `state` field, `is_closed` is used if present;
+  only when neither exists does it fall back to matching `stage_id.name`
+  against `closed_stage_names`. Cancelled tasks still count toward delivery
   hours (business decision, not a bug).
-- `closed_stage_names` (default `["Done", "Cancelled", "Delivered"]`):
-  Stage names treated as closed.
+- `closed_stage_names` (default `["Done", "Cancelled", "Delivered"]`): Stage
+  names treated as closed. This is the sole filter on schemas with neither
+  `state` nor `is_closed` (the stage-name fallback above). On schemas that DO
+  have `state`/`is_closed`, explicitly passing `closed_stage_names` narrows
+  the result further: it becomes an additional AND condition on top of the
+  stable closed-state filter, so a task must be both state-closed AND have a
+  matching stage name — a deliberate narrowing versus the previous
+  stage-name-only population. Omit it (or rely on the default) to use only
+  the stable state filter on those schemas.
 - `single_assignee_only` (default `false`): Count only tasks with exactly
   one user in `user_ids`.
 - `group_by_month` (default `false`): Also bucket totals by the local-time
@@ -239,6 +273,17 @@ error) with a `truncated_milestone_data` risk entry — same pattern as
 ### `team_workload` · `project_status_report` · `standup_digest`
 
 Project delivery reports — per-assignee workload, portfolio-wide project health, and a daily stand-up digest. Same composition style as the reports above (filters, thresholds, `timezone_offset`); see the docstrings in `odoo_pulse/tools_workflows.py` for the full argument list.
+
+`team_workload`'s `done_stages` and `standup_digest`'s `exclude_stages`
+classify a task as closed the same schema-aware way as
+`project_subtask_hours`'s `only_closed_stages` above: `project.task.state`
+is checked first (the stable closed set), then `is_closed`, and only then
+the stage-name list itself. The stage-name parameter remains a compatible
+fallback/exclusion filter on every schema — it just stops being the sole
+signal once a stabler field exists. Unlike `project_subtask_hours` /
+`project_dashboard`'s `closed_stage_names`, these two parameters are not
+additionally ANDed onto the state-based filter; they only narrow via the
+stage-name path itself.
 
 ### Multi-company / multi-currency
 

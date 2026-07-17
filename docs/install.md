@@ -20,6 +20,16 @@ Writes are off by default. Even with all three write variables set, every write
 tool returns a dry-run preview unless called with `confirm=true` — details in
 [Write operations](tools.md#write-operations).
 
+### If an API key may have been exposed
+
+1. Revoke or rotate the key in Odoo.
+2. Put the replacement only in your ignored local MCP configuration.
+3. Remove any override that disables TLS verification (`ODOO_VERIFY_SSL` set
+   to `false`); rely on the secure default (`true`).
+4. Verify the new key over TLS, then confirm the old key no longer authenticates.
+5. Before release, run the redacted reachable and unreachable Git scans from
+   the audit-remediation plan. Never paste the key into a command line or log.
+
 No Odoo account? See the [5-minute playground](playground.md) — it boots a demo
 Odoo for you.
 

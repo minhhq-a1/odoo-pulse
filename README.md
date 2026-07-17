@@ -86,7 +86,9 @@ claude mcp add odoo-pulse \
 
 Generate the API key in Odoo under **Settings → Users → (your user) → Account
 Security → New API Key**. Config for **Claude Desktop** and **Cursor**, plus pip
-and Docker alternatives: [docs/install.md](docs/install.md).
+and Docker alternatives: [docs/install.md](docs/install.md). If a key may have
+been exposed, see [If an API key may have been
+exposed](docs/install.md#if-an-api-key-may-have-been-exposed).
 
 Or one-click:
 
