@@ -297,6 +297,20 @@ def test_budget_context_lists_budgets(fake_client):
     assert ctx["parent_field"] == "crossovered_budget_id"
 
 
+def test_budget_context_excludes_revenue_lines_from_fetch(fake_client):
+    # crossovered.budget.lines can carry a Revenue-category line alongside
+    # Expense lines (general_budget_id="Revenue", positive planned_amount).
+    # Summing abs() over both inflates planned/practical -- must be
+    # excluded at the fetch domain, same as the budget.line candidate
+    # already excludes revenue via budget_analytic_id.budget_type.
+    _seed_budget(fake_client)
+    _budget_context(fake_client, 59)
+    call = next(c for c in fake_client.calls
+                if c["method"] == "search_read"
+                and c["model"] == "crossovered.budget.lines")
+    assert ("planned_amount", "<", 0) in call["domain"]
+
+
 def test_budget_context_accepts_prefetched_project_row(fake_client):
     _seed_budget(fake_client)
     row = {"id": 59, "name": "The Body Shop", "account_id": [5, "AA TBS"]}
@@ -637,6 +651,33 @@ def test_portfolio_health_joins_by_id_two_projects_same_name(fake_client):
     assert by_id[2]["revenue"] == 700.0
     assert by_id[1]["budget"] is None           # budgets unavailable
     assert out["tool"] == "portfolio_health"
+
+
+def test_portfolio_health_budget_excludes_revenue_lines(fake_client):
+    # Same crossovered.budget.lines revenue-exclusion rule as
+    # project_dashboard/project_budget must hold for portfolio_health's
+    # budget_burn_pct (_budget_by_project) -- one shared candidate list,
+    # one shared bug surface.
+    fake_client.fields_responses["project.project"] = dict(_PROJECT_SCHEMA)
+    fake_client.search_responses["project.project"] = [
+        {"id": 1, "name": "Alpha", "user_id": False, "partner_id": False,
+         "date": False, "task_count": 1, "last_update_status": "on_track",
+         "account_id": [101, "AA-1"]},
+    ]
+    fake_client.search_responses["project.milestone"] = []
+    fake_client.aggregate_responses_seq["account.analytic.line"] = [
+        [], [], [],
+    ]
+    fake_client.error_models.add("budget.line")
+    fake_client.fields_responses["crossovered.budget.lines"] = {
+        "analytic_account_id": {"type": "many2one"},
+        "planned_amount": {"type": "float"},
+    }
+    json.loads(portfolio_health())
+    call = next(c for c in fake_client.calls
+                if c["method"] == "aggregate_records"
+                and c["model"] == "crossovered.budget.lines")
+    assert ("planned_amount", "<", 0) in call["domain"]
 
 
 def test_portfolio_health_sorts_riskiest_first_and_filters(fake_client):

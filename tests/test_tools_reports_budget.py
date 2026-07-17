@@ -85,6 +85,12 @@ def test_line_and_cost_domains(fake_client):
     assert ("project_id", "in", [1, 2]) in lines["domain"]
     assert ("crossovered_budget_id.state", "in",
             ["confirm", "validate", "done"]) in lines["domain"]
+    # Revenue-category lines (general_budget_id="Revenue") must never enter
+    # planned/practical sums alongside Expense lines -- a budget with equal
+    # Expense and Revenue totals would otherwise report double the real
+    # planned amount (bug: project 127 "RTH - CR 0126" showed 479,600,000
+    # instead of the correct 239,800,000).
+    assert ("planned_amount", "<", 0) in lines["domain"]
     assert lines["limit"] == 500
     cost = next(c for c in fake_client.calls
                 if c["method"] == "aggregate_records"

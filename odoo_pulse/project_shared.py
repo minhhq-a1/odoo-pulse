@@ -27,7 +27,16 @@ _BUDGET_CANDIDATES = [
     ("crossovered.budget.lines",
      ["analytic_account_id"],
      ["planned_amount"],
-     [("crossovered_budget_id.state", "in", ["confirm", "validate", "done"])]),
+     # planned_amount < 0 keeps Expense lines only. Unlike budget.line,
+     # this model has no technical revenue/expense field on
+     # general_budget_id (account.budget.post only has a translatable
+     # name) -- the sign of planned_amount is the reliable signal, same
+     # convention as analytic_money's account.analytic.line.amount.
+     # Without this, a budget with a Revenue-category line (e.g. a
+     # matching "Doanh thu" position) alongside its Expense lines gets
+     # summed via abs() over both, silently doubling planned/practical.
+     [("crossovered_budget_id.state", "in", ["confirm", "validate", "done"]),
+      ("planned_amount", "<", 0)]),
 ]
 
 _PRACTICAL_CANDIDATES = ["practical_amount", "achieved_amount"]
