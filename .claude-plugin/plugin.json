@@ -1,7 +1,7 @@
 {
   "name": "odoo-pulse",
   "description": "AI business analyst for Odoo ERP — one-call reports with verdicts (business_pulse, pipeline_review, receivables_health, ...). Read-only by default.",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "author": { "name": "Minh Hong", "url": "https://github.com/minhhq-a1" },
   "homepage": "https://github.com/minhhq-a1/odoo-pulse",
   "license": "MIT",
