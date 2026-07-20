@@ -19,6 +19,7 @@ import threading
 import xmlrpc.client
 from dataclasses import dataclass
 from functools import cached_property
+from math import isfinite
 from typing import Any
 
 from .cache import TTLCache
@@ -122,6 +123,8 @@ def _float_env(
         value = float(raw)
     except ValueError:
         raise OdooConfigError(f"{name} must be a number, got {raw!r}")
+    if not isfinite(value):
+        raise OdooConfigError(f"{name} must be a finite number, got {raw!r}")
     invalid = minimum is not None and (
         value <= minimum if strict else value < minimum)
     if invalid:

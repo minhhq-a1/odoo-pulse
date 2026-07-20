@@ -177,3 +177,19 @@ def test_numeric_env_accepts_documented_boundaries(monkeypatch):
     assert cfg.timeout == 0.001
     assert cfg.schema_cache_ttl == 0.0
 
+
+@pytest.mark.parametrize(
+    "name,value",
+    [
+        ("ODOO_TIMEOUT", "nan"),
+        ("ODOO_TIMEOUT", "inf"),
+        ("ODOO_TIMEOUT", "-inf"),
+        ("ODOO_SCHEMA_CACHE_TTL", "nan"),
+        ("ODOO_SCHEMA_CACHE_TTL", "inf"),
+        ("ODOO_SCHEMA_CACHE_TTL", "-inf"),
+    ],
+)
+def test_numeric_env_rejects_non_finite_values(monkeypatch, name, value):
+    _set_env(monkeypatch, **{name: value})
+    with pytest.raises(OdooConfigError, match=name):
+        OdooConfig.from_env()

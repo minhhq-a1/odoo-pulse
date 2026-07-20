@@ -34,7 +34,6 @@ def _currency_aggregate(
         group_by=["currency_id"],
         measures=[(amount_field, "sum")],
         domain=domain,
-        limit=200,
     )
     count = 0
     total = 0.0

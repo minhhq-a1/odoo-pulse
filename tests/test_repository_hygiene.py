@@ -17,3 +17,12 @@ def test_public_config_uses_placeholders_and_tls_verification():
         assert "ODOO_VERIFY_SSL=false" not in text, path
     assert "your-api-key" in texts[ROOT / "README.md"]
     assert "your-api-key" in texts[ROOT / "docs" / "install.md"]
+
+
+def test_install_docs_include_self_contained_redacted_secret_scans():
+    text = (ROOT / "docs" / "install.md").read_text()
+    assert 'gitleaks git --redact --log-opts="--all" .' in text
+    assert "git fsck --full --no-reflogs --unreachable" in text
+    assert "gitleaks dir --redact" in text
+    assert "audit-remediation plan" not in text
+    assert "trusted private CA" in text

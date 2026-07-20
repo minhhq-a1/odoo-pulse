@@ -209,6 +209,21 @@ def test_business_pulse_invoice_aggregate_exceeds_row_cap(fake_client, monkeypat
     assert receivables["overdue_amount"] == 99000.0
 
 
+def test_business_pulse_currency_aggregates_are_not_group_capped(
+    fake_client, monkeypatch
+):
+    _fix_today(monkeypatch)
+    _setup(fake_client)
+    tools_reports_pulse.business_pulse()
+    calls = [
+        call for call in fake_client.calls
+        if call["method"] == "aggregate_records"
+        and call["model"] in {"sale.order", "account.move"}
+    ]
+    assert len(calls) == 2
+    assert all(call["limit"] is None for call in calls)
+
+
 def test_business_pulse_off_today_counts_unique_employees(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _setup(fake_client)

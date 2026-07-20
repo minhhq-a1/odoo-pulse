@@ -24,11 +24,37 @@ tool returns a dry-run preview unless called with `confirm=true` — details in
 
 1. Revoke or rotate the key in Odoo.
 2. Put the replacement only in your ignored local MCP configuration.
-3. Remove any override that disables TLS verification (`ODOO_VERIFY_SSL` set
-   to `false`); rely on the secure default (`true`).
+3. Use the secure `ODOO_VERIFY_SSL=true` default. For a self-signed
+   certificate, install its trusted private CA on the MCP host (or expose its
+   CA bundle through the host's Python trust configuration) instead of
+   disabling verification. Keep verification disabled only as an explicitly
+   documented, network-restricted exception after accepting the interception
+   risk.
 4. Verify the new key over TLS, then confirm the old key no longer authenticates.
-5. Before release, run the redacted reachable and unreachable Git scans from
-   the audit-remediation plan. Never paste the key into a command line or log.
+5. Before release, scan tracked and reachable history with redacted output:
+
+   ```bash
+   gitleaks git --redact --log-opts="--all" .
+   ```
+
+6. Extract unreachable Git blobs to a dedicated temporary directory, scan
+   them without printing their contents, then remove only that directory:
+
+   ```bash
+   audit_blob_dir="$(mktemp -d)"
+   git fsck --full --no-reflogs --unreachable |
+     awk '$1 == "unreachable" && $2 == "blob" {print $3}' |
+     while read -r object_id; do
+       git cat-file blob "$object_id" >"$audit_blob_dir/$object_id"
+     done
+   gitleaks dir --redact "$audit_blob_dir"
+   find "$audit_blob_dir" -type f -delete
+   rmdir "$audit_blob_dir"
+   ```
+
+Both Gitleaks commands must exit `0` with no findings. Install Gitleaks as a
+release-workstation tool if necessary; do not add it to Python dependencies or
+skip the gate. Never paste a key into a command line or log.
 
 No Odoo account? See the [5-minute playground](playground.md) — it boots a demo
 Odoo for you.
