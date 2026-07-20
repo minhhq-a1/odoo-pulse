@@ -91,7 +91,7 @@ def test_line_and_cost_domains(fake_client):
     # Expense and Revenue totals would otherwise report double the real
     # planned amount (bug: project 127 "RTH - CR 0126" showed 479,600,000
     # instead of the correct 239,800,000).
-    assert ("planned_amount", "<", 0) in lines["domain"]
+    assert ("planned_amount", "<=", 0) in lines["domain"]
     assert lines["limit"] == 500
     cost = next(c for c in fake_client.calls
                 if c["method"] == "aggregate_records"

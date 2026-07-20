@@ -312,7 +312,24 @@ def test_budget_context_excludes_revenue_lines_from_fetch(fake_client):
     call = next(c for c in fake_client.calls
                 if c["method"] == "search_read"
                 and c["model"] == "crossovered.budget.lines")
-    assert ("planned_amount", "<", 0) in call["domain"]
+    assert ("planned_amount", "<=", 0) in call["domain"]
+
+
+def test_budget_context_includes_zero_planned_expense_budgets(fake_client):
+    # A "practical-only" budget records actuals but was never planned: its
+    # line has planned_amount == 0 (e.g. "KFC - PRE-SALES", project 114).
+    # A strict `planned_amount < 0` filter drops that line, so its parent
+    # budget never surfaces in ctx["budgets"] and project_dashboard reports
+    # the budget id as "match no budget". `<= 0` keeps zero-planned Expense
+    # lines while still excluding positive Revenue lines (see the test
+    # above), so such budgets stay selectable.
+    _seed_budget(fake_client)
+    _budget_context(fake_client, 59)
+    call = next(c for c in fake_client.calls
+                if c["method"] == "search_read"
+                and c["model"] == "crossovered.budget.lines")
+    assert ("planned_amount", "<", 0) not in call["domain"]
+    assert ("planned_amount", "<=", 0) in call["domain"]
 
 
 def test_budget_context_accepts_prefetched_project_row(fake_client):
@@ -713,7 +730,7 @@ def test_portfolio_health_budget_excludes_revenue_lines(fake_client):
     call = next(c for c in fake_client.calls
                 if c["method"] == "aggregate_records"
                 and c["model"] == "crossovered.budget.lines")
-    assert ("planned_amount", "<", 0) in call["domain"]
+    assert ("planned_amount", "<=", 0) in call["domain"]
 
 
 def test_portfolio_health_sorts_riskiest_first_and_filters(fake_client):
