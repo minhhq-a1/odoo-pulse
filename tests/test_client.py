@@ -6,10 +6,10 @@ import xmlrpc.client
 
 import pytest
 
+from odoo_pulse.core.config import OdooConfig
+from odoo_pulse.core.errors import OdooError
 from odoo_pulse.odoo_client import (
     OdooClient,
-    OdooConfig,
-    OdooError,
     _TimeoutSafeTransport,
     _TimeoutTransport,
 )
