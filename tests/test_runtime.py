@@ -7,23 +7,25 @@ import threading
 
 import pytest
 
-from odoo_pulse import runtime
+from odoo_pulse.common.dates import date_domain, parse_date_parameter
+from odoo_pulse.common.domains import name_domain
 from odoo_pulse.mcp import app
 from odoo_pulse.mcp import runtime as mcp_runtime
 from odoo_pulse.mcp.result import safe
+from odoo_pulse.services.writes import preview
 
 
 def test_name_domain_empty_query():
-    assert runtime.name_domain(None, ["name"]) == []
-    assert runtime.name_domain("", ["name", "email"]) == []
+    assert name_domain(None, ["name"]) == []
+    assert name_domain("", ["name", "email"]) == []
 
 
 def test_name_domain_single_field():
-    assert runtime.name_domain("acme", ["name"]) == [("name", "ilike", "acme")]
+    assert name_domain("acme", ["name"]) == [("name", "ilike", "acme")]
 
 
 def test_name_domain_multi_field_or():
-    out = runtime.name_domain("acme", ["name", "email", "phone"])
+    out = name_domain("acme", ["name", "email", "phone"])
     # Two OR operators for three terms, prefix-notation as Odoo expects.
     assert out == [
         "|",
@@ -35,16 +37,16 @@ def test_name_domain_multi_field_or():
 
 
 def test_date_domain():
-    assert runtime.date_domain("date", None, None) == []
-    assert runtime.date_domain("date", "2026-01-01", None) == [("date", ">=", "2026-01-01")]
-    assert runtime.date_domain("date", "2026-01-01", "2026-12-31") == [
+    assert date_domain("date", None, None) == []
+    assert date_domain("date", "2026-01-01", None) == [("date", ">=", "2026-01-01")]
+    assert date_domain("date", "2026-01-01", "2026-12-31") == [
         ("date", ">=", "2026-01-01"),
         ("date", "<=", "2026-12-31"),
     ]
 
 
 def test_datetime_domain_uses_exclusive_next_day():
-    assert runtime.date_domain(
+    assert date_domain(
         "date_order", "2026-01-01", "2026-06-30", as_datetime=True
     ) == [
         ("date_order", ">=", "2026-01-01"),
@@ -55,7 +57,19 @@ def test_datetime_domain_uses_exclusive_next_day():
 def test_date_domain_rejects_invalid_iso_date():
     from odoo_pulse.core.errors import OdooError
     with pytest.raises(OdooError, match="date_to"):
-        runtime.date_domain("date", None, "2026-06-30 trailing")
+        date_domain("date", None, "2026-06-30 trailing")
+
+
+def test_parse_date_parameter_rejects_surrounding_whitespace():
+    # Unlike common.dates.parse_period_date (whitespace-tolerant, exercised
+    # in test_tools_reports_projects.py's test_validate_date_passthrough_and_error),
+    # parse_date_parameter is the strict tool-parameter variant: a leading
+    # or trailing space must not be silently trimmed away.
+    from odoo_pulse.core.errors import OdooError
+    with pytest.raises(OdooError, match="date_from"):
+        parse_date_parameter(" 2026-07-01", "date_from")
+    with pytest.raises(OdooError, match="date_from"):
+        parse_date_parameter("2026-07-01 ", "date_from")
 
 
 def test_safe_serialises_result():
@@ -74,7 +88,6 @@ def test_safe_catches_odoo_error():
 
 
 def test_preview_create_echoes_values():
-    from odoo_pulse.runtime import preview
     out = preview("create", "crm.lead", values={"name": "X"})
     assert out["preview"] is True
     assert out["confirm_required"] is True
@@ -85,7 +98,6 @@ def test_preview_create_echoes_values():
 
 
 def test_preview_update_includes_ids_count_affected():
-    from odoo_pulse.runtime import preview
     out = preview("update", "crm.lead", ids=[1, 2], values={"name": "Y"}, affected=["A", "B"])
     assert out["ids"] == [1, 2]
     assert out["count"] == 2

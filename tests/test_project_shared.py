@@ -3,6 +3,7 @@ import datetime as dt
 
 import pytest
 
+from odoo_pulse.common.dates import periods_domain
 from odoo_pulse.core.errors import OdooError
 from odoo_pulse.project_shared import (
     DEFAULT_CLOSED_STAGES,
@@ -13,7 +14,6 @@ from odoo_pulse.project_shared import (
     derive_project_health,
     fetch_subtasks,
     filter_subtasks_by_periods,
-    periods_domain,
     subtasks_by_month,
     sum_hours,
 )

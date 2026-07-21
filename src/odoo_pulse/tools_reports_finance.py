@@ -7,13 +7,14 @@ build_report envelope with a rule-based verdict. Read-only.
 
 from __future__ import annotations
 
-from .runtime import get_client, mcp, safe
+from .common.dates import parse_when, today_in_tz
+from .mcp.app import mcp
+from .mcp.result import safe
+from .mcp.runtime import get_client
 from .workflow_helpers import (
     build_report,
     fetch_with_truncation,
-    parse_when,
     resolve_company_id,
-    today_in_tz,
     totals_by_currency,
 )
 

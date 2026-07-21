@@ -10,17 +10,14 @@ practical figures — spec rule #7).
 
 from __future__ import annotations
 
-from datetime import datetime, time as dt_time, timedelta
-
+from .common.dates import parse_period_date, parse_when, periods_domain
 from .core.errors import OdooError
 from .workflow_helpers import (
     optional_fields,
     paged_search_read,
-    parse_when,
     task_closed_scope,
     task_matches_scope,
     task_scope_warning,
-    utc_bound,
 )
 
 # (model, analytic-account field candidates, planned-amount field candidates,
@@ -146,66 +143,6 @@ def _budget_by_project(
     return {}, False
 
 
-def _parse_ymd(value, param: str):
-    """Strict YYYY-MM-DD parse (surrounding whitespace only). Unlike
-    parse_when, this does NOT truncate to the first 10 characters --
-    callers (periods_domain, budget date fields) expect plain dates, and a
-    silent truncation would accept garbage like "2025-01-01xyz" as valid.
-    """
-    try:
-        return datetime.strptime(str(value).strip(), "%Y-%m-%d").date()
-    except (TypeError, ValueError):
-        raise OdooError(f"Invalid {param} {value!r}: expected YYYY-MM-DD")
-
-
-def periods_domain(
-    field: str,
-    periods: list[dict] | None,
-    timezone_offset: int,
-    as_datetime: bool = True,
-) -> list:
-    """OR-of-closed-ranges domain on `field` (spec: OR between periods,
-    NOT a union — gaps between non-adjacent budgets stay excluded).
-
-    as_datetime=True: bounds are local 00:00:00 / 23:59:59 at
-    timezone_offset, converted to UTC datetime strings. False: plain
-    YYYY-MM-DD strings for date (not datetime) fields.
-    """
-    subs: list[list] = []
-    for i, period in enumerate(periods or []):
-        d_from = (period or {}).get("date_from")
-        d_to = (period or {}).get("date_to")
-        if not d_from and not d_to:
-            raise OdooError(
-                f"periods[{i}] needs date_from and/or date_to")
-        leaves: list = []
-        if d_from:
-            day = _parse_ymd(d_from, f"periods[{i}].date_from")
-            low = (utc_bound(day, timezone_offset)
-                   if as_datetime else day.isoformat())
-            leaves.append((field, ">=", low))
-        if d_to:
-            day = _parse_ymd(d_to, f"periods[{i}].date_to")
-            if as_datetime:
-                high = (datetime.combine(day, dt_time(23, 59, 59))
-                        - timedelta(hours=timezone_offset)
-                        ).strftime("%Y-%m-%d %H:%M:%S")
-            else:
-                high = day.isoformat()
-            leaves.append((field, "<=", high))
-        subs.append(leaves)
-    if not subs:
-        return []
-    if len(subs) == 1:
-        return subs[0]
-    out: list = ["|"] * (len(subs) - 1)
-    for leaves in subs:
-        if len(leaves) == 2:
-            out.append("&")
-        out.extend(leaves)
-    return out
-
-
 # -- subtask fetch/filter/aggregate helpers ----------------------------------
 
 HOUR_FIELDS = ("delivery_hours", "allocated_hours", "effective_hours")
@@ -307,9 +244,10 @@ def filter_subtasks_by_periods(
     if not periods:
         return list(tasks)
     ranges = [
-        (_parse_ymd(p["date_from"], "date_from") if p.get("date_from")
-         else None,
-         _parse_ymd(p["date_to"], "date_to") if p.get("date_to") else None)
+        (parse_period_date(p["date_from"], "date_from")
+         if p.get("date_from") else None,
+         parse_period_date(p["date_to"], "date_to")
+         if p.get("date_to") else None)
         for p in periods
     ]
     out = []

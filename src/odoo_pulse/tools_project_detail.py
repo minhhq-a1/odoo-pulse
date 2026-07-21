@@ -14,7 +14,11 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+from .common.dates import parse_when, periods_domain, today_in_tz
 from .core.errors import OdooError
+from .mcp.app import mcp
+from .mcp.result import safe
+from .mcp.runtime import get_client
 from .project_shared import (
     DEFAULT_CLOSED_STAGES,
     _PARENT_CANDIDATES,
@@ -29,16 +33,12 @@ from .project_shared import (
     fetch_subtasks,
     filter_subtasks_by_periods,
     paged_search_read,
-    periods_domain,
     subtasks_by_month,
     sum_hours,
 )
-from .runtime import get_client, mcp, safe
 from .workflow_helpers import (
     fetch_with_truncation,
     optional_fields,
-    parse_when,
-    today_in_tz,
 )
 
 

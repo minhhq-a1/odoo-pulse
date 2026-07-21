@@ -9,39 +9,9 @@ composed tools (and standup_digest) stay DRY and independently testable.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime, time as dt_time, timedelta, timezone
 from typing import Any, Callable
 
 from .core.errors import OdooError
-
-
-def today_in_tz(timezone_offset: int) -> date:
-    """Current calendar date at a fixed UTC offset (default team tz is +7)."""
-    tz = timezone(timedelta(hours=timezone_offset))
-    return datetime.now(tz).date()
-
-
-def parse_when(raw: Any, timezone_offset: int = 0) -> date | None:
-    """Parse an Odoo date ('YYYY-MM-DD') or UTC datetime
-    ('YYYY-MM-DD HH:MM:SS') into the calendar date at the given UTC offset.
-
-    Datetime values are shifted by timezone_offset hours before taking the
-    date; plain date values pass through unshifted. Falsy input -> None.
-    """
-    if not raw:
-        return None
-    s = str(raw)
-    if len(s) <= 10:
-        return datetime.strptime(s[:10], "%Y-%m-%d").date()
-    dt = datetime.strptime(s[:19], "%Y-%m-%d %H:%M:%S")
-    return (dt + timedelta(hours=timezone_offset)).date()
-
-
-def utc_bound(day: date, timezone_offset: int) -> str:
-    """Local midnight of `day` at the given UTC offset, expressed as a UTC
-    datetime string suitable for domain comparisons on datetime fields."""
-    dt = datetime.combine(day, dt_time.min) - timedelta(hours=timezone_offset)
-    return dt.strftime("%Y-%m-%d %H:%M:%S")
 
 
 def fetch_with_truncation(

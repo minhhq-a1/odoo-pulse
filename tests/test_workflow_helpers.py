@@ -6,6 +6,7 @@ import threading
 
 import pytest
 
+from odoo_pulse.common.dates import parse_when, today_in_tz, utc_bound
 from odoo_pulse.core.errors import OdooError
 from odoo_pulse.workflow_helpers import (
     build_report,
@@ -13,15 +14,12 @@ from odoo_pulse.workflow_helpers import (
     distinct_companies,
     optional_fields,
     paged_search_read,
-    parse_when,
     resolve_company_id,
     resolve_user_names,
     task_closed_scope,
     task_matches_scope,
-    today_in_tz,
     totals_by_currency,
     trend_direction,
-    utc_bound,
 )
 
 

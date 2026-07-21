@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from .core.errors import OdooError
-from .runtime import get_client, mcp, safe
+from .mcp.app import mcp
+from .mcp.result import safe
+from .mcp.runtime import get_client
 
 
 @mcp.tool()

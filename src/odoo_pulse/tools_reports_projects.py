@@ -19,8 +19,11 @@ Caveats for callers:
 
 from __future__ import annotations
 
+from .common.dates import parse_period_date, today_in_tz
 from .core.errors import OdooError
-from .runtime import get_client, mcp, safe
+from .mcp.app import mcp
+from .mcp.result import safe
+from .mcp.runtime import get_client
 from .workflow_helpers import (
     build_report,
     distinct_companies,
@@ -28,7 +31,6 @@ from .workflow_helpers import (
     fetch_with_truncation,
     gather_strict,
     optional_fields,
-    today_in_tz,
 )
 from .project_shared import (  # noqa: F401  (re-export for tests/back-compat)
     _BUDGET_CANDIDATES,
@@ -38,7 +40,7 @@ from .project_shared import (  # noqa: F401  (re-export for tests/back-compat)
     _budget_by_project,
     _budget_sources,
 )
-from .project_shared import _parse_ymd, account_ids_by_project, analytic_money
+from .project_shared import account_ids_by_project, analytic_money
 
 _TIMESHEET_HINT = ("Timesheets require the hr_timesheet app; install it to "
                    "report delivery hours.")
@@ -46,14 +48,14 @@ _TIMESHEET_HINT = ("Timesheets require the hr_timesheet app; install it to "
 
 def _validate_date(value: str | None, param: str) -> str | None:
     """YYYY-MM-DD normalising validator; garbage -> clean OdooError.
-    Delegates the actual parsing to project_shared._parse_ymd (same helper
-    periods_domain uses) instead of a second, independently-maintained
+    Delegates the actual parsing to common.dates.parse_period_date (same
+    helper periods_domain uses) instead of a second, independently-maintained
     validator. Returns the PARSED date, not a slice of the raw input:
-    _parse_ymd tolerates surrounding whitespace, so slicing " 2026-07-01"
-    would leak the garbage " 2026-07-0" into a domain."""
+    parse_period_date tolerates surrounding whitespace, so slicing
+    " 2026-07-01" would leak the garbage " 2026-07-0" into a domain."""
     if not value:
         return None
-    return _parse_ymd(value, param).isoformat()
+    return parse_period_date(value, param).isoformat()
 
 
 def _verdict(

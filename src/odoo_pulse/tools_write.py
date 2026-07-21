@@ -9,7 +9,10 @@ happens with ``confirm=True``, and even then it must clear the guard in
 from __future__ import annotations
 
 from .core.errors import OdooError
-from .runtime import get_client, mcp, preview, safe
+from .mcp.app import mcp
+from .mcp.result import safe
+from .mcp.runtime import get_client
+from .services.writes import preview
 
 
 def _display_names(model: str, ids: list[int]) -> list:

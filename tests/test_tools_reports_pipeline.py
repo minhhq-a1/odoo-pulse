@@ -203,7 +203,7 @@ def test_stalled_uses_local_date_of_stage_update(fake_client):
     import json
     from datetime import timedelta
     from odoo_pulse import tools_reports_sales
-    from odoo_pulse.workflow_helpers import today_in_tz
+    from odoo_pulse.common.dates import today_in_tz
 
     today = today_in_tz(7)
     # stage moved 20:00 UTC "15 days ago by UTC date" == 14 days ago at +7
