@@ -5,8 +5,9 @@ from __future__ import annotations
 import asyncio
 import json
 
-from odoo_pulse import resources
-from odoo_pulse.runtime import mcp
+from odoo_pulse.mcp import resources
+from odoo_pulse.mcp.app import mcp
+from odoo_pulse.services.records import read_one
 
 
 def test_odoo_record_found_returns_single_dict(fake_client):
@@ -41,3 +42,11 @@ def test_odoo_record_template_is_registered():
     ours = [t for t in templates if t.uriTemplate == "odoo://{model}/{id}"]
     assert len(ours) == 1
     assert ours[0].mimeType == "application/json"
+
+
+def test_read_one_returns_python_dict(fake_client):
+    fake_client.read_responses["res.partner"] = [{"id": 5, "name": "Azure Interior"}]
+    assert read_one(fake_client, "res.partner", 5) == {
+        "id": 5,
+        "name": "Azure Interior",
+    }
