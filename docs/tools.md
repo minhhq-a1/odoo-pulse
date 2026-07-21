@@ -272,7 +272,7 @@ error) with a `truncated_milestone_data` risk entry — same pattern as
 
 ### `team_workload` · `project_status_report` · `standup_digest`
 
-Project delivery reports — per-assignee workload, portfolio-wide project health, and a daily stand-up digest. Same composition style as the reports above (filters, thresholds, `timezone_offset`); see the docstrings in `odoo_pulse/tools_workflows.py` for the full argument list.
+Project delivery reports — per-assignee workload, portfolio-wide project health, and a daily stand-up digest. Same composition style as the reports above (filters, thresholds, `timezone_offset`); see the docstrings in `src/odoo_pulse/tools_workflows.py` for the full argument list.
 
 `team_workload`'s `exclude_stages` (default `["Cancelled"]`) and
 `standup_digest`'s `exclude_stages` (default `["Done", "Cancelled",

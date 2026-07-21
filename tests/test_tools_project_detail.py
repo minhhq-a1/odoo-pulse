@@ -1,8 +1,17 @@
 # tests/test_tools_project_detail.py
 import json
 
-from odoo_pulse import tools_project_detail
-from odoo_pulse.tools_project_detail import project_subtask_hours
+from odoo_pulse.tools_project_detail import (
+    _budget_context,
+    _budget_detail_section,
+    _core_section,
+    _hours_section,
+    _selected,
+    _weekly_logged,
+    portfolio_health,
+    project_dashboard,
+    project_subtask_hours,
+)
 
 _TASK_SCHEMA = {
     "name": {"type": "char"}, "user_ids": {"type": "many2many"},
@@ -81,12 +90,6 @@ def test_module_registered_in_reports_group():
     from odoo_pulse.tool_groups import GROUP_MODULES
     assert "tools_project_detail" in GROUP_MODULES["reports"]
 
-
-from odoo_pulse.tools_project_detail import (
-    _core_section,
-    _hours_section,
-    _weekly_logged,
-)
 
 _PROJECT_SCHEMA = {
     "name": {"type": "char"}, "user_id": {"type": "many2one"},
@@ -248,12 +251,6 @@ def test_hours_section_totals_and_leaderboards(fake_client):
     assert h["by_task"] == [{"task_id": 8554, "task": "Build X",
                              "hours": 84.0}]
 
-
-from odoo_pulse.tools_project_detail import (
-    _budget_context,
-    _budget_detail_section,
-    _selected,
-)
 
 _LINE_SCHEMA = {
     "planned_amount": {"type": "float"},
@@ -423,9 +420,6 @@ def test_budget_detail_surfaces_unknown_budget_ids(fake_client):
     detail = _budget_detail_section(fake_client, 59, ctx, [12, 999], 7)
     assert detail["selected_budget_ids"] == [12]
     assert detail["unknown_budget_ids"] == [999]
-
-
-from odoo_pulse.tools_project_detail import project_dashboard
 
 
 def _seed_dashboard(fake):
@@ -666,9 +660,6 @@ def test_dashboard_core_finance_and_weekly_logged_fail_independently(
         "Object account.analytic.line doesn't exist"
     assert out["errors"]["finance"] == \
         "Object account.analytic.line doesn't exist"
-
-
-from odoo_pulse.tools_project_detail import portfolio_health
 
 
 def test_portfolio_health_joins_by_id_two_projects_same_name(fake_client):

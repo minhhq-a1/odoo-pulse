@@ -23,7 +23,7 @@ instance.
 ## Adding a tool
 
 1. Pick the right module (see the module map in `CLAUDE.md`), or create
-   `odoo_pulse/tools_<area>.py` importing `mcp` and `get_client` from
+   `src/odoo_pulse/tools_<area>.py` importing `mcp` and `get_client` from
    `.runtime`.
 2. Decorate with `@mcp.tool()`; wrap the body in `safe(lambda: ...)`.
 3. Report-style tools return the `build_report` envelope

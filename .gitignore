@@ -22,6 +22,9 @@ env/
 .mypy_cache/
 .ruff_cache/
 
+# Subagent-driven-development scratch (progress ledger, task briefs/reports)
+.superpowers/
+
 # Local design docs / plans (internal); shipped docs are re-included below
 docs/*
 !docs/playground.md

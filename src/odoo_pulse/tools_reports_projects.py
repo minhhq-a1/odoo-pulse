@@ -188,8 +188,8 @@ def project_budget(
                 budgets_available = True
                 src, line_opt, line_rows, line_truncation = fetched["lines"]
                 _, link_field, line_acct, amount_field, _ = src
-                pick = (lambda cands:
-                        next((f for f in cands if f in line_opt), None))
+                def pick(candidates):
+                    return next((field for field in candidates if field in line_opt), None)
                 practical_field = pick(_PRACTICAL_CANDIDATES)
                 theoretical_field = pick(_THEORETICAL_CANDIDATES)
                 parent_field = pick(_PARENT_CANDIDATES)
