@@ -8,15 +8,12 @@ build_report envelope with a rule-based verdict. Read-only.
 from __future__ import annotations
 
 from .common.dates import parse_when, today_in_tz
+from .common.money import totals_by_currency
 from .common.paging import fetch_with_truncation
+from .common.reporting import build_report, resolve_company_id
 from .mcp.app import mcp
 from .mcp.result import safe
 from .mcp.runtime import get_client
-from .workflow_helpers import (
-    build_report,
-    resolve_company_id,
-    totals_by_currency,
-)
 
 
 @mcp.tool()

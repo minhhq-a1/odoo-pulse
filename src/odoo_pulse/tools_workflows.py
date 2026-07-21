@@ -2,7 +2,7 @@
 """Composed workflow tools: business questions answered in one call.
 
 Each tool composes several reads/aggregates server-side and returns a
-decision-ready report (the envelope from workflow_helpers.build_report).
+decision-ready report (the envelope from common.reporting.build_report).
 Read-only; no new write surface.
 """
 
@@ -13,13 +13,13 @@ from datetime import timedelta
 
 from .common.dates import parse_when, today_in_tz
 from .common.paging import fetch_with_truncation
+from .common.reporting import build_report
 from .core.errors import OdooConfigError, OdooError
 from .mcp.app import mcp
 from .mcp.result import safe
 from .mcp.runtime import get_client
 from .project_shared import derive_project_health
 from .workflow_helpers import (
-    build_report,
     resolve_user_names,
     task_closed_scope,
     task_matches_scope,

@@ -19,18 +19,15 @@ Caveats for callers:
 
 from __future__ import annotations
 
+from .common.concurrency import gather_strict
 from .common.dates import parse_period_date, today_in_tz
 from .common.paging import fetch_with_truncation
+from .common.reporting import build_report, distinct_companies
 from .common.schema import ensure_field, optional_fields
 from .core.errors import OdooError
 from .mcp.app import mcp
 from .mcp.result import safe
 from .mcp.runtime import get_client
-from .workflow_helpers import (
-    build_report,
-    distinct_companies,
-    gather_strict,
-)
 from .project_shared import (  # noqa: F401  (re-export for tests/back-compat)
     _BUDGET_CANDIDATES,
     _PARENT_CANDIDATES,
@@ -551,7 +548,7 @@ def project_profitability(
                 # Every call here hits account.analytic.line -> ONE thunk,
                 # fixed order (hours, cost, revenue, by_employee, by_task)
                 # so the FakeClient per-model queue stays deterministic
-                # (documented constraint in workflow_helpers.gather).
+                # (documented constraint in common.concurrency.gather).
                 hours = client.aggregate_records(
                     "account.analytic.line", group_by=["project_id"],
                     measures=[("unit_amount", "sum")],

@@ -9,18 +9,18 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+from .common.concurrency import gather_strict
 from .common.dates import parse_when, today_in_tz, utc_bound
 from .common.paging import fetch_with_truncation
-from .mcp.app import mcp
-from .mcp.result import safe
-from .mcp.runtime import get_client
-from .workflow_helpers import (
+from .common.reporting import (
     build_report,
     distinct_companies,
-    gather_strict,
     resolve_company_id,
     trend_direction,
 )
+from .mcp.app import mcp
+from .mcp.result import safe
+from .mcp.runtime import get_client
 
 
 @mcp.tool()
