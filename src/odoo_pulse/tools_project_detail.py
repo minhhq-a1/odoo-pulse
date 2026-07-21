@@ -21,7 +21,6 @@ from .core.errors import OdooError
 from .mcp.app import mcp
 from .mcp.result import safe
 from .mcp.runtime import get_client
-from .project_shared import analytic_money
 from .services.projects.budget import (
     budget_by_project,
     build_budget_context,
@@ -29,6 +28,7 @@ from .services.projects.budget import (
     select_budgets,
 )
 from .services.projects.health import derive_project_health
+from .services.projects.profitability import analytic_money
 from .services.projects.queries import account_id_of, account_ids_by_project
 from .services.projects.subtasks import (
     DEFAULT_CLOSED_STAGES,

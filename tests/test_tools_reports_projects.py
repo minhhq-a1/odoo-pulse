@@ -6,24 +6,25 @@ import pytest
 
 from odoo_pulse import tools_reports_projects
 from odoo_pulse.core.errors import OdooError
+from odoo_pulse.services.projects import profitability
 from odoo_pulse.services.projects.budget import budget_by_project, burn_verdict
-from odoo_pulse.tools_reports_projects import _validate_date
+from odoo_pulse.services.projects.profitability import validate_project_date
 
 
 # -- helpers -----------------------------------------------------------------
 
 def test_validate_date_passthrough_and_error():
-    assert _validate_date(None, "date_from") is None
-    assert _validate_date("", "date_from") is None
-    assert _validate_date("2026-07-01", "date_from") == "2026-07-01"
+    assert validate_project_date(None, "date_from") is None
+    assert validate_project_date("", "date_from") is None
+    assert validate_project_date("2026-07-01", "date_from") == "2026-07-01"
     with pytest.raises(OdooError, match="Invalid date_from"):
-        _validate_date("notadate", "date_from")
+        validate_project_date("notadate", "date_from")
     with pytest.raises(OdooError, match="Invalid date_from"):
-        _validate_date("2026-07-01xyz", "date_from")
+        validate_project_date("2026-07-01xyz", "date_from")
     # surrounding whitespace passes validation (parse strips it), so the
     # returned string must be the parsed date -- not a slice of the raw
     # input, which for " 2026-07-01" would be the garbage " 2026-07-0".
-    assert _validate_date(" 2026-07-01 ", "date_from") == "2026-07-01"
+    assert validate_project_date(" 2026-07-01 ", "date_from") == "2026-07-01"
 
 
 def test_verdict_boundaries_and_worst_of_two():
@@ -266,7 +267,7 @@ def test_budget_burn_feeds_verdict(fake_client):
 
 
 def test_envelope_shape(fake_client, monkeypatch):
-    monkeypatch.setattr(tools_reports_projects, "today_in_tz",
+    monkeypatch.setattr(profitability, "today_in_tz",
                         lambda offset: dt.date(2026, 7, 11))
     _seed_portfolio(fake_client)
     out = json.loads(tools_reports_projects.project_profitability())

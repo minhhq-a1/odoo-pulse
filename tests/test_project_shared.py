@@ -5,8 +5,8 @@ import pytest
 
 from odoo_pulse.common.dates import periods_domain
 from odoo_pulse.core.errors import OdooError
-from odoo_pulse.project_shared import analytic_money
 from odoo_pulse.services.projects.health import derive_project_health
+from odoo_pulse.services.projects.profitability import analytic_money
 from odoo_pulse.services.projects.queries import (
     account_field_of,
     account_id_of,
