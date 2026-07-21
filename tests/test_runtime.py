@@ -8,6 +8,9 @@ import threading
 import pytest
 
 from odoo_pulse import runtime
+from odoo_pulse.mcp import app
+from odoo_pulse.mcp import runtime as mcp_runtime
+from odoo_pulse.mcp.result import safe
 
 
 def test_name_domain_empty_query():
@@ -56,7 +59,7 @@ def test_date_domain_rejects_invalid_iso_date():
 
 
 def test_safe_serialises_result():
-    out = runtime.safe(lambda: {"a": 1})
+    out = safe(lambda: {"a": 1})
     assert json.loads(out) == {"a": 1}
 
 
@@ -66,7 +69,7 @@ def test_safe_catches_odoo_error():
     def boom():
         raise OdooError("kaboom")
 
-    out = json.loads(runtime.safe(boom))
+    out = json.loads(safe(boom))
     assert out == {"error": "kaboom"}
 
 
@@ -94,7 +97,7 @@ def test_safe_serialises_unexpected_exceptions():
     def boom():
         raise KeyError("company_id")
 
-    out = json.loads(runtime.safe(boom))
+    out = json.loads(safe(boom))
     assert out["error"].startswith("internal error: KeyError")
 
 
@@ -110,29 +113,29 @@ def test_get_client_is_singleton_under_concurrency(monkeypatch):
         def __init__(self, cfg):
             created.append(self)
 
-    monkeypatch.setattr(runtime, "OdooConfig", _Cfg)
-    monkeypatch.setattr(runtime, "OdooClient", _Client)
-    runtime._client = None
+    monkeypatch.setattr(mcp_runtime, "OdooConfig", _Cfg)
+    monkeypatch.setattr(mcp_runtime, "OdooClient", _Client)
+    mcp_runtime._client = None
 
     barrier = threading.Barrier(8)
     results = []
 
     def grab():
         barrier.wait()
-        results.append(runtime.get_client())
+        results.append(mcp_runtime.get_client())
 
     threads = [threading.Thread(target=grab) for _ in range(8)]
     for t in threads:
         t.start()
     for t in threads:
         t.join()
-    runtime._client = None
+    mcp_runtime._client = None
     assert len(created) == 1
     assert len(set(map(id, results))) == 1
 
 
 def test_mcp_server_declares_disambiguation_instructions():
-    text = runtime.mcp.instructions
+    text = app.mcp.instructions
     assert text
     # Identity: live business data...
     assert "Live business data" in text

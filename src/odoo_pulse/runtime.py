@@ -1,57 +1,21 @@
-"""Shared runtime: the MCP instance, lazy Odoo client and a JSON-safe wrapper.
+"""Transitional facade over the split MCP runtime.
 
-Kept in its own module so both the generic tools and the domain tools can
-import these without creating an import cycle through ``server``.
+The FastMCP instance, lazy Odoo client singleton, and JSON-safe result
+wrapper now live in ``odoo_pulse.mcp.*``; they are re-imported here so
+existing callers keep working unchanged. The date/domain/preview helpers
+below have not moved yet (they migrate in a later task).
 """
 
 from __future__ import annotations
 
-import json
-import threading
 from datetime import datetime, timedelta
 
-from mcp.server.fastmcp import FastMCP
+from .core.errors import OdooError
+from .mcp.app import mcp
+from .mcp.result import safe
+from .mcp.runtime import get_client
 
-from .core.client import OdooClient
-from .core.config import OdooConfig
-from .core.errors import OdooConfigError, OdooError
-
-mcp = FastMCP(
-    "odoo-pulse",
-    instructions=(
-        "Live business data from the user's own Odoo instance: records, "
-        "reports, KPIs — read via tools (search_read, one-call reports) or "
-        "the odoo://{model}/{id} resource. NOT for Odoo source-code or "
-        "module-structure questions; use a code-index server for those."
-    ),
-)
-
-_client: OdooClient | None = None
-_client_lock = threading.Lock()
-
-
-def get_client() -> OdooClient:
-    """Lazily build the Odoo client so the server can start without creds
-    being validated until the first tool call. Safe under concurrent calls."""
-    global _client
-    if _client is None:
-        with _client_lock:
-            if _client is None:
-                _client = OdooClient(OdooConfig.from_env())
-    return _client
-
-
-def safe(func) -> str:
-    """Run a client call and serialise the result (or a friendly error) as JSON."""
-    try:
-        return json.dumps(func(), ensure_ascii=False, indent=2, default=str)
-    except (OdooConfigError, OdooError) as exc:
-        return json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2)
-    except Exception as exc:  # shaping bugs must not leak raw tracebacks
-        return json.dumps(
-            {"error": f"internal error: {type(exc).__name__}: {exc}"},
-            ensure_ascii=False, indent=2,
-        )
+__all__ = ["mcp", "safe", "get_client", "name_domain", "date_domain", "preview"]
 
 
 def name_domain(query: str | None, fields: list[str]) -> list:

@@ -8,8 +8,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from odoo_pulse import runtime
 from odoo_pulse.core.errors import OdooError
+from odoo_pulse.mcp import runtime as mcp_runtime
 
 _DEFAULT_FIELDS = {
     "name": {"type": "char", "string": "Name"},
@@ -192,8 +192,8 @@ class FakeClient:
 @pytest.fixture
 def fake_client():
     fake = FakeClient()
-    runtime._client = fake
+    mcp_runtime._client = fake
     try:
         yield fake
     finally:
-        runtime._client = None
+        mcp_runtime._client = None
