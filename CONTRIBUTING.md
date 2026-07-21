@@ -8,7 +8,7 @@ Thanks for helping make Odoo more conversational. Issues and PRs welcome.
 git clone https://github.com/minhhq-a1/odoo-pulse
 cd odoo-pulse
 pip install -e ".[dev]"
-pytest   # 322+ tests, no Odoo or network needed
+pytest   # 517+ tests, no Odoo or network needed
 ```
 
 ## How the tests work

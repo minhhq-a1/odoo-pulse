@@ -324,7 +324,7 @@ def main() -> int:
 
     # Import after env is loaded.
     from odoo_pulse.core.errors import OdooConfigError
-    from odoo_pulse.runtime import get_client
+    from odoo_pulse.mcp.runtime import get_client
 
     # 1) Connectivity check.
     print(f"{C.BOLD}Connecting to Odoo...{C.RESET}")
