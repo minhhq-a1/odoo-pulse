@@ -324,8 +324,10 @@ def test_paged_search_read_rejects_non_positive_step(fake_client):
     assert fake_client.calls == []
 
 
-def test_project_shared_reexports_paged_search_read():
+def test_subtasks_service_reexports_paged_search_read():
     from odoo_pulse.common.paging import paged_search_read as common_pager
-    from odoo_pulse.project_shared import paged_search_read as project_pager
-    assert project_pager is paged_search_read
-    assert project_pager is common_pager
+    from odoo_pulse.services.projects.subtasks import (
+        paged_search_read as subtasks_pager,
+    )
+    assert subtasks_pager is paged_search_read
+    assert subtasks_pager is common_pager

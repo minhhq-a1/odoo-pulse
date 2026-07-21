@@ -22,7 +22,6 @@ from .mcp.app import mcp
 from .mcp.result import safe
 from .mcp.runtime import get_client
 from .project_shared import (
-    DEFAULT_CLOSED_STAGES,
     _PARENT_CANDIDATES,
     _PARENT_MODEL,
     _PRACTICAL_CANDIDATES,
@@ -30,12 +29,16 @@ from .project_shared import (
     _budget_sources,
     analytic_money,
     derive_project_health,
+)
+from .services.projects.queries import account_id_of, account_ids_by_project
+from .services.projects.subtasks import (
+    DEFAULT_CLOSED_STAGES,
+    build_project_subtask_hours,
     fetch_subtasks,
     filter_subtasks_by_periods,
     subtasks_by_month,
     sum_hours,
 )
-from .services.projects.queries import account_id_of, account_ids_by_project
 
 
 @mcp.tool()
@@ -73,39 +76,16 @@ def project_subtask_hours(
             union). Empty/omitted = no date filter.
         timezone_offset: UTC offset for dates (default 7).
     """
-
-    def run() -> dict:
-        client = get_client()
-        today = today_in_tz(timezone_offset)
-        tasks, available, warnings = fetch_subtasks(
-            client, project_id,
-            only_closed_stages=only_closed_stages,
-            closed_stage_names=closed_stage_names,
-            single_assignee_only=single_assignee_only,
-            periods=periods, timezone_offset=timezone_offset)
-        report: dict = {
-            "tool": "project_subtask_hours",
-            "as_of": today.isoformat(),
-            "project_id": project_id,
-            "filters": {
-                "only_closed_stages": only_closed_stages,
-                "closed_stage_names": list(
-                    closed_stage_names or DEFAULT_CLOSED_STAGES),
-                "single_assignee_only": single_assignee_only,
-                "periods": periods or [],
-            },
-        }
-        if warnings:
-            report["warnings"] = warnings
-        report["totals"] = sum_hours(tasks, available)
-        if group_by_month:
-            by_month, no_date_end = subtasks_by_month(
-                tasks, available, timezone_offset)
-            report["by_month"] = by_month
-            report["no_date_end"] = no_date_end
-        return report
-
-    return safe(run)
+    return safe(lambda: build_project_subtask_hours(
+        get_client(),
+        project_id=project_id,
+        only_closed_stages=only_closed_stages,
+        closed_stage_names=closed_stage_names,
+        single_assignee_only=single_assignee_only,
+        group_by_month=group_by_month,
+        periods=periods,
+        timezone_offset=timezone_offset,
+    ))
 
 
 def _weekly_logged(client, project_id: int, today) -> list[dict]:

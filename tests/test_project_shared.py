@@ -6,18 +6,20 @@ import pytest
 from odoo_pulse.common.dates import periods_domain
 from odoo_pulse.core.errors import OdooError
 from odoo_pulse.project_shared import (
-    DEFAULT_CLOSED_STAGES,
     analytic_money,
     derive_project_health,
-    fetch_subtasks,
-    filter_subtasks_by_periods,
-    subtasks_by_month,
-    sum_hours,
 )
 from odoo_pulse.services.projects.queries import (
     account_field_of,
     account_id_of,
     account_ids_by_project,
+)
+from odoo_pulse.services.projects.subtasks import (
+    DEFAULT_CLOSED_STAGES,
+    fetch_subtasks,
+    filter_subtasks_by_periods,
+    subtasks_by_month,
+    sum_hours,
 )
 
 
