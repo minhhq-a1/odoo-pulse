@@ -8,11 +8,8 @@ import pytest
 
 from odoo_pulse.core.config import OdooConfig
 from odoo_pulse.core.errors import OdooError
-from odoo_pulse.odoo_client import (
-    OdooClient,
-    _TimeoutSafeTransport,
-    _TimeoutTransport,
-)
+from odoo_pulse.core.transport import _TimeoutSafeTransport, _TimeoutTransport
+from odoo_pulse.odoo_client import OdooClient
 
 
 class FakeProxy:

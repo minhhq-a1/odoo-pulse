@@ -19,9 +19,10 @@ import xmlrpc.client
 from functools import cached_property
 from typing import Any
 
-from .cache import TTLCache
+from .core.cache import TTLCache
 from .core.config import OdooConfig
 from .core.errors import OdooConfigError, OdooError  # noqa: F401 - transitional re-exports for Task 3
+from .core.transport import _TimeoutSafeTransport, _TimeoutTransport
 
 # Methods execute_kw may run WITHOUT write authorisation. This is an
 # allow-list on purpose: any method not listed here — including ORM button
@@ -80,39 +81,6 @@ _ORDER_AGGREGATORS = frozenset(
 
 # Sentinel distinguishing "not yet looked up" from a real None major version.
 _UNSET = object()
-
-
-class _TimeoutTransport(xmlrpc.client.Transport):
-    """Plain-HTTP transport that enforces a socket timeout.
-
-    ``xmlrpc.client.ServerProxy`` has no built-in timeout, so a hung/unreachable
-    Odoo would otherwise block a tool call forever. Overriding
-    ``make_connection`` lets us set ``timeout`` on the underlying
-    ``http.client.HTTPConnection`` before it's used.
-    """
-
-    def __init__(self, timeout: float, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self._timeout = timeout
-
-    def make_connection(self, host):
-        conn = super().make_connection(host)
-        conn.timeout = self._timeout
-        return conn
-
-
-class _TimeoutSafeTransport(xmlrpc.client.SafeTransport):
-    """HTTPS variant of :class:`_TimeoutTransport`; still honours ``context=``
-    so ``ODOO_VERIFY_SSL=false`` (self-signed certs) keeps working."""
-
-    def __init__(self, timeout: float, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self._timeout = timeout
-
-    def make_connection(self, host):
-        conn = super().make_connection(host)
-        conn.timeout = self._timeout
-        return conn
 
 
 class OdooClient:
