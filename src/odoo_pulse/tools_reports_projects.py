@@ -36,7 +36,8 @@ from .project_shared import (  # noqa: F401  (re-export for tests/back-compat)
     _budget_by_project,
     _budget_sources,
 )
-from .project_shared import account_ids_by_project, analytic_money
+from .project_shared import analytic_money
+from .services.projects.queries import account_ids_by_project
 
 _TIMESHEET_HINT = ("Timesheets require the hr_timesheet app; install it to "
                    "report delivery hours.")

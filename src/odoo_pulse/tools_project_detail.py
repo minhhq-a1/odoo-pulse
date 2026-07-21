@@ -28,8 +28,6 @@ from .project_shared import (
     _PRACTICAL_CANDIDATES,
     _budget_by_project,
     _budget_sources,
-    account_id_of,
-    account_ids_by_project,
     analytic_money,
     derive_project_health,
     fetch_subtasks,
@@ -37,6 +35,7 @@ from .project_shared import (
     subtasks_by_month,
     sum_hours,
 )
+from .services.projects.queries import account_id_of, account_ids_by_project
 
 
 @mcp.tool()
