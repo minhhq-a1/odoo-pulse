@@ -14,20 +14,19 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from .common.dates import parse_when, periods_domain, today_in_tz
+from .common.dates import parse_when, today_in_tz
 from .common.paging import fetch_with_truncation, paged_search_read
 from .common.schema import optional_fields
 from .core.errors import OdooError
 from .mcp.app import mcp
 from .mcp.result import safe
 from .mcp.runtime import get_client
-from .project_shared import (
-    _PARENT_CANDIDATES,
-    _PARENT_MODEL,
-    _PRACTICAL_CANDIDATES,
-    _budget_by_project,
-    _budget_sources,
-    analytic_money,
+from .project_shared import analytic_money
+from .services.projects.budget import (
+    budget_by_project,
+    build_budget_context,
+    build_budget_detail,
+    select_budgets,
 )
 from .services.projects.health import derive_project_health
 from .services.projects.queries import account_id_of, account_ids_by_project
@@ -186,7 +185,7 @@ def _core_section(client, project_id: int, timezone_offset: int,
         },
         "warnings": warnings,
         # internal only -- never copied into the tool's output; lets
-        # project_dashboard hand this row to _budget_context instead of
+        # project_dashboard hand this row to build_budget_context instead of
         # it re-fetching project.project (finding #8).
         "_raw_project_row": p,
     }
@@ -259,163 +258,6 @@ def _hours_section(client, project_id: int, only_closed_stages: bool,
         },
         "warnings": warnings,
     }
-
-
-def _budget_context(client, project_id: int,
-                    project_row: dict | None = None) -> dict:
-    """One shared fetch of budget lines + parent budgets for a project.
-
-    Abstracts crossovered.budget.lines vs budget.line exactly like
-    project_budget does (same _budget_sources helper — spec rule #7).
-
-    project_row, when given, is a project.project row the caller already
-    fetched (e.g. _core_section's) — must carry "id" and whichever of
-    account_id/analytic_account_id exists on this instance. None means
-    fetch it here (self-sufficient default). A resolved account id can
-    legitimately be None (no account set), so it can't double as the
-    "already fetched" sentinel — the row itself is.
-    """
-    opt = optional_fields(client, "project.project",
-                          ["account_id", "analytic_account_id"])
-    if project_row is None:
-        rows = client.search_read(
-            "project.project", domain=[("id", "=", project_id)],
-            fields=["id", *opt], limit=1)
-        if not rows:
-            raise OdooError(f"No project.project with id {project_id}")
-        project_row = rows[0]
-    acct_id = account_id_of(project_row, opt)
-    account_ids = [acct_id] if acct_id is not None else []
-
-    for model, link, acct, amount, extra_domain in _budget_sources(
-            client, account_ids):
-        line_opt = optional_fields(client, model, [
-            *_PRACTICAL_CANDIDATES, *_PARENT_CANDIDATES,
-            "date_from", "date_to"])
-        fields = ["id", amount, *line_opt]
-        match = ((link, "=", project_id) if link
-                 else (acct, "in", account_ids))
-        try:
-            lines = paged_search_read(client, model,
-                                      [match, *extra_domain],
-                                      fields=fields)
-        except OdooError:
-            continue
-        practical_field = next(
-            (f for f in _PRACTICAL_CANDIDATES if f in line_opt), None)
-        parent_field = next(
-            (f for f in _PARENT_CANDIDATES if f in line_opt), None)
-        budgets: list[dict] = []
-        if parent_field and parent_field in _PARENT_MODEL:
-            parent_model = _PARENT_MODEL[parent_field]
-            pids = sorted({ln[parent_field][0] for ln in lines
-                           if ln.get(parent_field)})
-            if pids:
-                popt = optional_fields(
-                    client, parent_model, ["date_from", "date_to", "state"])
-                parents = client.search_read(
-                    parent_model, domain=[("id", "in", pids)],
-                    fields=["id", "name", *popt], limit=len(pids))
-                budgets = [{"id": b["id"], "name": b["name"],
-                            "date_from": b.get("date_from") or None,
-                            "date_to": b.get("date_to") or None,
-                            "state": b.get("state") or None}
-                           for b in parents]
-        return {"budgets": budgets, "lines": lines,
-                "amount_field": amount,
-                "practical_field": practical_field,
-                "parent_field": parent_field, "available": True}
-    return {"budgets": [], "lines": [], "amount_field": None,
-            "practical_field": None, "parent_field": None,
-            "available": False}
-
-
-def _selected(ctx: dict, budget_ids: list[int] | None
-              ) -> tuple[list[int], list[dict], list[int]]:
-    """(selected budget ids, their periods, unknown ids). None = all budgets
-    of the project; [] = none selected (the two states are deliberately
-    distinct — spec Rev 2; both branches are test-locked). unknown_ids are
-    entries in budget_ids that match no budget of this project — a stale or
-    typo'd id would otherwise look identical to "select none"."""
-    if budget_ids is None:
-        selected = [b["id"] for b in ctx["budgets"]]
-        unknown: list[int] = []
-    else:
-        known = {b["id"] for b in ctx["budgets"]}
-        selected = [bid for bid in budget_ids if bid in known]
-        unknown = [bid for bid in budget_ids if bid not in known]
-    chosen = [b for b in ctx["budgets"] if b["id"] in set(selected)]
-    periods = [{"date_from": b["date_from"], "date_to": b["date_to"]}
-               for b in chosen if b["date_from"] or b["date_to"]]
-    return selected, periods, unknown
-
-
-def _budget_detail_section(client, project_id: int, ctx: dict,
-                           budget_ids: list[int] | None,
-                           timezone_offset: int) -> dict:
-    selected, periods, unknown_budget_ids = _selected(ctx, budget_ids)
-    sel = set(selected)
-    parent_field = ctx["parent_field"]
-    amount_field = ctx["amount_field"]
-    practical_field = ctx["practical_field"]
-    lines = [ln for ln in ctx["lines"]
-             if parent_field and ln.get(parent_field)
-             and ln[parent_field][0] in sel]
-    planned = (round(sum(abs(ln.get(amount_field) or 0.0)
-                         for ln in lines), 2)
-               if amount_field else None)
-    practical = (round(sum(abs(ln.get(practical_field) or 0.0)
-                           for ln in lines), 2)
-                 if practical_field else None)
-    chosen = [b for b in ctx["budgets"] if b["id"] in sel]
-    froms = sorted(b["date_from"] for b in chosen if b["date_from"])
-    tos = sorted(b["date_to"] for b in chosen if b["date_to"])
-
-    # valid_cost rule: ONLY task-linked timesheet lines, inside the OR'd
-    # budget periods (account.analytic.line.date is a plain date field).
-    domain = [("project_id", "=", project_id), ("task_id", "!=", False),
-              *periods_domain("date", periods, timezone_offset,
-                              as_datetime=False)]
-    rows = paged_search_read(
-        client, "account.analytic.line", domain,
-        fields=["date", "amount", "unit_amount", "employee_id", "task_id"])
-
-    def bucket(rows_subset, key_fn):
-        out: dict = {}
-        for r in rows_subset:
-            cost_hours = out.setdefault(key_fn(r), [0.0, 0.0])
-            cost_hours[0] -= r.get("amount") or 0.0     # flip sign once
-            cost_hours[1] += r.get("unit_amount") or 0.0
-        return out
-
-    months = bucket(rows, lambda r: str(r.get("date") or "")[:7])
-    emps = bucket([r for r in rows if r.get("employee_id")],
-                  lambda r: (r["employee_id"][0], r["employee_id"][1]))
-    tasks = bucket([r for r in rows if r.get("task_id")],
-                   lambda r: (r["task_id"][0], r["task_id"][1]))
-    detail = {
-        "selected_budget_ids": selected,
-        "planned": planned, "practical": practical,
-        "date_from": froms[0] if froms else None,
-        "date_to": tos[-1] if tos else None,
-        "valid_cost": round(-sum(r.get("amount") or 0.0 for r in rows), 2),
-        "valid_hours": round(sum(r.get("unit_amount") or 0.0
-                                 for r in rows), 2),
-        "by_month": [{"month": m, "cost": round(c, 2),
-                      "hours": round(h, 2)}
-                     for m, (c, h) in sorted(months.items()) if m],
-        "by_employee": [{"employee_id": k[0], "employee": k[1],
-                         "cost": round(c, 2), "hours": round(h, 2)}
-                        for k, (c, h) in sorted(emps.items(),
-                                                key=lambda kv: -kv[1][0])],
-        "by_task": [{"task_id": k[0], "task": k[1],
-                     "cost": round(c, 2), "hours": round(h, 2)}
-                    for k, (c, h) in sorted(tasks.items(),
-                                            key=lambda kv: -kv[1][0])],
-    }
-    if unknown_budget_ids:
-        detail["unknown_budget_ids"] = unknown_budget_ids
-    return detail
 
 
 def _delivery_monthly_section(client, project_id: int,
@@ -577,12 +419,12 @@ def project_dashboard(
         ctx = None
         if budget_sections:
             # Reuse core's already-fetched project.project row instead of
-            # _budget_context fetching it again (finding #8); None when
-            # core wasn't requested or failed, so _budget_context just
+            # build_budget_context fetching it again (finding #8); None when
+            # core wasn't requested or failed, so build_budget_context just
             # falls back to its own self-sufficient fetch.
             core_row = core.get("_raw_project_row") if core else None
             try:
-                ctx = _budget_context(client, project_id, core_row)
+                ctx = build_budget_context(client, project_id, core_row)
             except Exception as exc:
                 # Every budget section needs this context, so a failure is
                 # recorded under ALL requested ones — a requested section
@@ -597,7 +439,7 @@ def project_dashboard(
             # like "select none" just because budget_detail wasn't in
             # `include` this call (finding #1's guarantee must hold for
             # every budget_ids-consuming section, not only budget_detail).
-            _sel_ids, _sel_periods, unknown_ids = _selected(ctx, budget_ids)
+            _sel_ids, _sel_periods, unknown_ids = select_budgets(ctx, budget_ids)
             if unknown_ids:
                 warnings.append(
                     f"budget_ids {unknown_ids} match no budget of "
@@ -606,13 +448,13 @@ def project_dashboard(
                 report["budgets"] = ctx["budgets"]
             if "budget_detail" in wanted:
                 detail = attempt("budget_detail",
-                                 lambda: _budget_detail_section(
+                                 lambda: build_budget_detail(
                                      client, project_id, ctx,
                                      budget_ids, timezone_offset))
                 if detail is not None:
                     report["budget_detail"] = detail
             if "delivery_monthly" in wanted and shared_tasks is not None:
-                _ids, periods, _unknown = _selected(ctx, budget_ids)
+                _ids, periods, _unknown = select_budgets(ctx, budget_ids)
 
                 def deliver():
                     rows, warns = _delivery_monthly_section(
@@ -732,7 +574,7 @@ def portfolio_health(
                     hours_by_project[m2o[0]] = (
                         row.get("unit_amount:sum") or 0.0)
             cost_by, rev_by = analytic_money(client, account_ids)
-            budgets, budgets_available = _budget_by_project(
+            budgets, budgets_available = budget_by_project(
                 client, ids, acct_by_project)
 
         rows_out: list[dict] = []

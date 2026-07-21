@@ -6,11 +6,8 @@ import pytest
 
 from odoo_pulse import tools_reports_projects
 from odoo_pulse.core.errors import OdooError
-from odoo_pulse.tools_reports_projects import (
-    _budget_by_project,
-    _validate_date,
-    _verdict,
-)
+from odoo_pulse.services.projects.budget import budget_by_project, burn_verdict
+from odoo_pulse.tools_reports_projects import _validate_date
 
 
 # -- helpers -----------------------------------------------------------------
@@ -30,19 +27,19 @@ def test_validate_date_passthrough_and_error():
 
 
 def test_verdict_boundaries_and_worst_of_two():
-    assert _verdict(None, None, 80.0, 100.0) == ("on_track", None)
-    assert _verdict(79.9, None, 80.0, 100.0) == ("on_track", 79.9)
-    assert _verdict(80.0, None, 80.0, 100.0) == ("at_risk", 80.0)
-    assert _verdict(99.9, None, 80.0, 100.0) == ("at_risk", 99.9)
-    assert _verdict(100.0, None, 80.0, 100.0) == ("off_track", 100.0)
-    assert _verdict(50.0, 120.0, 80.0, 100.0) == ("off_track", 120.0)
-    assert _verdict(None, 85.0, 80.0, 100.0) == ("at_risk", 85.0)
+    assert burn_verdict(None, None, 80.0, 100.0) == ("on_track", None)
+    assert burn_verdict(79.9, None, 80.0, 100.0) == ("on_track", 79.9)
+    assert burn_verdict(80.0, None, 80.0, 100.0) == ("at_risk", 80.0)
+    assert burn_verdict(99.9, None, 80.0, 100.0) == ("at_risk", 99.9)
+    assert burn_verdict(100.0, None, 80.0, 100.0) == ("off_track", 100.0)
+    assert burn_verdict(50.0, 120.0, 80.0, 100.0) == ("off_track", 120.0)
+    assert burn_verdict(None, 85.0, 80.0, 100.0) == ("at_risk", 85.0)
 
 
-# -- _budget_by_project --------------------------------------------------------
+# -- budget_by_project --------------------------------------------------------
 
 def test_budget_no_projects_short_circuits(fake_client):
-    assert _budget_by_project(fake_client, [], {}) == ({}, False)
+    assert budget_by_project(fake_client, [], {}) == ({}, False)
     assert fake_client.calls == []
 
 
@@ -51,7 +48,7 @@ def test_budget_probe_uses_rpc_not_fields_get(fake_client):
     # (the fake returns a default schema for any model) — this test pins
     # the probe order the spec requires.
     fake_client.error_models = {"budget.line", "crossovered.budget.lines"}
-    budgets, available = _budget_by_project(fake_client, [1, 2], {1: 11, 2: 12})
+    budgets, available = budget_by_project(fake_client, [1, 2], {1: 11, 2: 12})
     assert budgets == {} and available is False
     probed = [c["model"] for c in fake_client.calls
               if c["method"] == "search_count"]
@@ -61,7 +58,7 @@ def test_budget_probe_uses_rpc_not_fields_get(fake_client):
 def test_budget_probe_order_flips_on_17(fake_client):
     fake_client.major = 17
     fake_client.error_models = {"budget.line", "crossovered.budget.lines"}
-    _budget_by_project(fake_client, [1], {1: 11})
+    budget_by_project(fake_client, [1], {1: 11})
     probed = [c["model"] for c in fake_client.calls
               if c["method"] == "search_count"]
     assert probed == ["crossovered.budget.lines", "budget.line"]
@@ -71,7 +68,7 @@ def test_budget_unresolvable_fields_degrade(fake_client):
     # Models "exist" (search_count returns the default 7) and the default
     # schema even has project_id — but no amount field resolves, so the
     # candidate is unusable -> ({}, False), no aggregate.
-    budgets, available = _budget_by_project(fake_client, [1], {1: 11})
+    budgets, available = budget_by_project(fake_client, [1], {1: 11})
     assert budgets == {} and available is False
     assert not any(c["method"] == "aggregate_records"
                    for c in fake_client.calls)
@@ -86,7 +83,7 @@ def test_budget_matches_by_line_project_id(fake_client):
         {"project_id": [1, "Alpha"], "budget_amount:sum": -10000.0},
         {"project_id": [2, "Beta"], "budget_amount:sum": 4000.0},
     ]]
-    budgets, available = _budget_by_project(fake_client, [1, 2], {1: 11})
+    budgets, available = budget_by_project(fake_client, [1, 2], {1: 11})
     assert available is True
     assert budgets == {1: 10000.0, 2: 4000.0}
     agg = fake_client.last("aggregate_records")
@@ -106,7 +103,7 @@ def test_budget_account_fallback_maps_shared_account(fake_client):
         "account_id": {}, "budget_amount": {}}
     fake_client.aggregate_responses_seq["budget.line"] = [[
         {"account_id": [11, "AA Shared"], "budget_amount:sum": -10000.0}]]
-    budgets, available = _budget_by_project(
+    budgets, available = budget_by_project(
         fake_client, [1, 2], {1: 11, 2: 11})
     assert available is True
     assert budgets == {1: 10000.0, 2: 10000.0}
@@ -125,7 +122,7 @@ def test_budget_project_id_wins_over_account_match(fake_client):
         [{"account_id": [11, "AA Alpha"], "budget_amount:sum": -5000.0},
          {"account_id": [12, "AA Beta"], "budget_amount:sum": -3000.0}],
     ]
-    budgets, available = _budget_by_project(
+    budgets, available = budget_by_project(
         fake_client, [1, 2], {1: 11, 2: 12})
     assert available is True
     assert budgets == {1: 8000.0, 2: 3000.0}
@@ -140,7 +137,7 @@ def test_budget_crossovered_filters_confirmed(fake_client):
         "analytic_account_id": {}, "planned_amount": {}}
     fake_client.aggregate_responses_seq["crossovered.budget.lines"] = [[
         {"analytic_account_id": [11, "AA"], "planned_amount:sum": -5000.0}]]
-    budgets, available = _budget_by_project(fake_client, [1], {1: 11})
+    budgets, available = budget_by_project(fake_client, [1], {1: 11})
     assert budgets == {1: 5000.0} and available is True
     agg = fake_client.last("aggregate_records")
     assert agg["model"] == "crossovered.budget.lines"

@@ -1,12 +1,14 @@
 # tests/test_tools_project_detail.py
 import json
 
+from odoo_pulse.services.projects.budget import (
+    build_budget_context,
+    build_budget_detail,
+    select_budgets,
+)
 from odoo_pulse.tools_project_detail import (
-    _budget_context,
-    _budget_detail_section,
     _core_section,
     _hours_section,
-    _selected,
     _weekly_logged,
     portfolio_health,
     project_dashboard,
@@ -289,7 +291,7 @@ def _seed_budget(fake):
 
 def test_budget_context_lists_budgets(fake_client):
     _seed_budget(fake_client)
-    ctx = _budget_context(fake_client, 59)
+    ctx = build_budget_context(fake_client, 59)
     assert ctx["available"] is True
     assert ctx["budgets"] == [{"id": 12, "name": "PASX TBS",
                                "date_from": "2025-03-01",
@@ -305,7 +307,7 @@ def test_budget_context_excludes_revenue_lines_from_fetch(fake_client):
     # excluded at the fetch domain, same as the budget.line candidate
     # already excludes revenue via budget_analytic_id.budget_type.
     _seed_budget(fake_client)
-    _budget_context(fake_client, 59)
+    build_budget_context(fake_client, 59)
     call = next(c for c in fake_client.calls
                 if c["method"] == "search_read"
                 and c["model"] == "crossovered.budget.lines")
@@ -321,7 +323,7 @@ def test_budget_context_includes_zero_planned_expense_budgets(fake_client):
     # lines while still excluding positive Revenue lines (see the test
     # above), so such budgets stay selectable.
     _seed_budget(fake_client)
-    _budget_context(fake_client, 59)
+    build_budget_context(fake_client, 59)
     call = next(c for c in fake_client.calls
                 if c["method"] == "search_read"
                 and c["model"] == "crossovered.budget.lines")
@@ -332,7 +334,7 @@ def test_budget_context_includes_zero_planned_expense_budgets(fake_client):
 def test_budget_context_accepts_prefetched_project_row(fake_client):
     _seed_budget(fake_client)
     row = {"id": 59, "name": "The Body Shop", "account_id": [5, "AA TBS"]}
-    ctx = _budget_context(fake_client, 59, project_row=row)
+    ctx = build_budget_context(fake_client, 59, project_row=row)
     assert ctx["available"] is True
     assert ctx["budgets"] == [{"id": 12, "name": "PASX TBS",
                                "date_from": "2025-03-01",
@@ -346,20 +348,20 @@ def test_budget_context_accepts_prefetched_project_row(fake_client):
 
 def test_selected_none_vs_empty_list(fake_client):
     _seed_budget(fake_client)
-    ctx = _budget_context(fake_client, 59)
-    ids_all, periods_all, unknown_all = _selected(ctx, None)
+    ctx = build_budget_context(fake_client, 59)
+    ids_all, periods_all, unknown_all = select_budgets(ctx, None)
     assert ids_all == [12]
     assert periods_all == [{"date_from": "2025-03-01",
                             "date_to": "2026-07-31"}]
     assert unknown_all == []
-    ids_none, periods_none, unknown_none = _selected(ctx, [])
+    ids_none, periods_none, unknown_none = select_budgets(ctx, [])
     assert ids_none == [] and periods_none == [] and unknown_none == []
 
 
 def test_selected_reports_unknown_ids(fake_client):
     _seed_budget(fake_client)
-    ctx = _budget_context(fake_client, 59)
-    selected, periods, unknown = _selected(ctx, [12, 999])
+    ctx = build_budget_context(fake_client, 59)
+    selected, periods, unknown = select_budgets(ctx, [12, 999])
     assert selected == [12]
     assert unknown == [999]
     assert periods == [{"date_from": "2025-03-01", "date_to": "2026-07-31"}]
@@ -367,7 +369,7 @@ def test_selected_reports_unknown_ids(fake_client):
 
 def test_budget_detail_signs_and_periods(fake_client):
     _seed_budget(fake_client)
-    ctx = _budget_context(fake_client, 59)
+    ctx = build_budget_context(fake_client, 59)
     fake_client.search_responses["account.analytic.line"] = [
         {"id": 1, "date": "2025-10-03", "amount": -210500000.0,
          "unit_amount": 890.0, "employee_id": [155, "A"],
@@ -377,7 +379,7 @@ def test_budget_detail_signs_and_periods(fake_client):
          "unit_amount": 0.0, "employee_id": [155, "A"],
          "task_id": [8554, "Build X"]},
     ]
-    detail = _budget_detail_section(fake_client, 59, ctx, None, 7)
+    detail = build_budget_detail(fake_client, 59, ctx, None, 7)
     assert detail["selected_budget_ids"] == [12]
     assert detail["planned"] == 1593314320.0     # abs of negative planned
     assert detail["practical"] == 1735766746.0
@@ -398,12 +400,12 @@ def test_budget_detail_signs_and_periods(fake_client):
 
 def test_budget_detail_empty_selection_all_time_cost(fake_client):
     _seed_budget(fake_client)
-    ctx = _budget_context(fake_client, 59)
+    ctx = build_budget_context(fake_client, 59)
     fake_client.search_responses["account.analytic.line"] = [
         {"id": 1, "date": "2020-01-01", "amount": -100.0,
          "unit_amount": 1.0, "employee_id": False, "task_id": [9, "T"]},
     ]
-    detail = _budget_detail_section(fake_client, 59, ctx, [], 7)
+    detail = build_budget_detail(fake_client, 59, ctx, [], 7)
     assert detail["selected_budget_ids"] == []
     assert detail["planned"] == 0.0
     assert detail["valid_cost"] == 100.0         # no period filter
@@ -415,9 +417,9 @@ def test_budget_detail_empty_selection_all_time_cost(fake_client):
 
 def test_budget_detail_surfaces_unknown_budget_ids(fake_client):
     _seed_budget(fake_client)
-    ctx = _budget_context(fake_client, 59)
+    ctx = build_budget_context(fake_client, 59)
     fake_client.search_responses["account.analytic.line"] = []
-    detail = _budget_detail_section(fake_client, 59, ctx, [12, 999], 7)
+    detail = build_budget_detail(fake_client, 59, ctx, [12, 999], 7)
     assert detail["selected_budget_ids"] == [12]
     assert detail["unknown_budget_ids"] == [999]
 
@@ -458,7 +460,7 @@ def test_dashboard_full_load_all_sections(fake_client):
     assert out["project"]["id"] == 59
     assert out["budgets"][0]["id"] == 12
     assert out["budget_detail"]["selected_budget_ids"] == [12]
-    # core's project.project row is reused by _budget_context instead of
+    # core's project.project row is reused by build_budget_context instead of
     # being fetched a second time (finding #8).
     proj_reads = [c for c in fake_client.calls
                   if c["method"] == "search_read"
@@ -614,12 +616,12 @@ def test_dashboard_warns_on_unknown_budget_ids_without_budget_detail(
 
 def test_dashboard_budget_context_failure_lands_on_every_budget_section(
         fake_client):
-    # _budget_context feeds budgets, budget_detail AND delivery_monthly;
+    # build_budget_context feeds budgets, budget_detail AND delivery_monthly;
     # when it fails, every requested one must land in errors -- a
     # requested section must never vanish from both the report and
     # errors (same fan-out contract as the shared sub-task fetch).
     _seed_dashboard(fake_client)
-    # no core in include -> _budget_context self-fetches project.project,
+    # no core in include -> build_budget_context self-fetches project.project,
     # which is the call made to fail here.
     fake_client.error_models.add("project.project")
     out = json.loads(project_dashboard(
@@ -700,7 +702,7 @@ def test_portfolio_health_joins_by_id_two_projects_same_name(fake_client):
 def test_portfolio_health_budget_excludes_revenue_lines(fake_client):
     # Same crossovered.budget.lines revenue-exclusion rule as
     # project_dashboard/project_budget must hold for portfolio_health's
-    # budget_burn_pct (_budget_by_project) -- one shared candidate list,
+    # budget_burn_pct (budget_by_project) -- one shared candidate list,
     # one shared bug surface.
     fake_client.fields_responses["project.project"] = dict(_PROJECT_SCHEMA)
     fake_client.search_responses["project.project"] = [

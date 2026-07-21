@@ -4,6 +4,7 @@ import json
 
 from odoo_pulse import tools_reports_projects
 from odoo_pulse.core.errors import OdooError
+from odoo_pulse.services.projects import budget
 
 # -- fixtures ------------------------------------------------------------------
 
@@ -227,7 +228,7 @@ def test_fetch_lines_recovers_from_faulting_first_candidate(fake_client, monkeyp
     # search_count existence probe succeeds) but its actual line read still
     # faults on a real server (e.g. a dotted extra-domain field the instance
     # doesn't support) -- fetch_lines() must catch that OdooError and fall
-    # through to the next candidate (mirroring _budget_by_project), not crash.
+    # through to the next candidate (mirroring budget_by_project), not crash.
     fake_client.fields_responses["budget.line"] = {
         "project_id": {}, "account_id": {}, "planned_amount": {}}
     _seed(fake_client)  # crossovered.budget.lines is the working fallback
@@ -289,7 +290,7 @@ def test_no_projects_short_circuits(fake_client):
 # -- envelope ---------------------------------------------------------------------
 
 def test_envelope_shape(fake_client, monkeypatch):
-    monkeypatch.setattr(tools_reports_projects, "today_in_tz",
+    monkeypatch.setattr(budget, "today_in_tz",
                         lambda offset: dt.date(2026, 7, 13))
     _seed(fake_client)
     out = json.loads(tools_reports_projects.project_budget())
