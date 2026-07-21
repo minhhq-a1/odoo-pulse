@@ -10,9 +10,14 @@ from __future__ import annotations
 
 import json
 
-from .odoo_client import OdooConfigError, OdooError
-from .runtime import date_domain, get_client, mcp, name_domain, safe
-from .workflow_helpers import ensure_field, resolve_user_names
+from .common.dates import date_domain
+from .common.domains import name_domain
+from .common.schema import ensure_field
+from .core.errors import OdooConfigError, OdooError
+from .mcp.app import mcp
+from .mcp.result import safe
+from .mcp.runtime import get_client
+from .services.projects.queries import resolve_user_names
 
 
 

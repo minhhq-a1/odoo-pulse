@@ -87,7 +87,7 @@ def test_off_today_counts_leave_ending_late_utc_yesterday(fake_client):
     import json
     from datetime import timedelta
     from odoo_pulse import tools_reports_hr
-    from odoo_pulse.workflow_helpers import today_in_tz
+    from odoo_pulse.common.dates import today_in_tz
 
     today = today_in_tz(7)
     # ends 18:00 UTC "yesterday by UTC date" == 01:00 today at +7 -> off today

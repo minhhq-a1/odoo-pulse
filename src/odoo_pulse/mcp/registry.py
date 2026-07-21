@@ -9,11 +9,12 @@ they don't bloat the client's context window.
 
 from __future__ import annotations
 
+import importlib
 import os
 
 # group name -> module names inside the odoo_pulse package
 GROUP_MODULES: dict[str, tuple[str, ...]] = {
-    "core": ("tools_generic", "tools_write", "resources"),
+    "core": ("tools_generic", "tools_write", "mcp.resources"),
     "reports": ("tools_workflows", "tools_reports_sales", "tools_reports_finance",
                 "tools_reports_inventory", "tools_reports_hr",
                 "tools_reports_pulse", "tools_reports_ops",
@@ -58,4 +59,17 @@ def modules_to_load(raw: str | None = None) -> list[str]:
         for mod in GROUP_MODULES[group]:
             if mod not in modules:
                 modules.append(mod)
+    return modules
+
+
+def load_enabled_modules(raw: str | None = None) -> list[str]:
+    """Import every module selected by ODOO_TOOL_GROUPS, registering its
+    @mcp.tool() / @mcp.resource() functions as a side effect.
+
+    Returns the ordered module list so registration is testable without
+    changing selection semantics.
+    """
+    modules = modules_to_load(raw)
+    for module in modules:
+        importlib.import_module(f"odoo_pulse.{module}")
     return modules

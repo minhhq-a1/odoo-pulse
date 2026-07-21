@@ -6,22 +6,22 @@ import threading
 
 import pytest
 
-from odoo_pulse.odoo_client import OdooError
-from odoo_pulse.workflow_helpers import (
+from odoo_pulse.common.concurrency import gather, gather_strict
+from odoo_pulse.common.dates import parse_when, today_in_tz, utc_bound
+from odoo_pulse.common.money import totals_by_currency
+from odoo_pulse.common.paging import paged_search_read
+from odoo_pulse.common.reporting import (
     build_report,
-    ensure_field,
     distinct_companies,
-    optional_fields,
-    paged_search_read,
-    parse_when,
     resolve_company_id,
-    resolve_user_names,
+    trend_direction,
+)
+from odoo_pulse.common.schema import ensure_field, optional_fields
+from odoo_pulse.core.errors import OdooError
+from odoo_pulse.services.projects.queries import resolve_user_names
+from odoo_pulse.services.projects.subtasks import (
     task_closed_scope,
     task_matches_scope,
-    today_in_tz,
-    totals_by_currency,
-    trend_direction,
-    utc_bound,
 )
 
 
@@ -232,14 +232,12 @@ def test_task_closed_scope_falls_back_to_casefolded_stage_names(fake_client):
 
 
 def test_gather_returns_values_in_key_order():
-    from odoo_pulse.workflow_helpers import gather
     out = gather({"a": lambda: 1, "b": lambda: 2, "c": lambda: 3})
     assert out == {"a": 1, "b": 2, "c": 3}
     assert list(out) == ["a", "b", "c"]
 
 
 def test_gather_captures_exceptions_as_values():
-    from odoo_pulse.workflow_helpers import gather
     boom = ValueError("boom")
 
     def raiser():
@@ -251,13 +249,11 @@ def test_gather_captures_exceptions_as_values():
 
 
 def test_gather_single_thunk_runs_inline():
-    from odoo_pulse.workflow_helpers import gather
     ident = gather({"only": threading.get_ident})
     assert ident["only"] == threading.get_ident()
 
 
 def test_gather_runs_thunks_concurrently():
-    from odoo_pulse.workflow_helpers import gather
     # Both thunks must be inside barrier.wait() at the same time; if gather
     # ran them sequentially the barrier would time out and raise.
     barrier = threading.Barrier(2, timeout=2)
@@ -273,14 +269,12 @@ def test_gather_runs_thunks_concurrently():
 
 
 def test_gather_strict_returns_values_in_key_order():
-    from odoo_pulse.workflow_helpers import gather_strict
     out = gather_strict({"a": lambda: 1, "b": lambda: 2})
     assert out == {"a": 1, "b": 2}
     assert list(out) == ["a", "b"]
 
 
 def test_gather_strict_reraises_first_exception_in_key_order():
-    from odoo_pulse.workflow_helpers import gather_strict
     first, second = ValueError("first"), TypeError("second")
 
     def raise_first():
@@ -331,5 +325,7 @@ def test_paged_search_read_rejects_non_positive_step(fake_client):
 
 
 def test_project_shared_reexports_paged_search_read():
+    from odoo_pulse.common.paging import paged_search_read as common_pager
     from odoo_pulse.project_shared import paged_search_read as project_pager
     assert project_pager is paged_search_read
+    assert project_pager is common_pager

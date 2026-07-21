@@ -111,7 +111,7 @@ def test_late_receipt_uses_local_date_of_date_planned(fake_client):
     import json
     from datetime import timedelta
     from odoo_pulse import tools_reports_ops
-    from odoo_pulse.workflow_helpers import today_in_tz
+    from odoo_pulse.common.dates import today_in_tz
 
     today = today_in_tz(7)
     # 20:00 UTC "yesterday by UTC date" is already today at +7 -> not late

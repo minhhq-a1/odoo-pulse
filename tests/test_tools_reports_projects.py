@@ -5,7 +5,7 @@ import json
 import pytest
 
 from odoo_pulse import tools_reports_projects
-from odoo_pulse.odoo_client import OdooError
+from odoo_pulse.core.errors import OdooError
 from odoo_pulse.tools_reports_projects import (
     _budget_by_project,
     _validate_date,

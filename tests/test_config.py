@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from odoo_pulse.odoo_client import OdooConfig, OdooConfigError
+from odoo_pulse.core.config import OdooConfig
+from odoo_pulse.core.errors import OdooConfigError
 
 _REQUIRED = {
     "ODOO_URL": "https://acme.odoo.com/",

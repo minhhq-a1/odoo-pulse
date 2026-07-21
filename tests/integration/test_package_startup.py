@@ -6,7 +6,7 @@ import sys
 STARTUP_PROBE = r"""
 import asyncio
 from odoo_pulse import server  # noqa: F401 -- registration side effects
-from odoo_pulse.runtime import mcp
+from odoo_pulse.mcp.app import mcp
 
 async def main():
     tools = await mcp.list_tools()

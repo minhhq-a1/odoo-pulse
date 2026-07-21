@@ -1,8 +1,8 @@
 # tests/test_cache.py
 import threading
 
-import odoo_pulse.cache as cache_mod
-from odoo_pulse.cache import TTLCache
+import odoo_pulse.core.cache as cache_mod
+from odoo_pulse.core.cache import TTLCache
 
 
 def test_set_then_get_returns_value():

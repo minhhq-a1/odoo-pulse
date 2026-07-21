@@ -87,7 +87,7 @@ def test_subtask_hours_bad_period_is_clean_error(fake_client):
 
 
 def test_module_registered_in_reports_group():
-    from odoo_pulse.tool_groups import GROUP_MODULES
+    from odoo_pulse.mcp.registry import GROUP_MODULES
     assert "tools_project_detail" in GROUP_MODULES["reports"]
 
 
@@ -157,7 +157,7 @@ def test_core_section_missing_project_raises(fake_client):
     fake_client.fields_responses["project.project"] = dict(_PROJECT_SCHEMA)
     fake_client.search_responses["project.project"] = []
     import pytest
-    from odoo_pulse.odoo_client import OdooError
+    from odoo_pulse.core.errors import OdooError
     with pytest.raises(OdooError, match="No project.project with id 999"):
         _core_section(fake_client, 999, 7, 7)
 
