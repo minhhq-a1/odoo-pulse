@@ -6,10 +6,12 @@ from odoo_pulse.services.projects.budget import (
     build_budget_detail,
     select_budgets,
 )
+from odoo_pulse.services.projects.dashboard import (
+    build_core_section,
+    build_hours_section,
+    weekly_logged,
+)
 from odoo_pulse.tools_project_detail import (
-    _core_section,
-    _hours_section,
-    _weekly_logged,
     portfolio_health,
     project_dashboard,
     project_subtask_hours,
@@ -136,7 +138,7 @@ def _seed_core(fake):
 
 def test_core_section_shape(fake_client):
     _seed_core(fake_client)
-    core = _core_section(fake_client, 59, 7, 7)
+    core = build_core_section(fake_client, 59, 7, 7)
     p = core["project"]
     assert p["id"] == 59 and p["name"] == "The Body Shop"
     assert p["manager"] == "Minh" and p["customer"] is None
@@ -161,7 +163,7 @@ def test_core_section_missing_project_raises(fake_client):
     import pytest
     from odoo_pulse.core.errors import OdooError
     with pytest.raises(OdooError, match="No project.project with id 999"):
-        _core_section(fake_client, 999, 7, 7)
+        build_core_section(fake_client, 999, 7, 7)
 
 
 def test_core_section_missing_delivery_hours_warns(fake_client):
@@ -169,7 +171,7 @@ def test_core_section_missing_delivery_hours_warns(fake_client):
     schema = dict(_PROJECT_SCHEMA)
     del schema["delivery_hours"]
     fake_client.fields_responses["project.project"] = schema
-    core = _core_section(fake_client, 59, 7, 7)
+    core = build_core_section(fake_client, 59, 7, 7)
     assert core["project"]["delivery_hours"] is None
     assert core["warnings"] == \
         ["field delivery_hours does not exist on project.project"]
@@ -183,7 +185,7 @@ def test_core_section_finance_soft_fails_independently(fake_client):
     fake_client.aggregate_responses_seq["account.analytic.line"] = [
         [{"account_id": [5, "AA TBS"], "amount:sum": "not-a-number"}],
     ]
-    core = _core_section(fake_client, 59, 7, 7)
+    core = build_core_section(fake_client, 59, 7, 7)
     assert "project" in core and core["project"]["id"] == 59
     assert "milestones" in core
     assert "finance" not in core
@@ -197,7 +199,7 @@ def test_core_section_finance_soft_fails_independently(fake_client):
 def test_core_section_weekly_logged_soft_fails_independently(fake_client):
     _seed_core(fake_client)
     fake_client.error_models.add("account.analytic.line")
-    core = _core_section(fake_client, 59, 7, 7)
+    core = build_core_section(fake_client, 59, 7, 7)
     assert "project" in core and core["project"]["id"] == 59
     assert "milestones" in core
     assert "weekly_logged" not in core
@@ -219,7 +221,7 @@ def test_weekly_logged_iso_monday_buckets(fake_client):
         {"id": 2, "date": "2026-07-14", "unit_amount": 3.5},   # Tue same wk
         {"id": 3, "date": "2026-07-06", "unit_amount": 8.0},   # prev week
     ]
-    weeks = _weekly_logged(fake_client, 59, dt.date(2026, 7, 15))
+    weeks = weekly_logged(fake_client, 59, dt.date(2026, 7, 15))
     assert weeks == [
         {"week_start": "2026-07-06", "hours": 8.0},
         {"week_start": "2026-07-13", "hours": 7.5},
@@ -244,7 +246,7 @@ def test_hours_section_totals_and_leaderboards(fake_client):
         [{"employee_id": [155, "Nguyễn Văn A"], "unit_amount:sum": 320.5}],
         [{"task_id": [8554, "Build X"], "unit_amount:sum": 84.0}],
     ]
-    out = _hours_section(fake_client, 59, False, None, False, 7)
+    out = build_hours_section(fake_client, 59, False, None, False, 7)
     h = out["hours"]
     assert h["subtask_delivery"] == 10.0
     assert h["by_employee"] == [{"employee_id": 155,

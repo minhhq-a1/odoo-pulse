@@ -171,7 +171,7 @@ def build_budget_context(client, project_id: int,
     rule #7).
 
     project_row, when given, is a project.project row the caller already
-    fetched (e.g. _core_section's) — must carry "id" and whichever of
+    fetched (e.g. build_core_section's) — must carry "id" and whichever of
     account_id/analytic_account_id exists on this instance. None means
     fetch it here (self-sufficient default). A resolved account id can
     legitimately be None (no account set), so it can't double as the
