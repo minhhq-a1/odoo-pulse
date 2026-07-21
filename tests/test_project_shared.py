@@ -3,7 +3,7 @@ import datetime as dt
 
 import pytest
 
-from odoo_pulse.odoo_client import OdooError
+from odoo_pulse.core.errors import OdooError
 from odoo_pulse.project_shared import (
     DEFAULT_CLOSED_STAGES,
     account_field_of,

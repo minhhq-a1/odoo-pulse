@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from odoo_pulse import runtime
-from odoo_pulse.odoo_client import OdooError
+from odoo_pulse.core.errors import OdooError
 
 _DEFAULT_FIELDS = {
     "name": {"type": "char", "string": "Name"},

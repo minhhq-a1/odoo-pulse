@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, time as dt_time, timedelta, timezone
 from typing import Any, Callable
 
-from .odoo_client import OdooError
+from .core.errors import OdooError
 
 
 def today_in_tz(timezone_offset: int) -> date:

@@ -3,7 +3,7 @@ import datetime as dt
 import json
 
 from odoo_pulse import tools_reports_projects
-from odoo_pulse.odoo_client import OdooError
+from odoo_pulse.core.errors import OdooError
 
 # -- fixtures ------------------------------------------------------------------
 

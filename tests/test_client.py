@@ -6,10 +6,10 @@ import xmlrpc.client
 
 import pytest
 
+from odoo_pulse.core.client import OdooClient
 from odoo_pulse.core.config import OdooConfig
 from odoo_pulse.core.errors import OdooError
 from odoo_pulse.core.transport import _TimeoutSafeTransport, _TimeoutTransport
-from odoo_pulse.odoo_client import OdooClient
 
 
 class FakeProxy:
@@ -325,7 +325,8 @@ def test_make_transport_honours_verify_ssl_false():
 
 def test_each_execute_kw_builds_a_fresh_proxy(monkeypatch):
     import xmlrpc.client
-    from odoo_pulse.odoo_client import OdooClient, OdooConfig
+    from odoo_pulse.core.client import OdooClient
+    from odoo_pulse.core.config import OdooConfig
 
     instances = []
 
@@ -350,7 +351,8 @@ def test_each_execute_kw_builds_a_fresh_proxy(monkeypatch):
 
 def test_uid_authenticates_once(monkeypatch):
     import xmlrpc.client
-    from odoo_pulse.odoo_client import OdooClient, OdooConfig
+    from odoo_pulse.core.client import OdooClient
+    from odoo_pulse.core.config import OdooConfig
 
     auth_calls = []
 

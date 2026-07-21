@@ -50,7 +50,7 @@ def test_datetime_domain_uses_exclusive_next_day():
 
 
 def test_date_domain_rejects_invalid_iso_date():
-    from odoo_pulse.odoo_client import OdooError
+    from odoo_pulse.core.errors import OdooError
     with pytest.raises(OdooError, match="date_to"):
         runtime.date_domain("date", None, "2026-06-30 trailing")
 
@@ -61,7 +61,7 @@ def test_safe_serialises_result():
 
 
 def test_safe_catches_odoo_error():
-    from odoo_pulse.odoo_client import OdooError
+    from odoo_pulse.core.errors import OdooError
 
     def boom():
         raise OdooError("kaboom")

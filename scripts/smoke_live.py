@@ -323,7 +323,7 @@ def main() -> int:
     load_env(Path(args.env))
 
     # Import after env is loaded.
-    from odoo_pulse.odoo_client import OdooConfigError
+    from odoo_pulse.core.errors import OdooConfigError
     from odoo_pulse.runtime import get_client
 
     # 1) Connectivity check.

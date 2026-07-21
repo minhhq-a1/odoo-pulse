@@ -19,10 +19,10 @@ import xmlrpc.client
 from functools import cached_property
 from typing import Any
 
-from .core.cache import TTLCache
-from .core.config import OdooConfig
-from .core.errors import OdooConfigError, OdooError  # noqa: F401 - transitional re-exports for Task 3
-from .core.transport import _TimeoutSafeTransport, _TimeoutTransport
+from .cache import TTLCache
+from .config import OdooConfig
+from .errors import OdooError
+from .transport import _TimeoutSafeTransport, _TimeoutTransport
 
 # Methods execute_kw may run WITHOUT write authorisation. This is an
 # allow-list on purpose: any method not listed here — including ORM button

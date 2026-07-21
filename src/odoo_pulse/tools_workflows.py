@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from datetime import timedelta
 
-from .odoo_client import OdooConfigError, OdooError
+from .core.errors import OdooConfigError, OdooError
 from .project_shared import derive_project_health
 from .runtime import get_client, mcp, safe
 from .workflow_helpers import (

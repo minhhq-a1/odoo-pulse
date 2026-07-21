@@ -1,7 +1,7 @@
 # tests/test_client_aggregate.py
 from odoo_pulse.core.config import OdooConfig
 from odoo_pulse.core.errors import OdooError
-from odoo_pulse.odoo_client import OdooClient
+from odoo_pulse.core.client import OdooClient
 
 
 def _client(server_version="18.0"):

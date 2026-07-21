@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from .odoo_client import OdooError
+from .core.errors import OdooError
 from .project_shared import (
     DEFAULT_CLOSED_STAGES,
     _PARENT_CANDIDATES,

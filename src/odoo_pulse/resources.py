@@ -16,7 +16,7 @@ the defensive catch-all and the path the FakeClient exercises.
 
 from __future__ import annotations
 
-from .odoo_client import OdooError
+from .core.errors import OdooError
 from .runtime import get_client, mcp, safe
 
 

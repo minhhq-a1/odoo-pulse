@@ -6,7 +6,7 @@ import threading
 
 import pytest
 
-from odoo_pulse.odoo_client import OdooError
+from odoo_pulse.core.errors import OdooError
 from odoo_pulse.workflow_helpers import (
     build_report,
     ensure_field,

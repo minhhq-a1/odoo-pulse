@@ -183,7 +183,7 @@ def test_find_partner_includes_mobile_when_present(fake_client):
 def test_document_tool_serialises_client_construction_error(
     monkeypatch, func, kwargs
 ):
-    from odoo_pulse.odoo_client import OdooConfigError
+    from odoo_pulse.core.errors import OdooConfigError
 
     def fail_client():
         raise OdooConfigError("Missing required environment variables: ODOO_API_KEY")

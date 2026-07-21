@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 
-from .odoo_client import OdooConfigError, OdooError
+from .core.errors import OdooConfigError, OdooError
 from .runtime import date_domain, get_client, mcp, name_domain, safe
 from .workflow_helpers import ensure_field, resolve_user_names
 

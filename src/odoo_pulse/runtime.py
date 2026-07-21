@@ -12,7 +12,9 @@ from datetime import datetime, timedelta
 
 from mcp.server.fastmcp import FastMCP
 
-from .odoo_client import OdooClient, OdooConfig, OdooConfigError, OdooError
+from .core.client import OdooClient
+from .core.config import OdooConfig
+from .core.errors import OdooConfigError, OdooError
 
 mcp = FastMCP(
     "odoo-pulse",

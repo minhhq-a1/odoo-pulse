@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from .odoo_client import OdooError
+from .core.errors import OdooError
 from .runtime import get_client, mcp, safe
 from .workflow_helpers import (
     build_report,

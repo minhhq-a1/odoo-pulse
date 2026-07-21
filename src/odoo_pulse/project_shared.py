@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import datetime, time as dt_time, timedelta
 
-from .odoo_client import OdooError
+from .core.errors import OdooError
 from .workflow_helpers import (
     optional_fields,
     paged_search_read,
