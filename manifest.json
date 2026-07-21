@@ -20,7 +20,7 @@
   "keywords": ["odoo", "mcp", "erp", "xml-rpc", "analytics", "business-intelligence"],
   "server": {
     "type": "python",
-    "entry_point": "odoo_pulse/server.py",
+    "entry_point": "src/odoo_pulse/server.py",
     "mcp_config": {
       "command": "uvx",
       "args": ["odoo-pulse"],

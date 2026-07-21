@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Install the package from source so the image always matches this repo.
 COPY pyproject.toml README.md LICENSE ./
-COPY odoo_pulse ./odoo_pulse
+COPY src ./src
 RUN pip install --no-cache-dir .
 
 # The server speaks MCP over stdio; connection details come from ODOO_* env vars.
