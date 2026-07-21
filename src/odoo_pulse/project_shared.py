@@ -10,7 +10,6 @@ practical figures — spec rule #7).
 
 from __future__ import annotations
 
-from .common.dates import parse_when
 from .common.schema import optional_fields
 from .core.errors import OdooError
 
@@ -135,61 +134,6 @@ def _budget_by_project(
         budgets.update(by_project)
         return budgets, True
     return {}, False
-
-
-def derive_project_health(
-    project_row: dict,
-    milestones: list[dict],
-    today,
-    cutoff,
-    timezone_offset: int,
-) -> dict:
-    """Milestone/end-date health verdict for one project.
-
-    THE single source of truth for derived health — used by
-    project_status_report, project_dashboard and portfolio_health, so the
-    artifact's two tabs can never show different verdicts for the same
-    project. Rules: any overdue unreached milestone or a passed end date
-    -> off_track; anything due within the cutoff -> at_risk; else
-    on_track. Divergent means the PM declared a healthier status than the
-    data supports.
-    """
-    native = project_row.get("last_update_status") or "to_define"
-    total = len(milestones)
-    reached = sum(1 for m in milestones if m.get("is_reached"))
-    overdue = soon = 0
-    next_milestone = None
-    ordered = sorted(milestones,
-                     key=lambda m: str(m.get("deadline") or "9999-99-99"))
-    for m in ordered:
-        if m.get("is_reached"):
-            continue
-        dd = parse_when(m.get("deadline"), timezone_offset)
-        if dd is None:
-            continue
-        if next_milestone is None:
-            next_milestone = {"name": m["name"], "deadline": m["deadline"]}
-        if dd < today:
-            overdue += 1
-        elif dd <= cutoff:
-            soon += 1
-    end = parse_when(project_row.get("date"), timezone_offset)
-    past_end = end is not None and end < today and native != "done"
-    end_soon = end is not None and today <= end <= cutoff
-    if overdue > 0 or past_end:
-        derived = "off_track"
-    elif soon > 0 or end_soon:
-        derived = "at_risk"
-    else:
-        derived = "on_track"
-    divergent = (
-        (native in ("on_track", "on_hold") and derived == "off_track")
-        or (native == "on_track" and derived == "at_risk"))
-    return {"native_status": native, "derived_health": derived,
-            "divergent": divergent, "reached": reached, "total": total,
-            "overdue": overdue, "soon": soon,
-            "next_milestone": next_milestone,
-            "past_end": past_end, "end_soon": end_soon}
 
 
 def analytic_money(

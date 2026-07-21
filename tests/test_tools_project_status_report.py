@@ -3,6 +3,7 @@ import datetime as dt
 import json
 
 from odoo_pulse import tools_workflows
+from odoo_pulse.services.projects import health
 
 
 # today is fixed at 2026-07-01 (cutoff 2026-07-08 with default lookahead 7).
@@ -39,7 +40,7 @@ def _setup(fake_client, projects=PROJECTS, milestones=MILESTONES):
 
 
 def _fix_today(monkeypatch):
-    monkeypatch.setattr(tools_workflows, "today_in_tz", lambda offset: dt.date(2026, 7, 1))
+    monkeypatch.setattr(health, "today_in_tz", lambda offset: dt.date(2026, 7, 1))
 
 
 def _project_call(fake_client):

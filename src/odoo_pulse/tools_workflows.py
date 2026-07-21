@@ -18,7 +18,7 @@ from .core.errors import OdooConfigError, OdooError
 from .mcp.app import mcp
 from .mcp.result import safe
 from .mcp.runtime import get_client
-from .project_shared import derive_project_health
+from .services.projects.health import build_project_status_report
 from .services.projects.queries import resolve_user_names
 from .services.projects.subtasks import (
     task_closed_scope,
@@ -245,173 +245,11 @@ def project_status_report(
         timezone_offset: UTC offset for "today" (default 7 = Asia/Ho_Chi_Minh).
     """
 
-    def run() -> dict:
-        client = get_client()
-
-        domain: list = [("active", "=", True)]
-        if manager:
-            domain.append(("user_id.name", "ilike", manager))
-        if customer:
-            domain.append(("partner_id.name", "ilike", customer))
-        if project:
-            domain.append(("name", "ilike", project))
-        if not include_done:
-            domain.append(("last_update_status", "!=", "done"))
-        if not include_on_hold:
-            domain.append(("last_update_status", "!=", "on_hold"))
-
-        projects, projects_truncation = fetch_with_truncation(
-            client,
-            "project.project",
-            domain,
-            fields=[
-                "id", "name", "user_id", "partner_id",
-                "date_start", "date", "last_update_status", "task_count",
-            ],
-            limit=200,
-            order="name",
-        )
-
-        today = today_in_tz(timezone_offset)
-        cutoff = today + timedelta(days=lookahead_days)
-
-        ids = [p["id"] for p in projects]
-        if ids:
-            milestones, milestones_truncation = fetch_with_truncation(
-                client,
-                "project.milestone",
-                [("project_id", "in", ids)],
-                fields=["id", "name", "deadline", "is_reached", "project_id"],
-                limit=200,
-                order="deadline",
-            )
-        else:
-            milestones, milestones_truncation = [], None
-
-        ms_by_project: dict[int, list] = {}
-        for m in milestones:
-            pid = m["project_id"][0] if m.get("project_id") else None
-            if pid is not None:
-                ms_by_project.setdefault(pid, []).append(m)
-
-        rank = {"off_track": 0, "at_risk": 1, "on_track": 2}
-        rows: list[dict] = []
-        off_track = at_risk = on_track = 0
-        total_overdue_ms = 0
-        past_end_projects = 0
-        divergent = 0
-
-        for p in projects:
-            ms = ms_by_project.get(p["id"], [])
-            h = derive_project_health(p, ms, today, cutoff, timezone_offset)
-
-            if h["derived_health"] == "off_track":
-                off_track += 1
-            elif h["derived_health"] == "at_risk":
-                at_risk += 1
-            else:
-                on_track += 1
-
-            total_overdue_ms += h["overdue"]
-            if h["past_end"]:
-                past_end_projects += 1
-            if h["divergent"]:
-                divergent += 1
-
-            rows.append({
-                "project_id": p["id"],
-                "project": p["name"],
-                "manager": p["user_id"][1] if p.get("user_id") else None,
-                "customer": p["partner_id"][1] if p.get("partner_id") else None,
-                "end_date": p.get("date") or None,
-                "task_count": p.get("task_count", 0),
-                "milestones": {"reached": h["reached"], "total": h["total"]},
-                "overdue_milestones": h["overdue"],
-                "next_milestone": h["next_milestone"],
-                "native_status": h["native_status"],
-                "derived_health": h["derived_health"],
-                "divergent": h["divergent"],
-            })
-
-        rows.sort(key=lambda r: (rank[r["derived_health"]],
-                                 -r["overdue_milestones"], r["project"]))
-
-        if off_track > 0 or divergent > 0:
-            verdict = "action_needed"
-        elif at_risk > 0:
-            verdict = "watch"
-        else:
-            verdict = "healthy"
-
-        summary = {
-            "projects": len(projects),
-            "off_track": off_track,
-            "at_risk": at_risk,
-            "on_track": on_track,
-            "overdue_milestones": total_overdue_ms,
-            "past_end_projects": past_end_projects,
-            "divergent": divergent,
-            "verdict": verdict,
-        }
-        if projects_truncation:
-            summary["projects_truncated"] = True
-            summary["total_projects_matching"] = projects_truncation["total_matching"]
-        if milestones_truncation:
-            summary["milestones_truncated"] = True
-            summary["total_milestones_matching"] = milestones_truncation["total_matching"]
-
-        highlights = [f"{off_track} of {len(projects)} project(s) off track"]
-        if rows and rows[0]["overdue_milestones"] > 0:
-            top = rows[0]
-            highlights.append(
-                f"{top['project']}: {top['overdue_milestones']} milestone(s) overdue"
-            )
-        if divergent:
-            highlights.append(f"{divergent} project(s) declared healthier than actual")
-
-        risks: list[dict] = []
-        if projects_truncation:
-            risks.append({
-                "code": "truncated_data", "count": projects_truncation["missing"],
-                "message": (
-                    f"Report covers only {projects_truncation['fetched']} of "
-                    f"{projects_truncation['total_matching']} matching project(s); "
-                    "the portfolio verdict may not reflect the full set."
-                ),
-            })
-        if milestones_truncation:
-            risks.append({
-                "code": "truncated_milestone_data", "count": milestones_truncation["missing"],
-                "message": (
-                    f"Report covers only {milestones_truncation['fetched']} of "
-                    f"{milestones_truncation['total_matching']} matching milestone(s); "
-                    "per-project milestone counts may be incomplete."
-                ),
-            })
-        if off_track:
-            risks.append({"code": "off_track_projects", "count": off_track,
-                          "message": f"{off_track} project(s) off track"})
-        if total_overdue_ms:
-            risks.append({"code": "overdue_milestones", "count": total_overdue_ms,
-                          "message": f"{total_overdue_ms} milestone(s) overdue and unreached"})
-        if past_end_projects:
-            risks.append({"code": "past_end_projects", "count": past_end_projects,
-                          "message": f"{past_end_projects} project(s) past their end date"})
-        if divergent:
-            risks.append({"code": "health_divergence", "count": divergent,
-                          "message": f"{divergent} project(s) declared healthier than the data"})
-
-        return build_report(
-            "project_status_report",
-            today,
-            summary=summary,
-            breakdown={"by_project": rows},
-            highlights=highlights,
-            risks=risks,
-            extra={"manager": manager, "customer": customer, "project": project},
-        )
-
-    return safe(run)
+    return safe(lambda: build_project_status_report(
+        get_client(), manager=manager, customer=customer, project=project,
+        include_on_hold=include_on_hold, include_done=include_done,
+        lookahead_days=lookahead_days, timezone_offset=timezone_offset,
+    ))
 
 
 @mcp.tool()

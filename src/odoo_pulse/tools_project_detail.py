@@ -28,8 +28,8 @@ from .project_shared import (
     _budget_by_project,
     _budget_sources,
     analytic_money,
-    derive_project_health,
 )
+from .services.projects.health import derive_project_health
 from .services.projects.queries import account_id_of, account_ids_by_project
 from .services.projects.subtasks import (
     DEFAULT_CLOSED_STAGES,
