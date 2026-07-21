@@ -28,20 +28,20 @@ make playground-reset    # wipe the playground (drops the database)
 
 ## Architecture
 
-This is an MCP server that exposes Odoo's XML-RPC external API as MCP tools. The entry point is `src/odoo_pulse/server.py`, which imports all tool modules as side effects — each import registers `@mcp.tool()` functions with the shared FastMCP instance.
+This is an MCP server that exposes Odoo's XML-RPC external API as MCP tools. The entry point is `src/odoo_pulse/server.py`, which calls `mcp.registry.load_enabled_modules()` to import the tool modules selected by `ODOO_TOOL_GROUPS` as side effects — each import registers `@mcp.tool()` (and, for `mcp.resources`, `@mcp.resource()`) functions with the shared FastMCP instance.
+
+As of this refactor the package is split into layered subpackages (`core`, `mcp`, `common`, `services`) plus the transitional flat tool/project modules that still hold the decorated adapters and the project-report business logic. Full project consolidation and adapter migration are pending Plans 3 and 4.
 
 **Module responsibilities:**
 
-- `src/odoo_pulse/runtime.py` — shared singleton: holds the `mcp` (FastMCP) instance, the lazy `OdooClient` (created on first tool call), and shared helpers used by every tool: `safe()` (runs a lambda and serialises result/error to JSON), `name_domain()`, `date_domain()`, `preview()` (dry-run struct).
-- `src/odoo_pulse/odoo_client.py` — thin XML-RPC wrapper. `OdooConfig.from_env()` reads all env vars. `OdooClient._check_write()` enforces the four-layer write safety guard. All XML-RPC faults become `OdooError`. `fields_get` results are cached via a process-local TTL+LRU cache (`src/odoo_pulse/cache.py`); `aggregate_records` dispatches between `read_group` (Odoo ≤18) and `formatted_read_group` (19+) based on `major_version()`. Aggregate rows are normalised so both dispatch paths return spec-keyed aggregates (`amount_total:sum`) plus `__count`; XML-RPC proxies are built per call for thread safety.
-- `src/odoo_pulse/tools_generic.py` — model-agnostic tools: `search_read`, `search_count`, `read_records`, `get_model_fields`, `list_models`, `odoo_version`, `aggregate_records`, `read_attachment`.
-- `src/odoo_pulse/tools_write.py` — write tools (`create_record`, `update_records`, `delete_records`) plus domain-specific helpers (`create_lead`, `create_contact`, `create_task`, `confirm_sale_order`). Every tool returns a dry-run preview unless `confirm=True`.
-- `src/odoo_pulse/workflow_helpers.py` — shared building blocks for composed workflow tools: `today_in_tz`, `parse_when` (UTC-datetime-aware date parsing), `utc_bound` (local-midnight domain boundaries), `ensure_field`, `optional_fields` (schema-filtered field candidates), archived-aware `resolve_user_names`, `build_report` (the standard report envelope: `tool`, `as_of`, tool-specific keys, `summary`, `breakdown`, `highlights`, `risks`), and `gather`/`gather_strict` (thread-per-thunk concurrency for independent RPCs; calls that share a model+method must stay ordered inside one thunk so the FakeClient's per-model response queues remain deterministic). Used by `src/odoo_pulse/tools_workflows.py` and `standup_digest`.
-- `src/odoo_pulse/tools_workflows.py` — composed, opinionated workflow tools that answer a business question in one call (e.g. `sprint_health`, `team_workload`, `project_status_report`, `standup_digest`). Read-only; compose `search_read`/aggregates server-side and return the `build_report` envelope.
-- `src/odoo_pulse/tools_reports_sales.py` (`pipeline_review`, `sales_snapshot`), `src/odoo_pulse/tools_reports_finance.py` (`receivables_health`), `src/odoo_pulse/tools_reports_inventory.py` (`inventory_risk`), `src/odoo_pulse/tools_reports_hr.py` (`absence_overview`), `src/odoo_pulse/tools_reports_pulse.py` (`business_pulse`) — cross-department report tools, one domain per module. Same envelope and composition style as `src/odoo_pulse/tools_workflows.py`.
-- `src/odoo_pulse/tools_reports_ops.py` — operations report tools (`procurement_watch`, `production_health`): purchasing and manufacturing health. Same `build_report` envelope and composition style; loaded as part of the `reports` group alongside `src/odoo_pulse/tools_workflows` and the other `tools_reports_*` modules.
-- `src/odoo_pulse/tool_groups.py` — maps `ODOO_TOOL_GROUPS` (default `core,reports`) to the tool modules `src/odoo_pulse/server.py` imports; unknown group names fail at startup.
-- `src/odoo_pulse/domain_tools.py`, `src/odoo_pulse/tools_hr.py`, `src/odoo_pulse/tools_projects.py`, `src/odoo_pulse/tools_operations.py`, `src/odoo_pulse/tools_engagement.py`, `src/odoo_pulse/tools_niche.py` — domain-specific read tools wrapping `search_read` with hard-coded fields and domains for common Odoo models.
+- `src/odoo_pulse/core/` — config, errors, cache, timeout transports, XML-RPC client, write guards
+- `src/odoo_pulse/mcp/` — FastMCP app, lazy client runtime, JSON result boundary, registry, resource adapter
+- `src/odoo_pulse/common/` — dates/domains, paging, schema, money, reporting, concurrency; no MCP/global client
+- `src/odoo_pulse/services/records.py` — record read service for the MCP resource
+- `src/odoo_pulse/services/writes.py` — dry-run preview shaping
+- `src/odoo_pulse/services/projects/` — query/task-scope landing zones; full project consolidation is pending Plan 3
+- `src/odoo_pulse/project_shared.py` — remaining project business helpers pending Plan 3
+- `src/odoo_pulse/tools_*.py` and `domain_tools.py` — explicit decorated adapters remain flat until later plans
 
 **Write safety chain** (all four must pass for any write to execute):
 1. `ODOO_READ_ONLY=false` — master switch (default: `true`, blocking all writes)
@@ -51,6 +51,6 @@ This is an MCP server that exposes Odoo's XML-RPC external API as MCP tools. The
 
 System models (`ir.*`, `base*`, `res.users`, `res.groups`, etc.) are permanently blocked regardless of `ODOO_WRITABLE_MODELS`.
 
-**Testing pattern:** Tests inject a `FakeClient` directly into `runtime._client` (see `conftest.py`). The fake records every call in `fake_client.calls` and returns canned data from `search_responses`/`read_responses` dicts. No real Odoo or network is needed. Tests assert on the model name and domain that a tool built, not on Odoo's actual response.
+**Testing pattern:** Tests inject a `FakeClient` directly into `odoo_pulse.mcp.runtime._client` (see `conftest.py`). The fake records every call in `fake_client.calls` and returns canned data from `search_responses`/`read_responses` dicts. No real Odoo or network is needed. Tests assert on the model name and domain that a tool built, not on Odoo's actual response.
 
-**Adding a new tool module:** Create `src/odoo_pulse/tools_foo.py`, import `mcp` and `get_client` from `.runtime`, decorate functions with `@mcp.tool()`, then add the module to a group in `tool_groups.GROUP_MODULES` (server.py imports modules per enabled group).
+**Adding a new tool module:** Create `src/odoo_pulse/tools_foo.py`, import `mcp` from `.mcp.app` and `get_client` from `.mcp.runtime`, decorate functions with `@mcp.tool()`, then add the module to a group in `src/odoo_pulse/mcp/registry.py`'s `GROUP_MODULES` (server.py imports modules per enabled group).
