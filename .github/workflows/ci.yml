@@ -27,5 +27,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
+      - name: Lint
+        run: ruff check .
+
       - name: Run tests
         run: pytest -q
+
+      - name: Build wheel and sdist
+        run: python -m build
+
+      - name: Smoke-test built wheel
+        run: |
+          python -m venv --system-site-packages "$RUNNER_TEMP/odoo-pulse-wheel"
+          "$RUNNER_TEMP/odoo-pulse-wheel/bin/pip" install --no-deps dist/*.whl
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/odoo-pulse-wheel/bin/python" -c 'import asyncio; from odoo_pulse import server; from odoo_pulse.runtime import mcp; tools = asyncio.run(mcp.list_tools()); assert len(tools) == 31'
