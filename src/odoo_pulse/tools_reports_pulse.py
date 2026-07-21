@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 from .common.dates import today_in_tz, utc_bound
+from .common.paging import paged_search_read
 from .core.errors import OdooError
 from .mcp.app import mcp
 from .mcp.result import safe
@@ -17,7 +18,6 @@ from .mcp.runtime import get_client
 from .workflow_helpers import (
     build_report,
     gather,
-    paged_search_read,
     resolve_company_id,
 )
 

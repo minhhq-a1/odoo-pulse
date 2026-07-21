@@ -21,10 +21,10 @@ from typing import Any
 
 from .common.dates import date_domain
 from .common.domains import name_domain
+from .common.schema import optional_fields
 from .mcp.app import mcp
 from .mcp.result import safe
 from .mcp.runtime import get_client
-from .workflow_helpers import optional_fields
 
 
 # --- Contacts -----------------------------------------------------------------

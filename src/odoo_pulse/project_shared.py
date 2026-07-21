@@ -11,10 +11,10 @@ practical figures — spec rule #7).
 from __future__ import annotations
 
 from .common.dates import parse_period_date, parse_when, periods_domain
+from .common.paging import paged_search_read
+from .common.schema import optional_fields
 from .core.errors import OdooError
 from .workflow_helpers import (
-    optional_fields,
-    paged_search_read,
     task_closed_scope,
     task_matches_scope,
     task_scope_warning,

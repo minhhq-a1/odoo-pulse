@@ -12,6 +12,7 @@ import json
 from datetime import timedelta
 
 from .common.dates import parse_when, today_in_tz
+from .common.paging import fetch_with_truncation
 from .core.errors import OdooConfigError, OdooError
 from .mcp.app import mcp
 from .mcp.result import safe
@@ -19,7 +20,6 @@ from .mcp.runtime import get_client
 from .project_shared import derive_project_health
 from .workflow_helpers import (
     build_report,
-    fetch_with_truncation,
     resolve_user_names,
     task_closed_scope,
     task_matches_scope,

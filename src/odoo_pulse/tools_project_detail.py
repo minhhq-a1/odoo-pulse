@@ -15,6 +15,8 @@ from __future__ import annotations
 from datetime import timedelta
 
 from .common.dates import parse_when, periods_domain, today_in_tz
+from .common.paging import fetch_with_truncation, paged_search_read
+from .common.schema import optional_fields
 from .core.errors import OdooError
 from .mcp.app import mcp
 from .mcp.result import safe
@@ -32,13 +34,8 @@ from .project_shared import (
     derive_project_health,
     fetch_subtasks,
     filter_subtasks_by_periods,
-    paged_search_read,
     subtasks_by_month,
     sum_hours,
-)
-from .workflow_helpers import (
-    fetch_with_truncation,
-    optional_fields,
 )
 
 

@@ -7,13 +7,12 @@ import threading
 import pytest
 
 from odoo_pulse.common.dates import parse_when, today_in_tz, utc_bound
+from odoo_pulse.common.paging import paged_search_read
+from odoo_pulse.common.schema import ensure_field, optional_fields
 from odoo_pulse.core.errors import OdooError
 from odoo_pulse.workflow_helpers import (
     build_report,
-    ensure_field,
     distinct_companies,
-    optional_fields,
-    paged_search_read,
     resolve_company_id,
     resolve_user_names,
     task_closed_scope,
@@ -329,5 +328,7 @@ def test_paged_search_read_rejects_non_positive_step(fake_client):
 
 
 def test_project_shared_reexports_paged_search_read():
+    from odoo_pulse.common.paging import paged_search_read as common_pager
     from odoo_pulse.project_shared import paged_search_read as project_pager
     assert project_pager is paged_search_read
+    assert project_pager is common_pager

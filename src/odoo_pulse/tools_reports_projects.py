@@ -20,6 +20,8 @@ Caveats for callers:
 from __future__ import annotations
 
 from .common.dates import parse_period_date, today_in_tz
+from .common.paging import fetch_with_truncation
+from .common.schema import ensure_field, optional_fields
 from .core.errors import OdooError
 from .mcp.app import mcp
 from .mcp.result import safe
@@ -27,10 +29,7 @@ from .mcp.runtime import get_client
 from .workflow_helpers import (
     build_report,
     distinct_companies,
-    ensure_field,
-    fetch_with_truncation,
     gather_strict,
-    optional_fields,
 )
 from .project_shared import (  # noqa: F401  (re-export for tests/back-compat)
     _BUDGET_CANDIDATES,

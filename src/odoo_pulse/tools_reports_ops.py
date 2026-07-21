@@ -10,15 +10,14 @@ from __future__ import annotations
 from datetime import timedelta
 
 from .common.dates import parse_when, today_in_tz, utc_bound
+from .common.paging import fetch_with_truncation, paged_search_read
+from .common.schema import optional_fields
 from .mcp.app import mcp
 from .mcp.result import safe
 from .mcp.runtime import get_client
 from .workflow_helpers import (
     build_report,
-    fetch_with_truncation,
     gather_strict,
-    optional_fields,
-    paged_search_read,
     resolve_company_id,
     totals_by_currency,
 )
