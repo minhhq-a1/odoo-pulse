@@ -1,10 +1,18 @@
 # tests/test_project_shared.py
+import datetime as dt
+
 import pytest
 
 from odoo_pulse.odoo_client import OdooError
 from odoo_pulse.project_shared import (
     DEFAULT_CLOSED_STAGES,
+    account_field_of,
+    account_id_of,
+    account_ids_by_project,
+    analytic_money,
+    derive_project_health,
     fetch_subtasks,
+    filter_subtasks_by_periods,
     periods_domain,
     subtasks_by_month,
     sum_hours,
@@ -198,9 +206,6 @@ def test_subtasks_by_month_buckets_and_no_date_end(fake_client):
 
 # -- filter_subtasks_by_periods -----------------------------------------------
 
-from odoo_pulse.project_shared import filter_subtasks_by_periods
-
-
 def test_filter_subtasks_by_periods_no_periods_keeps_all(fake_client):
     _seed_tasks(fake_client)
     tasks, _, _ = fetch_subtasks(fake_client, 59)
@@ -261,11 +266,6 @@ def test_filter_subtasks_by_periods_utc_to_local_month_shift():
 
 # -- derive_project_health ----------------------------------------------------
 
-import datetime as dt
-
-from odoo_pulse.project_shared import derive_project_health
-
-
 def _ms(name, deadline, reached=False):
     return {"name": name, "deadline": deadline, "is_reached": reached}
 
@@ -319,9 +319,6 @@ def test_health_milestone_order_independent():
 
 # -- analytic_money -----------------------------------------------------------
 
-from odoo_pulse.project_shared import analytic_money
-
-
 def test_analytic_money_empty_accounts_no_rpc(fake_client):
     assert analytic_money(fake_client, []) == ({}, {})
     assert fake_client.calls == []
@@ -342,13 +339,6 @@ def test_analytic_money_signs_and_domains(fake_client):
 
 
 # -- account_field_of / account_id_of / account_ids_by_project ---------------
-
-from odoo_pulse.project_shared import (
-    account_field_of,
-    account_id_of,
-    account_ids_by_project,
-)
-
 
 def test_account_field_of_prefers_account_id_over_analytic_account_id():
     assert account_field_of(["account_id", "analytic_account_id"]) \

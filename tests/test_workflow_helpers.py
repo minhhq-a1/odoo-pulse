@@ -18,7 +18,6 @@ from odoo_pulse.workflow_helpers import (
     resolve_user_names,
     task_closed_scope,
     task_matches_scope,
-    task_scope_warning,
     today_in_tz,
     totals_by_currency,
     trend_direction,
