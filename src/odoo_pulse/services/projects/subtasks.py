@@ -1,9 +1,10 @@
-# odoo_pulse/workflow_helpers.py
-"""Shared building blocks for composed workflow tools.
+# odoo_pulse/services/projects/subtasks.py
+"""Task closed/open scope resolution shared by project workflow tools.
 
-These orchestrate reads through an Odoo client (real or fake) and shape the
-common report envelope. They never write. Keeping them here lets multiple
-composed tools (and standup_digest) stay DRY and independently testable.
+These orchestrate reads through an Odoo client (real or fake) to work out
+whether "closed" means a stored state field, a boolean is_closed field, or
+a stage-name fallback -- and then apply that same scope client-side where a
+domain alone cannot express it. They never write.
 """
 
 from __future__ import annotations
@@ -53,20 +54,3 @@ def task_scope_warning(strategy: str) -> str | None:
     if strategy == "stage":
         return "stable task state unavailable; stage-name fallback applied"
     return None
-
-
-def resolve_user_names(client: Any, user_ids: Any) -> dict[int, str]:
-    """Map res.users ids to names, including archived users.
-
-    Returns {} and makes no call when there are no ids. De-duplicates ids.
-    """
-    ids = list({uid for uid in user_ids})
-    if not ids:
-        return {}
-    users = client.execute_kw(
-        "res.users",
-        "search_read",
-        [[("id", "in", ids)]],
-        {"fields": ["id", "name"], "limit": len(ids), "context": {"active_test": False}},
-    )
-    return {u["id"]: u["name"] for u in users}

@@ -17,7 +17,7 @@ from .core.errors import OdooConfigError, OdooError
 from .mcp.app import mcp
 from .mcp.result import safe
 from .mcp.runtime import get_client
-from .workflow_helpers import resolve_user_names
+from .services.projects.queries import resolve_user_names
 
 
 

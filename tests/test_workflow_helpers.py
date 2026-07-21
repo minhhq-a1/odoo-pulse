@@ -18,8 +18,8 @@ from odoo_pulse.common.reporting import (
 )
 from odoo_pulse.common.schema import ensure_field, optional_fields
 from odoo_pulse.core.errors import OdooError
-from odoo_pulse.workflow_helpers import (
-    resolve_user_names,
+from odoo_pulse.services.projects.queries import resolve_user_names
+from odoo_pulse.services.projects.subtasks import (
     task_closed_scope,
     task_matches_scope,
 )

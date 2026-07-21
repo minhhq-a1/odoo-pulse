@@ -19,8 +19,8 @@ from .mcp.app import mcp
 from .mcp.result import safe
 from .mcp.runtime import get_client
 from .project_shared import derive_project_health
-from .workflow_helpers import (
-    resolve_user_names,
+from .services.projects.queries import resolve_user_names
+from .services.projects.subtasks import (
     task_closed_scope,
     task_matches_scope,
     task_scope_warning,

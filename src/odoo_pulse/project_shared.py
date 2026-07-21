@@ -14,7 +14,7 @@ from .common.dates import parse_period_date, parse_when, periods_domain
 from .common.paging import paged_search_read
 from .common.schema import optional_fields
 from .core.errors import OdooError
-from .workflow_helpers import (
+from .services.projects.subtasks import (
     task_closed_scope,
     task_matches_scope,
     task_scope_warning,
