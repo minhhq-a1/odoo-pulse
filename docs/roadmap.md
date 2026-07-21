@@ -8,7 +8,7 @@ scheduled — pick items up when a real need appears.
 
 `sales_snapshot`'s `weekly_revenue` trend currently fetches up to 200 raw
 `sale.order` rows and buckets them into weeks client-side
-(`odoo_pulse/tools_reports_sales.py`, `sales_snapshot`). On an instance with more
+(`src/odoo_pulse/tools_reports_sales.py`, `sales_snapshot`). On an instance with more
 than ~200 confirmed orders in the trend window, the fetch truncates and the
 tool now reports `trend: null` (fixed 2026-07-03) rather than a
 biased direction — correct, but it means busy instances lose the trend
