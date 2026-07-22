@@ -166,12 +166,22 @@ Report delivery hours, money and budget burn per project in one call.
   Worst burn % thresholds for the per-project verdict.
 - `timezone_offset` (default `7`): UTC offset for "today".
 
+Cost and revenue are classified using Odoo's accounting semantics: when the
+instance exposes an `analytic_profitability`-style classifier, expense credits
+(refunds/returns) reduce cost and income credit notes reduce revenue, rather
+than being counted by amount sign alone. When that classifier is unavailable,
+the response falls back to sign-based classification and reports a
+`risks` entry with code `analytic_classification_fallback` so the degradation
+is explicit instead of silent.
+
 ### `project_budget`
 
 Report planned vs actual budget per project, line by line (Budgets app).
-Matches budget lines to projects by a line-level `project_id` m2o when the
-instance has one, else through the project's analytic account, and flags
-analytic spend the budget lines do not capture.
+Each budget line's explicit `project_id` m2o is authoritative when set; only
+a line with no project link falls back through the project's analytic
+account. Planned/practical totals add each line's magnitude (absolute value),
+so mixed-sign lines like `-100` and `+60` report `160`, not `40`. The tool
+still flags analytic spend the budget lines do not capture.
 
 - `project`: Optional project-name filter (ilike). Exactly one match adds a
   per-line breakdown (planned / practical / theoretical / burn %).

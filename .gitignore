@@ -35,5 +35,6 @@ docs/*
 !docs/tools.md
 !docs/roadmap.md
 !docs/launch/
+!docs/release-notes-project-finance-consistency.md
 
 /mcp-registry-fork/

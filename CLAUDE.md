@@ -42,8 +42,9 @@ As of this refactor the package is split into layered subpackages (`core`, `mcp`
 - `src/odoo_pulse/services/projects/queries.py` — project filters, account identity/mapping, milestone grouping, archived user resolution
 - `src/odoo_pulse/services/projects/subtasks.py` — task-state fallbacks, subtask queries/filters, hour totals and monthly buckets
 - `src/odoo_pulse/services/projects/health.py` — derived project health, project-status and portfolio-health payloads
-- `src/odoo_pulse/services/projects/budget.py` — budget discovery/fallbacks, project matching, budget context/detail and project-budget payload
-- `src/odoo_pulse/services/projects/profitability.py` — analytic money/hours, report dates, margin/burn and project-profitability payload
+- `src/odoo_pulse/services/projects/finance.py` — Odoo-aware analytic cost/revenue classification, sign normalization, and fallback metadata
+- `src/odoo_pulse/services/projects/budget.py` — budget discovery/fallbacks, canonical match domains/assignment and per-line magnitudes, budget context/detail and project-budget payload
+- `src/odoo_pulse/services/projects/profitability.py` — report dates, delivery hours, margin/burn shaping, and project-profitability payload
 - `src/odoo_pulse/services/projects/dashboard.py` — project dashboard section orchestration and partial degradation
 - `src/odoo_pulse/tools_workflows.py` / `tools_reports_projects.py` / `tools_project_detail.py` — explicit MCP adapters; `team_workload` and `standup_digest` remain in `tools_workflows` pending Plan 4
 - `src/odoo_pulse/tools_*.py` and `domain_tools.py` — explicit decorated adapters remain flat until later plans
