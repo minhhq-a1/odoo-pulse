@@ -30,7 +30,7 @@ make playground-reset    # wipe the playground (drops the database)
 
 This is an MCP server that exposes Odoo's XML-RPC external API as MCP tools. The entry point is `src/odoo_pulse/server.py`, which calls `mcp.registry.load_enabled_modules()` to import the tool modules selected by `ODOO_TOOL_GROUPS` as side effects — each import registers `@mcp.tool()` (and, for `mcp.resources`, `@mcp.resource()`) functions with the shared FastMCP instance.
 
-As of this refactor the package is split into layered subpackages (`core`, `mcp`, `common`, `services`) plus the transitional flat tool/project modules that still hold the decorated adapters and the project-report business logic. Full project consolidation and adapter migration are pending Plans 3 and 4.
+As of this refactor the package is split into layered subpackages (`core`, `mcp`, `common`, `services`) plus the transitional flat tool modules that still hold the decorated adapters. Project business logic is now fully consolidated under `services/projects/`; adapter migration for the remaining domains is pending Plan 4.
 
 **Module responsibilities:**
 
@@ -39,8 +39,13 @@ As of this refactor the package is split into layered subpackages (`core`, `mcp`
 - `src/odoo_pulse/common/` — dates/domains, paging, schema, money, reporting, concurrency; no MCP/global client
 - `src/odoo_pulse/services/records.py` — record read service for the MCP resource
 - `src/odoo_pulse/services/writes.py` — dry-run preview shaping
-- `src/odoo_pulse/services/projects/` — query/task-scope landing zones; full project consolidation is pending Plan 3
-- `src/odoo_pulse/project_shared.py` — remaining project business helpers pending Plan 3
+- `src/odoo_pulse/services/projects/queries.py` — project filters, account identity/mapping, milestone grouping, archived user resolution
+- `src/odoo_pulse/services/projects/subtasks.py` — task-state fallbacks, subtask queries/filters, hour totals and monthly buckets
+- `src/odoo_pulse/services/projects/health.py` — derived project health, project-status and portfolio-health payloads
+- `src/odoo_pulse/services/projects/budget.py` — budget discovery/fallbacks, project matching, budget context/detail and project-budget payload
+- `src/odoo_pulse/services/projects/profitability.py` — analytic money/hours, report dates, margin/burn and project-profitability payload
+- `src/odoo_pulse/services/projects/dashboard.py` — project dashboard section orchestration and partial degradation
+- `src/odoo_pulse/tools_workflows.py` / `tools_reports_projects.py` / `tools_project_detail.py` — explicit MCP adapters; `team_workload` and `standup_digest` remain in `tools_workflows` pending Plan 4
 - `src/odoo_pulse/tools_*.py` and `domain_tools.py` — explicit decorated adapters remain flat until later plans
 
 **Write safety chain** (all four must pass for any write to execute):
