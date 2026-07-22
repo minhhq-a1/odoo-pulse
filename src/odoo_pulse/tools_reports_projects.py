@@ -8,9 +8,11 @@ Caveats for callers:
 - Analytic amounts are in each company's currency (mixed_companies risk).
 - Two projects sharing one analytic account each get the full account's
   cost/revenue/budget (accepted double-count; splitting would be arbitrary).
-- Budgets match by a line-level project_id m2o when the instance has one
-  (authoritative), else by the project's own analytic account — budgets
-  carried on a second analytic dimension without project_id stay invisible.
+- Budgets match per line: a line's own project_id link, when present and
+  in scope, is authoritative; only unlinked lines fall back to matching by
+  analytic account. An out-of-scope project link never leaks onto other
+  projects, and a shared analytic account still double-counts across every
+  project that shares it.
 - On Odoo 18+ the budget state filter is skipped (state lives on the parent
   budget.analytic and drifts across minor versions); revenue-type budgets
   ARE excluded via a dotted budget_type domain — when that field is missing
