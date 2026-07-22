@@ -15,7 +15,14 @@ from datetime import timedelta
 from ...common.dates import parse_when, today_in_tz
 from ...common.paging import fetch_with_truncation
 from ...common.reporting import build_report
-from .queries import milestones_by_project, project_domain
+from ...common.schema import optional_fields
+from .budget import budget_by_project
+from .profitability import analytic_money
+from .queries import (
+    account_ids_by_project,
+    milestones_by_project,
+    project_domain,
+)
 
 
 def derive_project_health(
@@ -229,3 +236,163 @@ def build_project_status_report(
         risks=risks,
         extra={"manager": manager, "customer": customer, "project": project},
     )
+
+
+def build_portfolio_health(
+    client, *, manager=None, customer=None,
+    include_on_hold=True, include_done=False,
+    lookahead_days=7, timezone_offset=7,
+) -> dict:
+    """Portfolio overview: one row per project, joined by id server-side.
+
+    Raw signals only — the client computes its own health score from
+    user-configured thresholds. Composes the query, health, profitability
+    and budget services so the two artifact tabs can never diverge on a
+    project's verdict. Call order is fixed (projects -> milestones ->
+    hours aggregate -> cost -> revenue -> budget) to keep the FakeClient
+    per-model queue deterministic; milestone truncation is annotated as a
+    risk rather than failing the whole report.
+    """
+    today = today_in_tz(timezone_offset)
+    cutoff = today + timedelta(days=lookahead_days)
+
+    domain = project_domain(
+        manager=manager, customer=customer,
+        include_on_hold=include_on_hold, include_done=include_done,
+    )
+
+    opt = optional_fields(client, "project.project",
+                          ["allocated_hours", "account_id",
+                           "analytic_account_id"])
+    projects, truncation = fetch_with_truncation(
+        client, "project.project", domain,
+        fields=["id", "name", "user_id", "partner_id", "date",
+                "task_count", "last_update_status", *opt],
+        limit=200, order="name")
+
+    ids = [p["id"] for p in projects]
+    acct_by_project = account_ids_by_project(projects, opt)
+    account_ids = sorted(set(acct_by_project.values()))
+    has_alloc = "allocated_hours" in opt
+
+    ms_by_project: dict[int, list] = {}
+    hours_by_project: dict[int, float] = {}
+    cost_by: dict[int, float] = {}
+    rev_by: dict[int, float] = {}
+    budgets: dict[int, float] = {}
+    budgets_available = False
+    milestones_truncation = None
+    if ids:
+        milestones, milestones_truncation = fetch_with_truncation(
+            client, "project.milestone",
+            [("project_id", "in", ids)],
+            fields=["id", "name", "deadline", "is_reached",
+                    "project_id"],
+            limit=200, order="deadline")
+        ms_by_project = milestones_by_project(milestones)
+        hours_agg = client.aggregate_records(
+            "account.analytic.line", group_by=["project_id"],
+            measures=[("unit_amount", "sum")],
+            domain=[("project_id", "in", ids)])
+        for row in hours_agg.get("rows", []):
+            m2o = row.get("project_id")
+            if m2o:
+                hours_by_project[m2o[0]] = (
+                    row.get("unit_amount:sum") or 0.0)
+        cost_by, rev_by = analytic_money(client, account_ids)
+        budgets, budgets_available = budget_by_project(
+            client, ids, acct_by_project)
+
+    rows_out: list[dict] = []
+    off_track = total_overdue = divergent = past_end = 0
+    for p in projects:
+        pid = p["id"]
+        h = derive_project_health(
+            p, ms_by_project.get(pid, []), today, cutoff,
+            timezone_offset)
+        acct_id = acct_by_project.get(pid)
+        cost = cost_by.get(acct_id, 0.0) if acct_id is not None else 0.0
+        revenue = (rev_by.get(acct_id, 0.0)
+                   if acct_id is not None else 0.0)
+        budget = budgets.get(pid) if budgets_available else None
+        alloc = (p.get("allocated_hours") or 0.0) if has_alloc else 0.0
+        hours = hours_by_project.get(pid, 0.0)
+
+        if h["derived_health"] == "off_track":
+            off_track += 1
+        total_overdue += h["overdue"]
+        if h["divergent"]:
+            divergent += 1
+        if h["past_end"]:
+            past_end += 1
+
+        rows_out.append({
+            "project_id": pid,
+            "project": p["name"],
+            "manager": p["user_id"][1] if p.get("user_id") else None,
+            "customer": (p["partner_id"][1]
+                         if p.get("partner_id") else None),
+            "end_date": p.get("date") or None,
+            "task_count": p.get("task_count", 0),
+            "milestones": {"reached": h["reached"],
+                           "total": h["total"]},
+            "overdue_milestones": h["overdue"],
+            "next_milestone": h["next_milestone"],
+            "native_status": h["native_status"],
+            "derived_health": h["derived_health"],
+            "divergent": h["divergent"],
+            "revenue": round(revenue, 2),
+            "cost": round(cost, 2),
+            "margin": round(revenue - cost, 2),
+            "budget": round(budget, 2) if budget is not None else None,
+            "budget_burn_pct": (round(cost / budget * 100, 1)
+                                if budget else None),
+            "hours_burn_pct": (round(hours / alloc * 100, 1)
+                               if alloc else None),
+        })
+
+    rank = {"off_track": 0, "at_risk": 1, "on_track": 2}
+    rows_out.sort(key=lambda r: (rank[r["derived_health"]],
+                                 -r["overdue_milestones"],
+                                 r["project"]))
+
+    risks: list[dict] = []
+    if truncation:
+        risks.append({
+            "code": "truncated_data", "count": truncation["missing"],
+            "message": (
+                f"Report covers only {truncation['fetched']} of "
+                f"{truncation['total_matching']} matching projects.")})
+    if milestones_truncation:
+        risks.append({
+            "code": "truncated_milestone_data",
+            "count": milestones_truncation["missing"],
+            "message": (
+                f"Report covers only {milestones_truncation['fetched']} "
+                f"of {milestones_truncation['total_matching']} matching "
+                "milestone(s); per-project milestone counts may be "
+                "incomplete.")})
+    if off_track:
+        risks.append({"code": "off_track_projects", "count": off_track,
+                      "message": f"{off_track} project(s) off track"})
+    if total_overdue:
+        risks.append({
+            "code": "overdue_milestones", "count": total_overdue,
+            "message": (f"{total_overdue} milestone(s) overdue and "
+                        "unreached")})
+    if past_end:
+        risks.append({
+            "code": "past_end_projects", "count": past_end,
+            "message": f"{past_end} project(s) past their end date"})
+    if divergent:
+        risks.append({
+            "code": "health_divergence", "count": divergent,
+            "message": (f"{divergent} project(s) declared healthier "
+                        "than the data")})
+
+    return {"tool": "portfolio_health", "as_of": today.isoformat(),
+            "filters": {"manager": manager, "customer": customer,
+                        "include_on_hold": include_on_hold,
+                        "include_done": include_done},
+            "budgets_available": budgets_available,
+            "projects": rows_out, "risks": risks}
