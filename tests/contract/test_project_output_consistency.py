@@ -331,3 +331,199 @@ def test_income_credit_note_nets_revenue_across_profitability_dashboard_and_port
                    for r in budget["risks"])
     assert "warnings" not in dashboard
     assert "warnings" not in dashboard_budget
+
+
+# -- Task 5: shared matching / sign-separated magnitudes, across consumers ----
+
+def seed_partial_links(fake_client):
+    """crossovered.budget.lines exposes BOTH a (custom) project_id link and
+    the classic analytic_account_id -- three lines on the same account: one
+    directly linked to project 1, one unlinked (falls through to the
+    account), and one directly linked to a DIFFERENT project (99) that
+    happens to share the same account. planned_amount <= 0 keeps this a
+    single-sign source (crossovered's own domain), isolating the
+    partial-link assignment behaviour from the mixed-sign one below.
+    """
+    fake_client.fields_responses["project.project"] = {"account_id": {}}
+    fake_client.search_responses["project.project"] = [project_row()]
+    fake_client.error_models.add("budget.line")
+    fake_client.fields_responses["crossovered.budget.lines"] = {
+        "project_id": {}, "analytic_account_id": {}, "planned_amount": {},
+        "practical_amount": {}, "crossovered_budget_id": {},
+        "date_from": {}, "date_to": {},
+    }
+    fake_client.search_responses["crossovered.budget.lines"] = [
+        {"id": 20, "project_id": [1, "Alpha"],
+         "analytic_account_id": [11, "AA Alpha"],
+         "crossovered_budget_id": [7, "Budget Alpha"],
+         "planned_amount": -60.0, "practical_amount": -20.0,
+         "date_from": "2026-01-01", "date_to": "2026-12-31"},
+        {"id": 21, "project_id": False,
+         "analytic_account_id": [11, "AA Alpha"],
+         "crossovered_budget_id": [7, "Budget Alpha"],
+         "planned_amount": -40.0, "practical_amount": -10.0,
+         "date_from": "2026-01-01", "date_to": "2026-12-31"},
+        # Truthy link to project 99 (out of scope) on the SAME account:
+        # must contribute nowhere in project 1's outputs.
+        {"id": 22, "project_id": [99, "Zeta"],
+         "analytic_account_id": [11, "AA Alpha"],
+         "crossovered_budget_id": [7, "Budget Alpha"],
+         "planned_amount": -99999.0, "practical_amount": -99999.0,
+         "date_from": "2026-01-01", "date_to": "2026-12-31"},
+    ]
+    fake_client.fields_responses["crossovered.budget"] = {
+        "date_from": {}, "date_to": {}, "state": {},
+    }
+    fake_client.search_responses["crossovered.budget"] = [{
+        "id": 7, "name": "Budget Alpha", "date_from": "2026-01-01",
+        "date_to": "2026-12-31", "state": "validate",
+    }]
+    fake_client.search_responses["account.analytic.line"] = []
+
+
+def partial_link_agg_rows():
+    """Same three lines, aggregate-shaped (":sum" suffix) -- fed to the
+    budget_by_project consumers (profitability, portfolio_health). The
+    FakeClient does not apply the query domain, so the out-of-scope
+    project-99 row is deliberately included here too: only the
+    canonical assignment helper (not the domain) is what must reject it.
+    """
+    return [
+        {"project_id": [1, "Alpha"], "analytic_account_id": [11, "AA Alpha"],
+         "planned_amount:sum": -60.0},
+        {"project_id": False, "analytic_account_id": [11, "AA Alpha"],
+         "planned_amount:sum": -40.0},
+        {"project_id": [99, "Zeta"], "analytic_account_id": [11, "AA Alpha"],
+         "planned_amount:sum": -99999.0},
+    ]
+
+
+def test_partial_project_links_match_across_budget_consumers(fake_client):
+    """A direct project-linked row (-60) and a falsy-project/account-fallback
+    row (-40) on the requested project's account must ADD to 100 across
+    every budget consumer -- project_budget, project_profitability,
+    project_dashboard's budget_detail and portfolio_health -- while a
+    truthy row linked to a different project (99) sharing the same account
+    contributes nowhere. This fails under the old project-level "project
+    wins" precedence (which drops the unlinked row entirely once a link
+    field exists) and under any regression that lets an out-of-scope
+    direct link leak through the shared account.
+    """
+    seed_partial_links(fake_client)
+    fake_client.aggregate_responses_seq["account.analytic.line"] = [[], []]
+    budget = json.loads(
+        tools_reports_projects.project_budget(project="Alpha"))
+    budget_row = budget["breakdown"]["projects"][0]
+
+    reset_calls(fake_client)
+    fake_client.aggregate_responses_seq["account.analytic.line"] = [
+        [], [], [], [], []]
+    fake_client.aggregate_responses_seq["crossovered.budget.lines"] = [
+        partial_link_agg_rows()]
+    profitability = json.loads(
+        tools_reports_projects.project_profitability(project="Alpha"))
+    profit_row = profitability["breakdown"]["projects"][0]
+
+    reset_calls(fake_client)
+    dashboard = json.loads(tools_project_detail.project_dashboard(
+        project_id=1, include=["budgets", "budget_detail"]))
+    detail = dashboard["budget_detail"]
+
+    reset_calls(fake_client)
+    fake_client.aggregate_responses_seq["account.analytic.line"] = [[], [], []]
+    fake_client.aggregate_responses_seq["crossovered.budget.lines"] = [
+        partial_link_agg_rows()]
+    portfolio = json.loads(tools_project_detail.portfolio_health())
+    portfolio_row = portfolio["projects"][0]
+
+    assert budget_row["planned"] == 100.0
+    assert profit_row["budget"] == 100.0
+    assert detail["planned"] == 100.0
+    assert portfolio_row["budget"] == 100.0
+
+
+def seed_mixed_sign(fake_client):
+    """budget.line (budget_type != revenue semantics) carries two lines on
+    the SAME project: -100 (expense) and +60 (a positive/revenue-tagged
+    amount the != "revenue" filter still admits through a mixed budget).
+    Its own extra_domain has no <= 0 leaf, so budget_by_project must query
+    non-positive THEN positive and add both magnitudes.
+    """
+    fake_client.fields_responses["project.project"] = {"account_id": {}}
+    fake_client.search_responses["project.project"] = [project_row()]
+    fake_client.error_models.add("crossovered.budget.lines")
+    fake_client.fields_responses["budget.line"] = {
+        "project_id": {}, "account_id": {}, "budget_amount": {},
+        "practical_amount": {}, "budget_analytic_id": {},
+        "date_from": {}, "date_to": {},
+    }
+    fake_client.search_responses["budget.line"] = [
+        {"id": 30, "project_id": [1, "Alpha"],
+         "account_id": [11, "AA Alpha"],
+         "budget_analytic_id": [7, "Budget Alpha"],
+         "budget_amount": -100.0, "practical_amount": -100.0,
+         "date_from": "2026-01-01", "date_to": "2026-12-31"},
+        {"id": 31, "project_id": [1, "Alpha"],
+         "account_id": [11, "AA Alpha"],
+         "budget_analytic_id": [7, "Budget Alpha"],
+         "budget_amount": 60.0, "practical_amount": 60.0,
+         "date_from": "2026-01-01", "date_to": "2026-12-31"},
+    ]
+    fake_client.fields_responses["budget.analytic"] = {
+        "date_from": {}, "date_to": {}, "state": {},
+    }
+    fake_client.search_responses["budget.analytic"] = [{
+        "id": 7, "name": "Budget Alpha", "date_from": "2026-01-01",
+        "date_to": "2026-12-31", "state": "validate",
+    }]
+    fake_client.search_responses["account.analytic.line"] = []
+
+
+def test_mixed_sign_budget_magnitude_matches_across_budget_consumers(
+        fake_client):
+    """-100 and +60 on the same project must add to 160 -- never
+    abs(sum()) == 40 -- across every budget consumer. Raw consumers
+    (project_budget, project_dashboard's budget_detail) already sum
+    abs() per line; aggregate consumers (project_profitability,
+    portfolio_health) must query and sum the two signs separately to
+    reach the same total.
+    """
+    seed_mixed_sign(fake_client)
+    fake_client.aggregate_responses_seq["account.analytic.line"] = [[], []]
+    budget = json.loads(
+        tools_reports_projects.project_budget(project="Alpha"))
+    budget_row = budget["breakdown"]["projects"][0]
+
+    reset_calls(fake_client)
+    fake_client.aggregate_responses_seq["account.analytic.line"] = [
+        [], [], [], [], []]
+    fake_client.aggregate_responses_seq["budget.line"] = [
+        [{"project_id": [1, "Alpha"], "account_id": [11, "AA Alpha"],
+          "budget_amount:sum": -100.0}],
+        [{"project_id": [1, "Alpha"], "account_id": [11, "AA Alpha"],
+          "budget_amount:sum": 60.0}],
+    ]
+    profitability = json.loads(
+        tools_reports_projects.project_profitability(project="Alpha"))
+    profit_row = profitability["breakdown"]["projects"][0]
+
+    reset_calls(fake_client)
+    dashboard = json.loads(tools_project_detail.project_dashboard(
+        project_id=1, include=["budgets", "budget_detail"]))
+    detail = dashboard["budget_detail"]
+
+    reset_calls(fake_client)
+    fake_client.aggregate_responses_seq["account.analytic.line"] = [[], [], []]
+    fake_client.aggregate_responses_seq["budget.line"] = [
+        [{"project_id": [1, "Alpha"], "account_id": [11, "AA Alpha"],
+          "budget_amount:sum": -100.0}],
+        [{"project_id": [1, "Alpha"], "account_id": [11, "AA Alpha"],
+          "budget_amount:sum": 60.0}],
+    ]
+    portfolio = json.loads(tools_project_detail.portfolio_health())
+    portfolio_row = portfolio["projects"][0]
+
+    assert budget_row["planned"] == 160.0
+    assert profit_row["budget"] == 160.0
+    assert detail["planned"] == 160.0
+    assert portfolio_row["budget"] == 160.0

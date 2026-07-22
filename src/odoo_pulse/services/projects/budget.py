@@ -158,51 +158,78 @@ def project_ids_for_budget_row(
 def budget_by_project(
     client, project_ids: list[int], acct_by_project: dict[int, int]
 ) -> tuple[dict[int, float], bool]:
-    """Planned budget (absolute) per project id + budgets_available.
+    """Planned budget (magnitude) per project id + budgets_available.
 
-    Uses the first usable :func:`budget_sources` candidate. Line-level
-    project_id matching is authoritative per project; analytic-account
-    matching (the classic path) fills projects the project aggregate did
-    not cover — two projects sharing one account each get the account's
-    full amount (accepted double-count caveat). Fixed aggregate order
-    (project first, then account) keeps the FakeClient queue deterministic.
-    None usable -> ({}, False).
+    Uses the first usable :func:`budget_sources` candidate. Matching goes
+    through the SAME canonical helpers as build_budget_context and
+    build_project_budget_report (budget_match_domain +
+    project_ids_for_budget_row -- spec rule #7): a direct project link is
+    authoritative, a falsy link falls through to a shared/unlinked
+    analytic account (accepted double-count caveat when two projects
+    share one account).
+
+    Planned/practical is a magnitude, not a signed total: non-positive
+    (expense) and positive (revenue-tagged) rows are queried and summed
+    SEPARATELY via abs(), then added -- never abs(sum()) -- so e.g. a
+    -100 and a +60 row on the same project contribute 160, not 40. A
+    source whose own extra_domain already restricts to non-positive
+    amounts (crossovered.budget.lines) skips the positive query entirely.
+
+    Either required aggregate raising OdooError discards this candidate's
+    partial accumulator and falls through to the next source. None usable
+    -> ({}, False).
     """
     if not project_ids:
         return {}, False
     account_ids = sorted(set(acct_by_project.values()))
+    project_ids_by_account: dict[int, list[int]] = {}
+    for pid, aid in acct_by_project.items():
+        project_ids_by_account.setdefault(aid, []).append(pid)
+    for aid in project_ids_by_account:
+        project_ids_by_account[aid].sort()
+
     for model, link, acct, amount, extra_domain in budget_sources(
             client, account_ids):
-        by_project: dict[int, float] = {}
-        by_account: dict[int, float] = {}
+        match_domain = budget_match_domain(
+            project_ids, account_ids, link, acct)
+        if not match_domain:
+            continue
+        group_by: list[str] = []
+        for field in (link, acct):
+            if field and field not in group_by:
+                group_by.append(field)
+
+        signs = ["non_positive"]
+        if (amount, "<=", 0) not in extra_domain:
+            signs.append("positive")
+
+        candidate_totals: dict[int, float] = {}
         try:
-            if link:
-                agg = client.aggregate_records(
-                    model, group_by=[link],
+            for sign in signs:
+                sign_leaf = ((amount, "<=", 0) if sign == "non_positive"
+                             else (amount, ">", 0))
+                aggregate = client.aggregate_records(
+                    model,
+                    group_by=group_by,
                     measures=[(amount, "sum")],
-                    domain=[(link, "in", project_ids), *extra_domain])
-                for row in agg.get("rows", []):
-                    m2o = row.get(link)
-                    if m2o:
-                        by_project[m2o[0]] = abs(
-                            row.get(f"{amount}:sum") or 0.0)
-            if acct and account_ids:
-                agg = client.aggregate_records(
-                    model, group_by=[acct],
-                    measures=[(amount, "sum")],
-                    domain=[(acct, "in", account_ids), *extra_domain])
-                for row in agg.get("rows", []):
-                    m2o = row.get(acct)
-                    if m2o:
-                        by_account[m2o[0]] = abs(
-                            row.get(f"{amount}:sum") or 0.0)
+                    domain=[*match_domain, *extra_domain, sign_leaf],
+                )
+                for row in aggregate.get("rows", []):
+                    magnitude = abs(row.get(f"{amount}:sum") or 0.0)
+                    for project_id in project_ids_for_budget_row(
+                        row,
+                        requested_project_ids=set(project_ids),
+                        project_ids_by_account=project_ids_by_account,
+                        link_field=link,
+                        account_field=acct,
+                    ):
+                        candidate_totals[project_id] = (
+                            candidate_totals.get(project_id, 0.0)
+                            + magnitude
+                        )
         except OdooError:
             continue
-        budgets = {pid: by_account[aid]
-                   for pid, aid in acct_by_project.items()
-                   if aid in by_account}
-        budgets.update(by_project)
-        return budgets, True
+        return candidate_totals, True
     return {}, False
 
 
@@ -252,20 +279,38 @@ def build_budget_context(client, project_id: int,
     acct_id = account_id_of(project_row, opt)
     account_ids = [acct_id] if acct_id is not None else []
 
+    project_ids_by_account = (
+        {acct_id: [project_id]} if acct_id is not None else {})
     for model, link, acct, amount, extra_domain in budget_sources(
             client, account_ids):
         line_opt = optional_fields(client, model, [
             *PRACTICAL_CANDIDATES, *PARENT_CANDIDATES,
             "date_from", "date_to"])
         fields = ["id", amount, *line_opt]
-        match = ((link, "=", project_id) if link
-                 else (acct, "in", account_ids))
+        for field in (link, acct):
+            if field and field not in fields:
+                fields.append(field)
+        match_domain = budget_match_domain(
+            [project_id], account_ids, link, acct)
+        if not match_domain:
+            continue
         try:
             lines = paged_search_read(client, model,
-                                      [match, *extra_domain],
+                                      [*match_domain, *extra_domain],
                                       fields=fields)
         except OdooError:
             continue
+        # Defensive assignment check: the combined domain above already
+        # excludes lines linked to some OTHER project, but re-derive
+        # membership per row through the same canonical helper so a
+        # future domain change can't silently widen this project's scope.
+        lines = [
+            ln for ln in lines
+            if project_id in project_ids_for_budget_row(
+                ln, requested_project_ids={project_id},
+                project_ids_by_account=project_ids_by_account,
+                link_field=link, account_field=acct)
+        ]
         practical_field = next(
             (f for f in PRACTICAL_CANDIDATES if f in line_opt), None)
         parent_field = next(
@@ -448,16 +493,16 @@ def build_project_budget_report(
                     *PARENT_CANDIDATES, "general_budget_id",
                     "date_from", "date_to"])
                 fields = ["id", amount, *opt]
-                if link:
-                    fields.append(link)
-                    match = (link, "in", ids)
-                else:
-                    match = (acct, "in", account_ids)
-                if acct and acct not in fields:
-                    fields.append(acct)
+                for field in (link, acct):
+                    if field and field not in fields:
+                        fields.append(field)
+                match_domain = budget_match_domain(
+                    ids, account_ids, link, acct)
+                if not match_domain:
+                    continue
                 try:
                     rows, trunc = fetch_with_truncation(
-                        client, model, [match, *extra_domain],
+                        client, model, [*match_domain, *extra_domain],
                         fields=fields, limit=500)
                 except OdooError:
                     continue
@@ -483,18 +528,19 @@ def build_project_budget_report(
         classification = money.classification
 
     lines_by_project: dict[int, list[dict]] = {}
-    if link_field:
-        for row in line_rows:
-            m2o = row.get(link_field)
-            if m2o:
-                lines_by_project.setdefault(m2o[0], []).append(row)
-    elif line_acct:
-        pids_by_acct: dict[int, list[int]] = {}
+    if link_field or line_acct:
+        project_ids_by_account: dict[int, list[int]] = {}
         for pid, aid in acct_by_project.items():
-            pids_by_acct.setdefault(aid, []).append(pid)
+            project_ids_by_account.setdefault(aid, []).append(pid)
+        for aid in project_ids_by_account:
+            project_ids_by_account[aid].sort()
+        requested_ids = set(ids)
         for row in line_rows:
-            m2o = row.get(line_acct)
-            for pid in (pids_by_acct.get(m2o[0], []) if m2o else []):
+            for pid in project_ids_for_budget_row(
+                row, requested_project_ids=requested_ids,
+                project_ids_by_account=project_ids_by_account,
+                link_field=link_field, account_field=line_acct,
+            ):
                 lines_by_project.setdefault(pid, []).append(row)
 
     def line_stats(row: dict) -> tuple[float, float | None, bool]:

@@ -113,23 +113,101 @@ def test_budget_account_fallback_maps_shared_account(fake_client):
     assert ("account_id", "in", [11]) in agg["domain"]
 
 
-def test_budget_project_id_wins_over_account_match(fake_client):
-    # Both link styles resolve: the project aggregate runs first and its
-    # value is authoritative per project; account matching fills the rest.
+def test_budget_direct_and_account_rows_add_without_replacement(fake_client):
+    # Both project_id and account_id resolve on the same model: matching now
+    # goes through ONE combined aggregate call (group_by carries every
+    # match key, link first) rather than two independent project/account
+    # aggregates -- a direct-project row and an unlinked/shared-account row
+    # ADD to their assigned projects; project-level results never overwrite
+    # (or get overwritten by) the account fallback.
     fake_client.fields_responses["budget.line"] = {
         "project_id": {}, "account_id": {}, "budget_amount": {}}
-    fake_client.aggregate_responses_seq["budget.line"] = [
-        [{"project_id": [1, "Alpha"], "budget_amount:sum": -8000.0}],
-        [{"account_id": [11, "AA Alpha"], "budget_amount:sum": -5000.0},
-         {"account_id": [12, "AA Beta"], "budget_amount:sum": -3000.0}],
-    ]
+    fake_client.aggregate_responses_seq["budget.line"] = [[
+        {"project_id": [1, "Alpha"], "account_id": [11, "AA Alpha"],
+         "budget_amount:sum": -8000.0},
+        {"project_id": False, "account_id": [12, "AA Beta"],
+         "budget_amount:sum": -3000.0},
+    ]]
     budgets, available = budget_by_project(
         fake_client, [1, 2], {1: 11, 2: 12})
     assert available is True
     assert budgets == {1: 8000.0, 2: 3000.0}
     aggs = [c for c in fake_client.calls
             if c["method"] == "aggregate_records"]
-    assert [a["group_by"] for a in aggs] == [["project_id"], ["account_id"]]
+    # budget.line's extra_domain has no "<= 0" leaf -> non_positive query,
+    # then a positive query (that second call finds no queued rows).
+    assert len(aggs) == 2
+    assert aggs[0]["group_by"] == ["project_id", "account_id"]
+    assert aggs[0]["domain"] == [
+        "|", ("project_id", "in", [1, 2]), "&",
+        ("project_id", "=", False), ("account_id", "in", [11, 12]),
+        ("budget_analytic_id.budget_type", "!=", "revenue"),
+        ("budget_amount", "<=", 0),
+    ]
+    assert aggs[1]["domain"][-1] == ("budget_amount", ">", 0)
+
+
+# -- Task 5: sign-separated magnitudes + shared matching -----------------------
+
+def test_budget_aggregate_combines_direct_and_unlinked_account_rows(fake_client):
+    # Same source exposing both project_id and account_id: one grouped row
+    # links project 1 directly, one has project_id=False and the account
+    # project 2 shares -- both surface from a single group_by carrying
+    # every available match key.
+    fake_client.fields_responses["budget.line"] = {
+        "project_id": {}, "account_id": {}, "budget_amount": {}}
+    fake_client.aggregate_responses_seq["budget.line"] = [[
+        {"project_id": [1, "Alpha"], "account_id": [11, "AA Alpha"],
+         "budget_amount:sum": -1000.0},
+        {"project_id": False, "account_id": [12, "AA Beta"],
+         "budget_amount:sum": -2000.0},
+    ]]
+    budgets, available = budget_by_project(
+        fake_client, [1, 2], {1: 11, 2: 12})
+    assert available is True
+    assert budgets == {1: 1000.0, 2: 2000.0}
+    aggs = [c for c in fake_client.calls
+            if c["method"] == "aggregate_records"]
+    assert aggs[0]["group_by"] == ["project_id", "account_id"]
+
+
+def test_budget_aggregate_adds_mixed_sign_magnitudes(fake_client):
+    # -100 (non-positive) and +60 (positive) on the SAME project must add
+    # their magnitudes -- 160 -- never abs(sum()) which would silently net
+    # them down to 40.
+    fake_client.fields_responses["budget.line"] = {
+        "project_id": {}, "budget_amount": {}}
+    fake_client.aggregate_responses_seq["budget.line"] = [
+        [{"project_id": [1, "Alpha"], "budget_amount:sum": -100.0}],
+        [{"project_id": [1, "Alpha"], "budget_amount:sum": 60.0}],
+    ]
+    budgets, available = budget_by_project(fake_client, [1], {1: 11})
+    assert available is True
+    assert budgets == {1: 160.0}
+    aggs = [c for c in fake_client.calls
+            if c["method"] == "aggregate_records"]
+    assert len(aggs) == 2
+    assert aggs[0]["domain"][-1] == ("budget_amount", "<=", 0)
+    assert aggs[1]["domain"][-1] == ("budget_amount", ">", 0)
+
+
+def test_non_positive_candidate_skips_positive_query_and_keeps_zero(fake_client):
+    # crossovered.budget.lines' own extra_domain already restricts to
+    # planned_amount <= 0 -- the positive-sign query must be skipped
+    # entirely, and a genuine zero-valued row must still surface as an
+    # available budget of 0.0 rather than being mistaken for "no usable
+    # candidate".
+    fake_client.fields_responses["crossovered.budget.lines"] = {
+        "analytic_account_id": {}, "planned_amount": {}}
+    fake_client.aggregate_responses_seq["crossovered.budget.lines"] = [[
+        {"analytic_account_id": [11, "AA"], "planned_amount:sum": 0.0}]]
+    budgets, available = budget_by_project(fake_client, [1], {1: 11})
+    assert budgets == {1: 0.0} and available is True
+    aggs = [c for c in fake_client.calls
+            if c["method"] == "aggregate_records"
+            and c["model"] == "crossovered.budget.lines"]
+    assert len(aggs) == 1
+    assert aggs[0]["domain"][-1] == ("planned_amount", "<=", 0)
 
 
 def test_budget_crossovered_filters_confirmed(fake_client):
