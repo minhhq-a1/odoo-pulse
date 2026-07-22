@@ -562,9 +562,11 @@ def build_project_budget_report(
         acct_id = acct_by_project.get(pid)
         cost = (cost_by_account.get(acct_id, 0.0)
                 if acct_id is not None else 0.0)
-        # cost_by_account values are already positive (analytic_money
-        # normalizes cost as -amount for the loss/negative bucket) --
-        # no abs() needed here, unlike planned/practical below.
+        # cost_by_account is a signed net: analytic_money negates the
+        # loss bucket once (-amount), so a normal cost is positive, but an
+        # over-credit can net NEGATIVE and that reversal must survive.
+        # Do NOT abs() here -- that would clamp a legitimate negative net
+        # (unlike planned/practical below, which sum per-line magnitudes).
         plines = lines_by_project.get(pid, [])
         budget_names = sorted(
             {row[parent_field][1] for row in plines
