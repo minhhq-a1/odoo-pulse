@@ -5,6 +5,7 @@ import json
 from odoo_pulse import tools_reports_projects
 from odoo_pulse.core.errors import OdooError
 from odoo_pulse.services.projects import budget
+from odoo_pulse.services.projects.finance import FALLBACK_WARNING
 
 # -- fixtures ------------------------------------------------------------------
 
@@ -54,12 +55,22 @@ AGG_COST = [{"account_id": [11, "AA Alpha"], "amount:sum": -8000.0},
 
 def _seed(fake, projects=PROJECTS, lines=LINES, cost=AGG_COST):
     """budget.line stays unusable (default schema resolves no amount field),
-    so the walk lands on crossovered.budget.lines with our schema."""
+    so the walk lands on crossovered.budget.lines with our schema.
+
+    account.analytic.line exposes analytic_profitability -- the classifier
+    resolves to "odoo_profitability" and the finance thunk queries cost
+    (loss) then revenue in that fixed order, so the queue below is
+    [cost_rows, revenue_rows]. Revenue is empty here: these tests only
+    exercise cost/planned/practical math.
+    """
     fake.fields_responses["project.project"] = PROJECT_FIELDS
     fake.search_responses["project.project"] = projects
     fake.fields_responses["crossovered.budget.lines"] = dict(LINE_SCHEMA)
     fake.search_responses["crossovered.budget.lines"] = lines
-    fake.aggregate_responses_seq["account.analytic.line"] = [list(cost)]
+    fake.fields_responses["account.analytic.line"] = {
+        "project_id": {}, "analytic_profitability": {}}
+    fake.aggregate_responses_seq["account.analytic.line"] = [
+        list(cost), []]
 
 
 # -- domains -------------------------------------------------------------------
@@ -94,13 +105,16 @@ def test_line_and_cost_domains(fake_client):
     # instead of the correct 239,800,000).
     assert ("planned_amount", "<=", 0) in lines["domain"]
     assert lines["limit"] == 500
-    cost = next(c for c in fake_client.calls
-                if c["method"] == "aggregate_records"
-                and c["model"] == "account.analytic.line")
+    aggs = [c for c in fake_client.calls
+            if c["method"] == "aggregate_records"
+            and c["model"] == "account.analytic.line"]
+    assert len(aggs) == 2  # cost (loss) then revenue -- finance.py order
+    cost, revenue = aggs
     assert cost["group_by"] == ["account_id"]
     assert cost["measures"] == [("amount", "sum")]
     assert ("account_id", "in", [11, 12]) in cost["domain"]
-    assert ("amount", "<", 0) in cost["domain"]
+    assert ("analytic_profitability", "=", "loss") in cost["domain"]
+    assert ("analytic_profitability", "=", "revenue") in revenue["domain"]
 
 
 def test_account_fallback_assigns_lines_via_account(fake_client):
@@ -287,6 +301,38 @@ def test_no_projects_short_circuits(fake_client):
                    for c in fake_client.calls)
 
 
+def test_project_budget_surfaces_sign_fallback(fake_client):
+    # Override _seed()'s classifier exposure: no analytic_profitability
+    # field on account.analytic.line -> the classifier degrades to the
+    # amount-sign fallback; the report must surface that (not silently
+    # succeed). The aggregate queue (cost_rows, []) still applies -- the
+    # fake returns canned rows regardless of which domain triggered them.
+    _seed(fake_client)
+    fake_client.fields_responses["account.analytic.line"] = {
+        "project_id": {}}
+    out = json.loads(tools_reports_projects.project_budget())
+    assert out["analytic_classification"] == "sign_fallback"
+    risk = next(r for r in out["risks"]
+                if r["code"] == "analytic_classification_fallback")
+    assert risk["message"] == FALLBACK_WARNING
+    assert risk["count"] == 2  # len(account_ids) == {11, 12}
+
+
+def test_project_budget_present_classifier_fault_is_not_fallback(fake_client):
+    # The classifier field IS present (odoo_profitability path decided),
+    # but the actual account.analytic.line aggregate faults. That is a
+    # genuine data/instance fault, not a degradation -- the public safe()
+    # result must be an error, never a successful sign_fallback report.
+    _seed(fake_client)
+    fake_client.fields_responses["account.analytic.line"] = {
+        "project_id": {}, "analytic_profitability": {}}
+    fake_client.error_models.add("account.analytic.line")
+    out = json.loads(tools_reports_projects.project_budget())
+    assert "error" in out
+    assert "analytic_classification" not in out
+    assert "sign_fallback" not in json.dumps(out)
+
+
 # -- envelope ---------------------------------------------------------------------
 
 def test_envelope_shape(fake_client, monkeypatch):
@@ -297,8 +343,8 @@ def test_envelope_shape(fake_client, monkeypatch):
     assert out["tool"] == "project_budget"
     assert out["as_of"] == "2026-07-13"
     assert list(out) == ["tool", "as_of", "filters", "thresholds",
-                         "budgets_available", "summary", "breakdown",
-                         "highlights", "risks"]
+                         "budgets_available", "analytic_classification",
+                         "summary", "breakdown", "highlights", "risks"]
     assert out["filters"] == {"project": None, "manager": None,
                               "customer": None}
     assert out["thresholds"] == {"burn_pct_at_risk": 80.0,

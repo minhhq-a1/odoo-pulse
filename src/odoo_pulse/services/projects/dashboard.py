@@ -380,6 +380,8 @@ def build_project_dashboard(
                                  budget_ids, timezone_offset))
             if detail is not None:
                 report["budget_detail"] = detail
+                if detail["analytic_classification"] == "sign_fallback":
+                    warnings.append(FALLBACK_WARNING)
         if "delivery_monthly" in wanted and shared_tasks is not None:
             _ids, periods, _unknown = select_budgets(ctx, budget_ids)
 

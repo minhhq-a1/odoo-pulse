@@ -380,14 +380,26 @@ def test_selected_reports_unknown_ids(fake_client):
 def test_budget_detail_signs_and_periods(fake_client):
     _seed_budget(fake_client)
     ctx = build_budget_context(fake_client, 59)
+    # Instance exposes analytic_profitability -> the odoo_profitability
+    # classifier path, not the amount-sign fallback, decides cost here.
+    fake_client.fields_responses["account.analytic.line"] = {
+        "project_id": {}, "analytic_profitability": {},
+    }
     fake_client.search_responses["account.analytic.line"] = [
         {"id": 1, "date": "2025-10-03", "amount": -210500000.0,
          "unit_amount": 890.0, "employee_id": [155, "A"],
-         "task_id": [8554, "Build X"]},
-        # credit line REDUCES cost (positive amount)
+         "task_id": [8554, "Build X"], "analytic_profitability": "loss"},
+        # credit line, ALSO loss-classified -> REDUCES cost (positive
+        # amount within the same cost category).
         {"id": 2, "date": "2025-10-20", "amount": 500000.0,
          "unit_amount": 0.0, "employee_id": [155, "A"],
-         "task_id": [8554, "Build X"]},
+         "task_id": [8554, "Build X"], "analytic_profitability": "loss"},
+        # revenue-classified row: must NOT enter cost or any cost bucket,
+        # but its hours still contribute to valid_hours (and by_month) --
+        # excluded revenue must never remove legitimate logged hours.
+        {"id": 3, "date": "2025-10-15", "amount": 999999.0,
+         "unit_amount": 15.0, "employee_id": [155, "A"],
+         "task_id": [8554, "Build X"], "analytic_profitability": "revenue"},
     ]
     detail = build_budget_detail(fake_client, 59, ctx, None, 7)
     assert detail["selected_budget_ids"] == [12]
@@ -396,9 +408,10 @@ def test_budget_detail_signs_and_periods(fake_client):
     assert detail["date_from"] == "2025-03-01"
     assert detail["date_to"] == "2026-07-31"
     assert detail["valid_cost"] == 210000000.0   # 210.5M - 0.5M credit
-    assert detail["valid_hours"] == 890.0
+    assert detail["valid_hours"] == 905.0        # 890 + 0 + 15 (revenue row)
+    assert detail["analytic_classification"] == "odoo_profitability"
     assert detail["by_month"] == [{"month": "2025-10",
-                                   "cost": 210000000.0, "hours": 890.0}]
+                                   "cost": 210000000.0, "hours": 905.0}]
     assert detail["by_employee"][0]["employee_id"] == 155
     assert detail["by_task"][0]["task_id"] == 8554
     # domain: task-linked lines only, plain-date period bounds
@@ -432,6 +445,50 @@ def test_budget_detail_surfaces_unknown_budget_ids(fake_client):
     detail = build_budget_detail(fake_client, 59, ctx, [12, 999], 7)
     assert detail["selected_budget_ids"] == [12]
     assert detail["unknown_budget_ids"] == [999]
+
+
+def test_budget_detail_sign_fallback_excludes_positive_amounts_from_cost(
+        fake_client):
+    # Default fake schema exposes no analytic_profitability field ->
+    # sign-fallback classifier. Under that classifier a POSITIVE amount is
+    # revenue, not cost -- it must not enter valid_cost or any cost bucket,
+    # though its hours still count (population unchanged).
+    _seed_budget(fake_client)
+    ctx = build_budget_context(fake_client, 59)
+    fake_client.search_responses["account.analytic.line"] = [
+        {"id": 1, "date": "2025-10-03", "amount": -100.0,
+         "unit_amount": 5.0, "employee_id": [155, "A"],
+         "task_id": [8554, "Build X"]},
+        {"id": 2, "date": "2025-10-20", "amount": 20.0,
+         "unit_amount": 2.0, "employee_id": [155, "A"],
+         "task_id": [8554, "Build X"]},
+    ]
+    detail = build_budget_detail(fake_client, 59, ctx, None, 7)
+    assert detail["analytic_classification"] == "sign_fallback"
+    assert detail["valid_cost"] == 100.0
+    assert detail["valid_hours"] == 7.0
+    assert detail["by_month"] == [
+        {"month": "2025-10", "cost": 100.0, "hours": 7.0}]
+    assert detail["by_employee"][0]["cost"] == 100.0
+    assert detail["by_task"][0]["cost"] == 100.0
+
+    _seed_dashboard(fake_client)
+    fake_client.search_responses["account.analytic.line"] = [
+        {"id": 1, "date": "2025-10-03", "amount": -100.0,
+         "unit_amount": 5.0, "employee_id": [155, "A"],
+         "task_id": [8554, "Build X"]},
+        {"id": 2, "date": "2025-10-20", "amount": 20.0,
+         "unit_amount": 2.0, "employee_id": [155, "A"],
+         "task_id": [8554, "Build X"]},
+    ]
+    fake_client.aggregate_responses_seq["account.analytic.line"] = [
+        [{"account_id": [5, "AA TBS"], "amount:sum": -1000.0}],
+        [{"account_id": [5, "AA TBS"], "amount:sum": 200.0}],
+        [{"employee_id": [155, "A"], "unit_amount:sum": 320.5}],
+        [{"task_id": [8554, "T"], "unit_amount:sum": 84.0}],
+    ]
+    out = json.loads(project_dashboard(project_id=59))
+    assert out["warnings"].count(FALLBACK_WARNING) == 1
 
 
 def _seed_dashboard(fake):

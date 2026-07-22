@@ -18,6 +18,12 @@ from ...common.paging import fetch_with_truncation, paged_search_read
 from ...common.reporting import build_report, distinct_companies
 from ...common.schema import optional_fields
 from ...core.errors import OdooError
+from .finance import (
+    FALLBACK_WARNING,
+    analytic_bucket,
+    analytic_classification,
+    analytic_money,
+)
 from .queries import account_id_of, account_ids_by_project, project_domain
 
 # (model, analytic-account field candidates, planned-amount field candidates,
@@ -273,22 +279,40 @@ def build_budget_detail(client, project_id: int, ctx: dict,
     froms = sorted(b["date_from"] for b in chosen if b["date_from"])
     tos = sorted(b["date_to"] for b in chosen if b["date_to"])
 
+    # classification decides cost vs revenue on the raw rows below (same
+    # canonical primitive as project_profitability/portfolio_health/
+    # dashboard-core's finance -- spec rule #7); resolved BEFORE the read
+    # so the fields requested reflect which columns are actually needed.
+    classification = analytic_classification(client)
+    analytic_fields = [
+        "date", "amount", "unit_amount", "employee_id", "task_id"
+    ]
+    if classification == "odoo_profitability":
+        analytic_fields.append("analytic_profitability")
+
     # valid_cost rule: ONLY task-linked timesheet lines, inside the OR'd
     # budget periods (account.analytic.line.date is a plain date field).
     domain = [("project_id", "=", project_id), ("task_id", "!=", False),
               *periods_domain("date", periods, timezone_offset,
                               as_datetime=False)]
     rows = paged_search_read(
-        client, "account.analytic.line", domain,
-        fields=["date", "amount", "unit_amount", "employee_id", "task_id"])
+        client, "account.analytic.line", domain, fields=analytic_fields)
 
     def bucket(rows_subset, key_fn):
         out: dict = {}
-        for r in rows_subset:
-            cost_hours = out.setdefault(key_fn(r), [0.0, 0.0])
-            cost_hours[0] -= r.get("amount") or 0.0     # flip sign once
-            cost_hours[1] += r.get("unit_amount") or 0.0
+        for row in rows_subset:
+            key = key_fn(row)
+            cost_hours = out.setdefault(key, [0.0, 0.0])
+            if analytic_bucket(row, classification) == "cost":
+                cost_hours[0] -= row.get("amount") or 0.0
+            cost_hours[1] += row.get("unit_amount") or 0.0
         return out
+
+    # Cost-classified rows only feed valid_cost -- a revenue-classified
+    # credit note must never reduce cost (that would silently understate
+    # spend), though its hours still count via bucket()'s unconditional
+    # hours addition below (population unchanged).
+    cost_rows = [r for r in rows if analytic_bucket(r, classification) == "cost"]
 
     months = bucket(rows, lambda r: str(r.get("date") or "")[:7])
     emps = bucket([r for r in rows if r.get("employee_id")],
@@ -300,9 +324,11 @@ def build_budget_detail(client, project_id: int, ctx: dict,
         "planned": planned, "practical": practical,
         "date_from": froms[0] if froms else None,
         "date_to": tos[-1] if tos else None,
-        "valid_cost": round(-sum(r.get("amount") or 0.0 for r in rows), 2),
+        "valid_cost": round(
+            -sum(r.get("amount") or 0.0 for r in cost_rows), 2),
         "valid_hours": round(sum(r.get("unit_amount") or 0.0
                                  for r in rows), 2),
+        "analytic_classification": classification,
         "by_month": [{"month": m, "cost": round(c, 2),
                       "hours": round(h, 2)}
                      for m, (c, h) in sorted(months.items()) if m],
@@ -351,6 +377,7 @@ def build_project_budget_report(
     parent_field = amount_field = link_field = None
     line_opt: list[str] = []
     cost_by_account: dict[int, float] = {}
+    classification = "not_evaluated"
 
     if ids:
         def fetch_lines():
@@ -380,17 +407,11 @@ def build_project_budget_report(
                 return src, opt, rows, trunc
             return None
 
-        def fetch_cost():
-            if not account_ids:
-                return None
-            return client.aggregate_records(
-                "account.analytic.line", group_by=["account_id"],
-                measures=[("amount", "sum")],
-                domain=[("account_id", "in", account_ids),
-                        ("amount", "<", 0)])
+        def fetch_money():
+            return analytic_money(client, account_ids)
 
         fetched = gather_strict(
-            {"lines": fetch_lines, "cost": fetch_cost})
+            {"lines": fetch_lines, "money": fetch_money})
         if fetched["lines"] is not None:
             budgets_available = True
             src, line_opt, line_rows, line_truncation = fetched["lines"]
@@ -400,11 +421,9 @@ def build_project_budget_report(
             practical_field = pick(PRACTICAL_CANDIDATES)
             theoretical_field = pick(THEORETICAL_CANDIDATES)
             parent_field = pick(PARENT_CANDIDATES)
-        for row in ((fetched["cost"] or {}).get("rows", [])):
-            m2o = row.get("account_id")
-            if m2o:
-                cost_by_account[m2o[0]] = abs(row.get("amount:sum")
-                                              or 0.0)
+        money = fetched["money"]
+        cost_by_account = money.cost_by_account
+        classification = money.classification
 
     lines_by_project: dict[int, list[dict]] = {}
     if link_field:
@@ -440,6 +459,9 @@ def build_project_budget_report(
         acct_id = acct_by_project.get(pid)
         cost = (cost_by_account.get(acct_id, 0.0)
                 if acct_id is not None else 0.0)
+        # cost_by_account values are already positive (analytic_money
+        # normalizes cost as -amount for the loss/negative bucket) --
+        # no abs() needed here, unlike planned/practical below.
         plines = lines_by_project.get(pid, [])
         budget_names = sorted(
             {row[parent_field][1] for row in plines
@@ -652,6 +674,12 @@ def build_project_budget_report(
                 f"{', '.join(companies)}; filter by manager/customer/"
                 "project to compare like with like."),
         })
+    if classification == "sign_fallback":
+        risks.append({
+            "code": "analytic_classification_fallback",
+            "count": len(account_ids),
+            "message": FALLBACK_WARNING,
+        })
 
     return build_report(
         "project_budget", today,
@@ -662,4 +690,5 @@ def build_project_budget_report(
                "thresholds": {
                    "burn_pct_at_risk": burn_pct_at_risk,
                    "burn_pct_off_track": burn_pct_off_track},
-               "budgets_available": budgets_available})
+               "budgets_available": budgets_available,
+               "analytic_classification": classification})

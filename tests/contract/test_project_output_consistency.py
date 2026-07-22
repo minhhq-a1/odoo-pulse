@@ -200,18 +200,56 @@ def test_expense_credit_nets_cost_across_profitability_dashboard_and_portfolio(
     portfolio = json.loads(tools_project_detail.portfolio_health())
     portfolio_row = portfolio["projects"][0]
 
+    reset_calls(fake_client)
+    fake_client.aggregate_responses_seq["account.analytic.line"] = rows()[1:]
+    budget = json.loads(
+        tools_reports_projects.project_budget(project="Alpha")
+    )
+    budget_row = budget["breakdown"]["projects"][0]
+
+    # build_budget_detail reads RAW account.analytic.line rows via
+    # search_read -- a FakeClient channel independent of
+    # aggregate_responses_seq -- scoped to task_id != False (no budget
+    # period narrows it further here: no budget model resolves under
+    # error_models, so selected budgets/periods are empty and the read is
+    # all-time). Every row below carries a truthy task_id so this raw
+    # population describes the SAME accounting facts as the
+    # account-grouped aggregate above (-100 loss, +20 loss -> net -80 ->
+    # cost 80), making the cross-output equality intentional rather than
+    # comparing an all-time population against a period-scoped one.
+    fake_client.search_responses["account.analytic.line"] = [
+        {"id": 901, "date": "2026-01-01", "amount": -100.0,
+         "unit_amount": 1.0, "employee_id": False, "task_id": [50, "T"],
+         "analytic_profitability": "loss"},
+        {"id": 902, "date": "2026-01-02", "amount": 20.0,
+         "unit_amount": 0.5, "employee_id": False, "task_id": [50, "T"],
+         "analytic_profitability": "loss"},
+    ]
+    reset_calls(fake_client)
+    dashboard_budget = json.loads(
+        tools_project_detail.project_dashboard(
+            project_id=1, include=["budgets", "budget_detail"])
+    )
+    detail = dashboard_budget["budget_detail"]
+
     assert profit_row["cost"] == dashboard["finance"]["cost_all_time"] \
-        == portfolio_row["cost"] == 80.0
+        == portfolio_row["cost"] == budget_row["cost"] \
+        == budget["summary"]["cost"] == detail["valid_cost"] == 80.0
     assert profit_row["revenue"] == dashboard["finance"]["revenue"] \
         == portfolio_row["revenue"] == 0.0
     assert profit_row["margin"] == dashboard["finance"]["margin"] \
         == portfolio_row["margin"] == -80.0
     assert dashboard["finance"]["analytic_classification"] == "odoo_profitability"
+    assert budget["analytic_classification"] == "odoo_profitability"
+    assert detail["analytic_classification"] == "odoo_profitability"
     assert not any(r["code"] == "analytic_classification_fallback"
                    for r in profitability["risks"])
     assert not any(r["code"] == "analytic_classification_fallback"
                    for r in portfolio["risks"])
+    assert not any(r["code"] == "analytic_classification_fallback"
+                   for r in budget["risks"])
     assert "warnings" not in dashboard
+    assert "warnings" not in dashboard_budget
 
 
 def test_income_credit_note_nets_revenue_across_profitability_dashboard_and_portfolio(
@@ -247,15 +285,49 @@ def test_income_credit_note_nets_revenue_across_profitability_dashboard_and_port
     portfolio = json.loads(tools_project_detail.portfolio_health())
     portfolio_row = portfolio["projects"][0]
 
+    reset_calls(fake_client)
+    fake_client.aggregate_responses_seq["account.analytic.line"] = rows()[1:]
+    budget = json.loads(
+        tools_reports_projects.project_budget(project="Alpha")
+    )
+    budget_row = budget["breakdown"]["projects"][0]
+
+    # Same two independent FakeClient channels as the expense-credit test:
+    # aggregate_responses_seq feeds the account-grouped aggregate consumers
+    # above, search_responses feeds build_budget_detail's raw-row read.
+    # Both rows carry a truthy task_id and are revenue-classified, so
+    # valid_cost must come out 0 -- a revenue-classified credit note must
+    # never enter cost.
+    fake_client.search_responses["account.analytic.line"] = [
+        {"id": 903, "date": "2026-01-01", "amount": 100.0,
+         "unit_amount": 1.0, "employee_id": False, "task_id": [51, "T"],
+         "analytic_profitability": "revenue"},
+        {"id": 904, "date": "2026-01-02", "amount": -20.0,
+         "unit_amount": 0.5, "employee_id": False, "task_id": [51, "T"],
+         "analytic_profitability": "revenue"},
+    ]
+    reset_calls(fake_client)
+    dashboard_budget = json.loads(
+        tools_project_detail.project_dashboard(
+            project_id=1, include=["budgets", "budget_detail"])
+    )
+    detail = dashboard_budget["budget_detail"]
+
     assert profit_row["cost"] == dashboard["finance"]["cost_all_time"] \
-        == portfolio_row["cost"] == 0.0
+        == portfolio_row["cost"] == budget_row["cost"] \
+        == budget["summary"]["cost"] == detail["valid_cost"] == 0.0
     assert profit_row["revenue"] == dashboard["finance"]["revenue"] \
         == portfolio_row["revenue"] == 80.0
     assert profit_row["margin"] == dashboard["finance"]["margin"] \
         == portfolio_row["margin"] == 80.0
     assert dashboard["finance"]["analytic_classification"] == "odoo_profitability"
+    assert budget["analytic_classification"] == "odoo_profitability"
+    assert detail["analytic_classification"] == "odoo_profitability"
     assert not any(r["code"] == "analytic_classification_fallback"
                    for r in profitability["risks"])
     assert not any(r["code"] == "analytic_classification_fallback"
                    for r in portfolio["risks"])
+    assert not any(r["code"] == "analytic_classification_fallback"
+                   for r in budget["risks"])
     assert "warnings" not in dashboard
+    assert "warnings" not in dashboard_budget
