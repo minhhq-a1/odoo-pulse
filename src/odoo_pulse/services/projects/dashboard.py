@@ -26,8 +26,8 @@ from .budget import (
     build_budget_detail,
     select_budgets,
 )
+from .finance import FALLBACK_WARNING, analytic_money
 from .health import derive_project_health
-from .profitability import analytic_money
 from .queries import account_id_of
 from .subtasks import (
     DEFAULT_CLOSED_STAGES,
@@ -144,15 +144,20 @@ def build_core_section(client, project_id: int, timezone_offset: int,
     section_errors: dict[str, str] = {}
     try:
         acct_id = account_id_of(p, opt)
-        cost_by, rev_by = analytic_money(
+        money = analytic_money(
             client, [acct_id] if acct_id is not None else [])
-        cost = cost_by.get(acct_id, 0.0) if acct_id is not None else 0.0
-        revenue = rev_by.get(acct_id, 0.0) if acct_id is not None else 0.0
+        cost = (money.cost_by_account.get(acct_id, 0.0)
+                if acct_id is not None else 0.0)
+        revenue = (money.revenue_by_account.get(acct_id, 0.0)
+                   if acct_id is not None else 0.0)
         result["finance"] = {
             "revenue": round(revenue, 2),
             "cost_all_time": round(cost, 2),
             "margin": round(revenue - cost, 2),
+            "analytic_classification": money.classification,
         }
+        if money.classification == "sign_fallback":
+            warnings.append(FALLBACK_WARNING)
     except Exception as exc:
         section_errors["finance"] = error_message(exc)
 

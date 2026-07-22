@@ -6,7 +6,6 @@ import pytest
 from odoo_pulse.common.dates import periods_domain
 from odoo_pulse.core.errors import OdooError
 from odoo_pulse.services.projects.health import derive_project_health
-from odoo_pulse.services.projects.profitability import analytic_money
 from odoo_pulse.services.projects.queries import (
     account_field_of,
     account_id_of,
@@ -317,27 +316,6 @@ def test_health_milestone_order_independent():
         [_ms("B", "2026-09-01"), _ms("A", "2026-08-01")],
         today, today + dt.timedelta(days=7), 7)
     assert h["next_milestone"]["name"] == "A"
-
-
-# -- analytic_money -----------------------------------------------------------
-
-def test_analytic_money_empty_accounts_no_rpc(fake_client):
-    assert analytic_money(fake_client, []) == ({}, {})
-    assert fake_client.calls == []
-
-
-def test_analytic_money_signs_and_domains(fake_client):
-    fake_client.aggregate_responses_seq["account.analytic.line"] = [
-        [{"account_id": [5, "AA TBS"], "amount:sum": -1738006746.0}],
-        [{"account_id": [5, "AA TBS"], "amount:sum": 120.0}],
-    ]
-    cost, revenue = analytic_money(fake_client, [5])
-    assert cost == {5: 1738006746.0}     # positive cost
-    assert revenue == {5: 120.0}
-    aggs = [c for c in fake_client.calls
-            if c["method"] == "aggregate_records"]
-    assert ("amount", "<", 0) in aggs[0]["domain"]
-    assert ("amount", ">", 0) in aggs[1]["domain"]
 
 
 # -- account_field_of / account_id_of / account_ids_by_project ---------------

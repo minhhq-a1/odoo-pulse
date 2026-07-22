@@ -275,6 +275,7 @@ def test_envelope_shape(fake_client, monkeypatch):
     assert out["as_of"] == "2026-07-11"
     assert list(out) == ["tool", "as_of", "filters", "thresholds",
                          "budgets_available", "burn_evaluated",
+                         "analytic_classification",
                          "summary", "breakdown", "highlights", "risks"]
     assert out["filters"] == {"project": None, "manager": None,
                               "customer": None, "date_from": None,

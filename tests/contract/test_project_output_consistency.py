@@ -148,3 +148,114 @@ def test_revenue_cost_margin_match_profitability_dashboard_and_portfolio(fake_cl
         == portfolio_row["cost"] == 40.0
     assert profit_row["margin"] == dashboard["finance"]["margin"] \
         == portfolio_row["margin"] == 60.0
+
+
+def seed_profitability_classified(fake_client):
+    """Like seed_profitability, but the instance exposes
+    analytic_profitability -- the odoo_profitability classifier path,
+    not the amount-sign fallback, decides cost vs revenue here."""
+    fake_client.fields_responses["project.project"] = {
+        "allocated_hours": {}, "delivery_hours": {}, "account_id": {},
+    }
+    fake_client.fields_responses["account.analytic.line"] = {
+        "project_id": {}, "analytic_profitability": {},
+    }
+    fake_client.search_responses["project.project"] = [project_row()]
+    fake_client.search_responses["project.milestone"] = []
+    fake_client.search_responses["account.analytic.line"] = []
+    fake_client.error_models.update({"budget.line", "crossovered.budget.lines"})
+
+
+def test_expense_credit_nets_cost_across_profitability_dashboard_and_portfolio(
+        fake_client):
+    # An expense credit note (-100 + 20, both loss-classified) nets to a
+    # single -80 aggregate row on the loss domain; no revenue-classified
+    # rows at all. cost must come out 80 (not clamped/absolute-valued away
+    # from a genuine net), revenue 0, margin -80, everywhere.
+    seed_profitability_classified(fake_client)
+
+    def rows():
+        return [
+            [{"project_id": [1, "Alpha"], "unit_amount:sum": 10.0}],  # hours
+            [{"account_id": [11, "AA Alpha"], "amount:sum": -80.0}],  # loss
+            [],  # revenue: no rows
+        ]
+
+    fake_client.aggregate_responses_seq["account.analytic.line"] = [
+        *rows(), [], [],
+    ]
+    profitability = json.loads(
+        tools_reports_projects.project_profitability(project="Alpha")
+    )
+    profit_row = profitability["breakdown"]["projects"][0]
+
+    reset_calls(fake_client)
+    fake_client.aggregate_responses_seq["account.analytic.line"] = rows()[1:]
+    dashboard = json.loads(
+        tools_project_detail.project_dashboard(project_id=1, include=["core"])
+    )
+
+    reset_calls(fake_client)
+    fake_client.aggregate_responses_seq["account.analytic.line"] = rows()
+    portfolio = json.loads(tools_project_detail.portfolio_health())
+    portfolio_row = portfolio["projects"][0]
+
+    assert profit_row["cost"] == dashboard["finance"]["cost_all_time"] \
+        == portfolio_row["cost"] == 80.0
+    assert profit_row["revenue"] == dashboard["finance"]["revenue"] \
+        == portfolio_row["revenue"] == 0.0
+    assert profit_row["margin"] == dashboard["finance"]["margin"] \
+        == portfolio_row["margin"] == -80.0
+    assert dashboard["finance"]["analytic_classification"] == "odoo_profitability"
+    assert not any(r["code"] == "analytic_classification_fallback"
+                   for r in profitability["risks"])
+    assert not any(r["code"] == "analytic_classification_fallback"
+                   for r in portfolio["risks"])
+    assert "warnings" not in dashboard
+
+
+def test_income_credit_note_nets_revenue_across_profitability_dashboard_and_portfolio(
+        fake_client):
+    # An income credit note (+100 - 20, both revenue-classified) nets to a
+    # single 80 aggregate row on the revenue domain; no loss-classified
+    # rows at all. cost 0, revenue 80, margin 80, everywhere.
+    seed_profitability_classified(fake_client)
+
+    def rows():
+        return [
+            [{"project_id": [1, "Alpha"], "unit_amount:sum": 10.0}],  # hours
+            [],  # loss: no rows
+            [{"account_id": [11, "AA Alpha"], "amount:sum": 80.0}],  # revenue
+        ]
+
+    fake_client.aggregate_responses_seq["account.analytic.line"] = [
+        *rows(), [], [],
+    ]
+    profitability = json.loads(
+        tools_reports_projects.project_profitability(project="Alpha")
+    )
+    profit_row = profitability["breakdown"]["projects"][0]
+
+    reset_calls(fake_client)
+    fake_client.aggregate_responses_seq["account.analytic.line"] = rows()[1:]
+    dashboard = json.loads(
+        tools_project_detail.project_dashboard(project_id=1, include=["core"])
+    )
+
+    reset_calls(fake_client)
+    fake_client.aggregate_responses_seq["account.analytic.line"] = rows()
+    portfolio = json.loads(tools_project_detail.portfolio_health())
+    portfolio_row = portfolio["projects"][0]
+
+    assert profit_row["cost"] == dashboard["finance"]["cost_all_time"] \
+        == portfolio_row["cost"] == 0.0
+    assert profit_row["revenue"] == dashboard["finance"]["revenue"] \
+        == portfolio_row["revenue"] == 80.0
+    assert profit_row["margin"] == dashboard["finance"]["margin"] \
+        == portfolio_row["margin"] == 80.0
+    assert dashboard["finance"]["analytic_classification"] == "odoo_profitability"
+    assert not any(r["code"] == "analytic_classification_fallback"
+                   for r in profitability["risks"])
+    assert not any(r["code"] == "analytic_classification_fallback"
+                   for r in portfolio["risks"])
+    assert "warnings" not in dashboard

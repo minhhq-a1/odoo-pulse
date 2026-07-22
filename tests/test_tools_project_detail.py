@@ -11,6 +11,7 @@ from odoo_pulse.services.projects.dashboard import (
     build_hours_section,
     weekly_logged,
 )
+from odoo_pulse.services.projects.finance import FALLBACK_WARNING
 from odoo_pulse.tools_project_detail import (
     portfolio_health,
     project_dashboard,
@@ -152,9 +153,12 @@ def test_core_section_shape(fake_client):
     assert ms["next_unreached"]["name"] == "1.2 Go-live"
     assert len(ms["list"]) == 2
     fin = core["finance"]
+    # Default fake schema has no analytic_profitability field -> the
+    # classifier degrades to the amount-sign fallback (still cost 1000 /
+    # revenue 200 for these seeded amounts) and reports it via a warning.
     assert fin == {"revenue": 200.0, "cost_all_time": 1000.0,
-                   "margin": -800.0}
-    assert core["warnings"] == []
+                   "margin": -800.0, "analytic_classification": "sign_fallback"}
+    assert core["warnings"] == [FALLBACK_WARNING]
 
 
 def test_core_section_missing_project_raises(fake_client):
@@ -173,8 +177,12 @@ def test_core_section_missing_delivery_hours_warns(fake_client):
     fake_client.fields_responses["project.project"] = schema
     core = build_core_section(fake_client, 59, 7, 7)
     assert core["project"]["delivery_hours"] is None
+    # both the missing-field warning and the analytic classifier's
+    # sign-fallback warning (default fake schema lacks
+    # analytic_profitability) are present.
     assert core["warnings"] == \
-        ["field delivery_hours does not exist on project.project"]
+        ["field delivery_hours does not exist on project.project",
+         FALLBACK_WARNING]
 
 
 def test_core_section_finance_soft_fails_independently(fake_client):

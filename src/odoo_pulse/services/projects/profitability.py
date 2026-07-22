@@ -25,6 +25,7 @@ from ...common.paging import fetch_with_truncation
 from ...common.reporting import build_report, distinct_companies
 from ...common.schema import ensure_field, optional_fields
 from .budget import budget_by_project, burn_verdict
+from .finance import FALLBACK_WARNING, analytic_money
 from .queries import account_ids_by_project, project_domain
 
 _TIMESHEET_HINT = ("Timesheets require the hr_timesheet app; install it to "
@@ -41,35 +42,6 @@ def validate_project_date(value: str | None, param: str) -> str | None:
     if not value:
         return None
     return parse_period_date(value, param).isoformat()
-
-
-def analytic_money(
-    client, account_ids: list[int], extra_domain: list | None = None
-) -> tuple[dict[int, float], dict[int, float]]:
-    """(cost_by_account, revenue_by_account) from account.analytic.line.
-
-    Cost comes back POSITIVE (analytic cost lines are negative in Odoo;
-    the sign is flipped here once, so every consumer shows the same
-    number). Fixed call order cost-then-revenue: consumers that bundle
-    this with other analytic-line calls must keep it inside one thunk.
-    """
-    if not account_ids:
-        return {}, {}
-    extra = list(extra_domain or [])
-    out: list[dict[int, float]] = []
-    for op in ("<", ">"):
-        agg = client.aggregate_records(
-            "account.analytic.line", group_by=["account_id"],
-            measures=[("amount", "sum")],
-            domain=[("account_id", "in", account_ids),
-                    ("amount", op, 0), *extra])
-        acc: dict[int, float] = {}
-        for row in agg.get("rows", []):
-            m2o = row.get("account_id")
-            if m2o:
-                acc[m2o[0]] = abs(row.get("amount:sum") or 0.0)
-        out.append(acc)
-    return out[0], out[1]
 
 
 def build_project_profitability_report(
@@ -109,8 +81,7 @@ def build_project_profitability_report(
         date_dom.append(("date", "<=", d_to))
 
     hours_by_project: dict[int, float] = {}
-    cost_by_account: dict[int, float] = {}
-    revenue_by_account: dict[int, float] = {}
+    money = analytic_money(client, [])
     by_employee: list[dict] = []
     by_task: list[dict] = []
     budgets: dict[int, float] = {}
@@ -129,7 +100,7 @@ def build_project_profitability_report(
                 "account.analytic.line", group_by=["project_id"],
                 measures=[("unit_amount", "sum")],
                 domain=[("project_id", "in", ids), *date_dom])
-            cost_by, revenue_by = analytic_money(
+            money = analytic_money(
                 client, account_ids, extra_domain=date_dom)
             emp = task = None
             if drill_id is not None:
@@ -143,15 +114,14 @@ def build_project_profitability_report(
                     measures=[("unit_amount", "sum")],
                     domain=[("project_id", "=", drill_id), *date_dom],
                     limit=top_n, order="unit_amount:sum desc")
-            return hours, cost_by, revenue_by, emp, task
+            return hours, money, emp, task
 
         fetched = gather_strict({
             "analytic": analytic_calls,
             "budget": lambda: budget_by_project(
                 client, ids, acct_by_project),
         })
-        hours_agg, cost_by_account, revenue_by_account, emp_agg, task_agg = \
-            fetched["analytic"]
+        hours_agg, money, emp_agg, task_agg = fetched["analytic"]
         budgets, budgets_available = fetched["budget"]
 
         for row in hours_agg.get("rows", []):
@@ -179,9 +149,9 @@ def build_project_profitability_report(
         alloc = ((p.get("allocated_hours") or 0.0)
                  if has_alloc_field else 0.0)
         acct_id = acct_by_project.get(pid)
-        cost = (cost_by_account.get(acct_id, 0.0)
+        cost = (money.cost_by_account.get(acct_id, 0.0)
                 if acct_id is not None else 0.0)
-        revenue = (revenue_by_account.get(acct_id, 0.0)
+        revenue = (money.revenue_by_account.get(acct_id, 0.0)
                    if acct_id is not None else 0.0)
         margin = revenue - cost
         budget = budgets.get(pid) if budgets_available else None
@@ -328,6 +298,12 @@ def build_project_profitability_report(
                 f"spans {', '.join(companies)}; filter by manager/"
                 "customer/project to compare like with like."),
         })
+    if money.classification == "sign_fallback":
+        risks.append({
+            "code": "analytic_classification_fallback",
+            "count": len(account_ids),
+            "message": FALLBACK_WARNING,
+        })
 
     breakdown: dict = {"projects": rows_out}
     if drill_id is not None:
@@ -345,4 +321,5 @@ def build_project_profitability_report(
                    "burn_pct_at_risk": burn_pct_at_risk,
                    "burn_pct_off_track": burn_pct_off_track},
                "budgets_available": budgets_available,
-               "burn_evaluated": burn_evaluated})
+               "burn_evaluated": burn_evaluated,
+               "analytic_classification": money.classification})

@@ -17,7 +17,7 @@ from ...common.paging import fetch_with_truncation
 from ...common.reporting import build_report
 from ...common.schema import optional_fields
 from .budget import budget_by_project
-from .profitability import analytic_money
+from .finance import FALLBACK_WARNING, analytic_money
 from .queries import (
     account_ids_by_project,
     milestones_by_project,
@@ -279,6 +279,7 @@ def build_portfolio_health(
     hours_by_project: dict[int, float] = {}
     cost_by: dict[int, float] = {}
     rev_by: dict[int, float] = {}
+    money = analytic_money(client, [])
     budgets: dict[int, float] = {}
     budgets_available = False
     milestones_truncation = None
@@ -299,7 +300,8 @@ def build_portfolio_health(
             if m2o:
                 hours_by_project[m2o[0]] = (
                     row.get("unit_amount:sum") or 0.0)
-        cost_by, rev_by = analytic_money(client, account_ids)
+        money = analytic_money(client, account_ids)
+        cost_by, rev_by = money.cost_by_account, money.revenue_by_account
         budgets, budgets_available = budget_by_project(
             client, ids, acct_by_project)
 
@@ -389,6 +391,12 @@ def build_portfolio_health(
             "code": "health_divergence", "count": divergent,
             "message": (f"{divergent} project(s) declared healthier "
                         "than the data")})
+    if money.classification == "sign_fallback":
+        risks.append({
+            "code": "analytic_classification_fallback",
+            "count": len(account_ids),
+            "message": FALLBACK_WARNING,
+        })
 
     return {"tool": "portfolio_health", "as_of": today.isoformat(),
             "filters": {"manager": manager, "customer": customer,
