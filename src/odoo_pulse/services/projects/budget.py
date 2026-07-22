@@ -98,6 +98,63 @@ def budget_sources(client, account_ids: list[int]):
         yield model, link, acct, amount, extra_domain
 
 
+def budget_match_domain(
+    project_ids: list[int], account_ids: list[int],
+    link_field: str | None, account_field: str | None,
+) -> list:
+    """Odoo prefix-notation domain matching budget lines to projects.
+
+    A direct project link is authoritative; the account leaf only picks up
+    UNLINKED lines ("|", project_leaf, "&", link=False, account_leaf) so a
+    line linked to some OTHER project never gets double-counted onto an
+    account it merely shares. An empty result means no usable match --
+    callers must skip the source entirely, not query all budget lines.
+    """
+    project_leaf = (
+        (link_field, "in", project_ids)
+        if link_field and project_ids else None
+    )
+    account_leaf = (
+        (account_field, "in", account_ids)
+        if account_field and account_ids else None
+    )
+    if project_leaf and account_leaf:
+        return [
+            "|", project_leaf, "&",
+            (link_field, "=", False), account_leaf,
+        ]
+    if project_leaf:
+        return [project_leaf]
+    if account_leaf:
+        return [account_leaf]
+    return []
+
+
+def project_ids_for_budget_row(
+    row: dict, *, requested_project_ids: set[int],
+    project_ids_by_account: dict[int, list[int]],
+    link_field: str | None, account_field: str | None,
+) -> list[int]:
+    """Which requested project id(s) a single budget-line row belongs to.
+
+    A truthy project link is authoritative and final: in scope -> that one
+    project; out of scope -> [] (must NOT fall through to the account --
+    that would leak spend from a project outside the request onto an
+    account it happens to share with an in-scope project). Only a falsy
+    link falls through to the account, and a shared/unlinked account maps
+    to every requested project on it (accepted double-count caveat, same
+    as budget_by_project's account aggregate).
+    """
+    project = row.get(link_field) if link_field else None
+    if project:
+        project_id = project[0]
+        return [project_id] if project_id in requested_project_ids else []
+    account = row.get(account_field) if account_field else None
+    if not account:
+        return []
+    return list(project_ids_by_account.get(account[0], []))
+
+
 def budget_by_project(
     client, project_ids: list[int], acct_by_project: dict[int, int]
 ) -> tuple[dict[int, float], bool]:
