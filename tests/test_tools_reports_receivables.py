@@ -3,6 +3,7 @@ import datetime as dt
 import json
 
 from odoo_pulse import tools_reports_finance
+from odoo_pulse.services import report_context
 
 # today fixed at 2026-06-30.
 INVOICES = [
@@ -18,7 +19,7 @@ INVOICES = [
 
 
 def _fix_today(monkeypatch):
-    monkeypatch.setattr(tools_reports_finance, "today_in_tz", lambda offset: dt.date(2026, 6, 30))
+    monkeypatch.setattr(report_context, "today_in_tz", lambda offset: dt.date(2026, 6, 30))
 
 
 def test_receivables_health_builds_domain(fake_client, monkeypatch):
