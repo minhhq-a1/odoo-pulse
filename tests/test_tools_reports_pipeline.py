@@ -3,6 +3,7 @@ import datetime as dt
 import json
 
 from odoo_pulse import tools_reports_sales
+from odoo_pulse.services import report_context
 
 # today is fixed at 2026-06-30; stalled_days=14 -> stalled if last stage
 # change is before 2026-06-16.
@@ -20,7 +21,7 @@ LEADS = [
 
 
 def _fix_today(monkeypatch):
-    monkeypatch.setattr(tools_reports_sales, "today_in_tz", lambda offset: dt.date(2026, 6, 30))
+    monkeypatch.setattr(report_context, "today_in_tz", lambda offset: dt.date(2026, 6, 30))
 
 
 def test_pipeline_review_builds_domain(fake_client, monkeypatch):
