@@ -3,6 +3,7 @@ import datetime as dt
 import json
 
 from odoo_pulse import tools_workflows
+from odoo_pulse.services import report_context
 
 
 # today is fixed at 2026-06-30 (cutoff 2026-07-07 with default lookahead 7).
@@ -34,7 +35,7 @@ def _setup(fake_client, tasks=TASKS):
 
 
 def _fix_today(monkeypatch):
-    monkeypatch.setattr(tools_workflows, "today_in_tz", lambda offset: dt.date(2026, 6, 30))
+    monkeypatch.setattr(report_context, "today_in_tz", lambda offset: dt.date(2026, 6, 30))
 
 
 def _task_search_call(fake_client):
