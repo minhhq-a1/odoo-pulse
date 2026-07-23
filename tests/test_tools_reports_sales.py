@@ -3,6 +3,7 @@ import datetime as dt
 import json
 
 from odoo_pulse import tools_reports_sales
+from odoo_pulse.services import report_context
 
 # today fixed at 2026-06-30; period_days=7 -> current period starts
 # 2026-06-23, previous period starts 2026-06-16.
@@ -19,7 +20,7 @@ LINE_AGG = [
 
 
 def _fix_today(monkeypatch):
-    monkeypatch.setattr(tools_reports_sales, "today_in_tz", lambda offset: dt.date(2026, 6, 30))
+    monkeypatch.setattr(report_context, "today_in_tz", lambda offset: dt.date(2026, 6, 30))
 
 
 def _prime(fake_client):
