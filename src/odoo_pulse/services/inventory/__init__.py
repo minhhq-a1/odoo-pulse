@@ -1,0 +1,1 @@
+"""Inventory report services."""
