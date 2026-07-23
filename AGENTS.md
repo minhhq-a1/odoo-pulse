@@ -30,24 +30,25 @@ make playground-reset    # wipe the playground (drops the database)
 
 This is an MCP server that exposes Odoo's XML-RPC external API as MCP tools. The entry point is `src/odoo_pulse/server.py`, which calls `mcp.registry.load_enabled_modules()` to import the tool modules selected by `ODOO_TOOL_GROUPS` as side effects — each import registers `@mcp.tool()` (and, for `mcp.resources`, `@mcp.resource()`) functions with the shared FastMCP instance.
 
-As of this refactor the package is split into layered subpackages (`core`, `mcp`, `common`, `services`) plus the transitional flat tool modules that still hold the decorated adapters. Project business logic is now fully consolidated under `services/projects/`; adapter migration for the remaining domains is pending Plan 4.
+As of this refactor the package is split into layered subpackages (`core`, `mcp`, `common`, `services`) plus the transitional flat tool modules that hold thin decorated adapters. All report business logic is consolidated under `services/` (`report_context.py`, `pulse.py`, `crm/`, `sales/`, `finance/`, `hr/`, `inventory/`, `operations/`, and `projects/`).
 
 **Module responsibilities:**
 
 - `src/odoo_pulse/core/` — config, errors, cache, timeout transports, XML-RPC client, write guards
 - `src/odoo_pulse/mcp/` — FastMCP app, lazy client runtime, JSON result boundary, registry, resource adapter
 - `src/odoo_pulse/common/` — dates/domains, paging, schema, money, reporting, concurrency; no MCP/global client
+- `src/odoo_pulse/services/report_context.py` — immutable context (client, today, timezone_offset, company_id) and company domain helper
 - `src/odoo_pulse/services/records.py` — record read service for the MCP resource
 - `src/odoo_pulse/services/writes.py` — dry-run preview shaping
-- `src/odoo_pulse/services/projects/queries.py` — project filters, account identity/mapping, milestone grouping, archived user resolution
-- `src/odoo_pulse/services/projects/subtasks.py` — task-state fallbacks, subtask queries/filters, hour totals and monthly buckets
-- `src/odoo_pulse/services/projects/health.py` — derived project health, project-status and portfolio-health payloads
-- `src/odoo_pulse/services/projects/finance.py` — Odoo-aware analytic cost/revenue classification, sign normalization, and fallback metadata
-- `src/odoo_pulse/services/projects/budget.py` — budget discovery/fallbacks, canonical match domains/assignment and per-line magnitudes, budget context/detail and project-budget payload
-- `src/odoo_pulse/services/projects/profitability.py` — report dates, delivery hours, margin/burn shaping, and project-profitability payload
-- `src/odoo_pulse/services/projects/dashboard.py` — project dashboard section orchestration and partial degradation
-- `src/odoo_pulse/tools_workflows.py` / `tools_reports_projects.py` / `tools_project_detail.py` — explicit MCP adapters; `team_workload` and `standup_digest` remain in `tools_workflows` pending Plan 4
-- `src/odoo_pulse/tools_*.py` and `domain_tools.py` — explicit decorated adapters remain flat until later plans
+- `src/odoo_pulse/services/pulse.py` — cross-department business pulse report orchestrating domain metrics
+- `src/odoo_pulse/services/crm/` — CRM metrics (`new_leads`) and pipeline review service
+- `src/odoo_pulse/services/sales/` — Sales metrics (`confirmed_sales`) and sales snapshot service
+- `src/odoo_pulse/services/finance/` — Finance metrics (`overdue_receivables`) and receivables health service
+- `src/odoo_pulse/services/hr/` — HR metrics (`employees_off`) and absence overview service
+- `src/odoo_pulse/services/inventory/` — Inventory risk report service
+- `src/odoo_pulse/services/operations/` — Procurement watch and production health report services
+- `src/odoo_pulse/services/projects/` — Project queries, subtask metrics, health, finance, budget, profitability, dashboard, workload, standup, and overdue metrics
+- `src/odoo_pulse/tools_*.py` — explicit decorated adapters; their physical reorganization into tool subpackages remains Plan 5
 
 **Write safety chain** (all four must pass for any write to execute):
 1. `ODOO_READ_ONLY=false` — master switch (default: `true`, blocking all writes)
