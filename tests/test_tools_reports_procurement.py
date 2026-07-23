@@ -3,6 +3,7 @@ import datetime as dt
 import json
 
 from odoo_pulse import tools_reports_ops
+from odoo_pulse.services import report_context
 
 # today fixed at 2026-06-30
 POS = [
@@ -24,7 +25,7 @@ LINE_SCHEMA = {
 
 def _fix_today(monkeypatch):
     monkeypatch.setattr(
-        tools_reports_ops, "today_in_tz", lambda offset: dt.date(2026, 6, 30))
+        report_context, "today_in_tz", lambda offset: dt.date(2026, 6, 30))
 
 
 def test_procurement_watch_domain(fake_client, monkeypatch):
