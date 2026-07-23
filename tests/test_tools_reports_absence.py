@@ -3,6 +3,7 @@ import datetime as dt
 import json
 
 from odoo_pulse import tools_reports_hr
+from odoo_pulse.services import report_context
 
 # today fixed at 2026-06-30; days=14 -> window ends 2026-07-14.
 APPROVED = [
@@ -27,7 +28,7 @@ HEADCOUNT = [
 
 
 def _fix_today(monkeypatch):
-    monkeypatch.setattr(tools_reports_hr, "today_in_tz", lambda offset: dt.date(2026, 6, 30))
+    monkeypatch.setattr(report_context, "today_in_tz", lambda offset: dt.date(2026, 6, 30))
 
 
 def _setup(fake_client):
