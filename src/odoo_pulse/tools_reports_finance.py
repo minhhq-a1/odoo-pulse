@@ -41,4 +41,3 @@ def receivables_health(
         company=company, overdue_pct_at_risk=overdue_pct_at_risk,
         overdue_pct_off_track=overdue_pct_off_track,
     ))
-

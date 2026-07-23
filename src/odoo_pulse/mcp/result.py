@@ -36,4 +36,3 @@ def safe_text(func: Callable[[], str]) -> str:
             ensure_ascii=False,
             indent=2,
         )
-

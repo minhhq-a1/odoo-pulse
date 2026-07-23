@@ -96,4 +96,3 @@ def sales_snapshot(
         growth_threshold_pct=growth_threshold_pct,
         company=company, trend_weeks=trend_weeks,
     ))
-

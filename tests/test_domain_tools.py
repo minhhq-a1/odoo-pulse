@@ -192,4 +192,3 @@ def test_document_tool_serialises_client_construction_error(
     out = json.loads(func(**kwargs))
     assert out == {
         "error": "Missing required environment variables: ODOO_API_KEY"}
-

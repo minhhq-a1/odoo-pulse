@@ -31,4 +31,3 @@ def test_plan4_service_modules_are_packaged_and_importable():
         "odoo_pulse.services.projects.standup",
     ]
     assert [importlib.import_module(name).__name__ for name in modules] == modules
-

@@ -317,5 +317,3 @@ def test_pipeline_review_not_truncated_has_no_partial_fields(fake_client, monkey
     out = json.loads(tools_reports_sales.pipeline_review())
     assert "partial_fields" not in out["summary"]
     assert "truncated" not in out["summary"]
-
-

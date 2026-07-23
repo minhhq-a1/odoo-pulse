@@ -69,4 +69,3 @@ def production_health(
         get_client(), stuck_days=stuck_days, top_n=top_n,
         timezone_offset=timezone_offset, company=company,
     ))
-

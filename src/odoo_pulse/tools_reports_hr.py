@@ -36,4 +36,3 @@ def absence_overview(
         get_client(), days=days, coverage_threshold=coverage_threshold,
         timezone_offset=timezone_offset,
     ))
-

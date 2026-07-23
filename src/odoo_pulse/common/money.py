@@ -34,4 +34,3 @@ def aggregate_currency_totals(
     return count, round(total, 2), {
         name: round(value, 2) for name, value in by_currency.items()
     }
-

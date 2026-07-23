@@ -111,5 +111,3 @@ def standup_digest(
         get_client(), project=project, exclude_stages=exclude_stages,
         lookahead_days=lookahead_days, timezone_offset=timezone_offset,
     ))
-
-

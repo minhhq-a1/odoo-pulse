@@ -129,5 +129,3 @@ def test_list_timesheets_friendly_error_without_hr_timesheet(fake_client):
         "name": {"type": "char"}}
     out = json.loads(tools_projects.list_timesheets())
     assert "hr_timesheet" in out["error"]
-
-

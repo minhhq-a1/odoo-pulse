@@ -254,4 +254,3 @@ def test_plan4_tool_descriptions_and_input_schemas_match_registry_contract():
         for name, contract in sorted(contracts.items())
     }
     assert actual == EXPECTED_PLAN4_TOOL_CONTRACT
-
