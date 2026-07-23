@@ -11,7 +11,7 @@ from odoo_pulse.common.dates import date_domain, parse_date_parameter
 from odoo_pulse.common.domains import name_domain
 from odoo_pulse.mcp import app
 from odoo_pulse.mcp import runtime as mcp_runtime
-from odoo_pulse.mcp.result import safe
+from odoo_pulse.mcp.result import safe, safe_text
 from odoo_pulse.services.writes import preview
 
 
@@ -111,6 +111,38 @@ def test_safe_serialises_unexpected_exceptions():
 
     out = json.loads(safe(boom))
     assert out["error"].startswith("internal error: KeyError")
+
+
+def test_safe_text_returns_success_unchanged():
+    markdown = "## 🗓️ Daily Standup — Dự án"
+    assert safe_text(lambda: markdown) == markdown
+
+
+def test_safe_text_catches_odoo_error():
+    from odoo_pulse.core.errors import OdooError
+
+    def boom():
+        raise OdooError("không có model")
+
+    assert json.loads(safe_text(boom)) == {"error": "không có model"}
+
+
+def test_safe_text_catches_config_error():
+    from odoo_pulse.core.errors import OdooConfigError
+
+    def boom():
+        raise OdooConfigError("missing config")
+
+    assert json.loads(safe_text(boom)) == {"error": "missing config"}
+
+
+def test_safe_text_hides_unexpected_traceback():
+    def boom():
+        raise KeyError("name")
+
+    assert json.loads(safe_text(boom))["error"].startswith(
+        "internal error: KeyError"
+    )
 
 
 def test_get_client_is_singleton_under_concurrency(monkeypatch):
