@@ -2,7 +2,7 @@
 import datetime as dt
 import json
 
-from odoo_pulse import tools_reports_sales
+from odoo_pulse.tools.reports import crm as tools_reports_sales
 from odoo_pulse.services import report_context
 
 # today is fixed at 2026-06-30; stalled_days=14 -> stalled if last stage
@@ -203,7 +203,7 @@ def test_pipeline_review_flags_mixed_companies(fake_client, monkeypatch):
 def test_stalled_uses_local_date_of_stage_update(fake_client):
     import json
     from datetime import timedelta
-    from odoo_pulse import tools_reports_sales
+    from odoo_pulse.tools.reports import crm as tools_reports_sales
     from odoo_pulse.common.dates import today_in_tz
 
     today = today_in_tz(7)

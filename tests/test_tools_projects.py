@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 
-from odoo_pulse import tools_workflows
 from odoo_pulse.tools.lists import project as tools_projects
+from odoo_pulse.tools.reports import projects as tools_workflows
 
 
 def test_list_tasks_default_excludes_subtasks(fake_client):
@@ -73,7 +73,7 @@ def test_standup_digest_renders_markdown_header(fake_client):
 
 
 def test_standup_digest_warns_on_truncation(fake_client):
-    from odoo_pulse import tools_workflows
+    from odoo_pulse.tools.reports import projects as tools_workflows
 
     # exactly max_records rows returned + a larger search_count => truncated
     fake_client.config.max_records = 2
@@ -107,7 +107,7 @@ def test_standup_digest_uses_stable_state_not_localized_stage_name(fake_client):
 
 def test_standup_digest_shaping_bug_returns_json_error(fake_client):
     import json
-    from odoo_pulse import tools_workflows
+    from odoo_pulse.tools.reports import projects as tools_workflows
 
     # a task row missing user_ids triggers a shaping KeyError path safely
     fake_client.search_responses["project.task"] = [

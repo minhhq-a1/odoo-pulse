@@ -1,16 +1,11 @@
-# odoo_pulse/tools_reports_pulse.py
-"""Cross-department pulse report: the one-call company briefing.
-
-Same composition style as tools_workflows: bounded reads shaped into the
-build_report envelope with a rule-based verdict. Read-only.
-"""
+"""Cross-department pulse report tools."""
 
 from __future__ import annotations
 
-from .mcp.app import mcp
-from .mcp.result import safe
-from .mcp.runtime import get_client
-from .services.pulse import build_business_pulse
+from ...mcp.app import mcp
+from ...mcp.result import safe
+from ...mcp.runtime import get_client
+from ...services.pulse import build_business_pulse
 
 
 @mcp.tool()

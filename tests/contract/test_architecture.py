@@ -41,27 +41,29 @@ def test_services_do_not_import_mcp_or_tool_adapters():
 
 def test_plan4_adapters_are_thin_and_delegate_to_designated_builders():
     adapters = {
-        "tools_reports_sales.py": {
+        "tools/reports/crm.py": {
             "pipeline_review": ("safe", "build_pipeline_review"),
+        },
+        "tools/reports/sales.py": {
             "sales_snapshot": ("safe", "build_sales_snapshot"),
         },
-        "tools_reports_finance.py": {
+        "tools/reports/finance.py": {
             "receivables_health": ("safe", "build_receivables_health"),
         },
-        "tools_reports_hr.py": {
+        "tools/reports/hr.py": {
             "absence_overview": ("safe", "build_absence_overview"),
         },
-        "tools_reports_inventory.py": {
+        "tools/reports/inventory.py": {
             "inventory_risk": ("safe", "build_inventory_risk"),
         },
-        "tools_reports_ops.py": {
+        "tools/reports/operations.py": {
             "procurement_watch": ("safe", "build_procurement_watch"),
             "production_health": ("safe", "build_production_health"),
         },
-        "tools_reports_pulse.py": {
+        "tools/reports/pulse.py": {
             "business_pulse": ("safe", "build_business_pulse"),
         },
-        "tools_workflows.py": {
+        "tools/reports/projects.py": {
             "team_workload": ("safe", "build_team_workload"),
             "standup_digest": ("safe_text", "build_standup_digest"),
         },

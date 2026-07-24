@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from odoo_pulse import tools_reports_pulse
+from odoo_pulse.tools.reports import pulse as tools_reports_pulse
 from odoo_pulse.services import report_context
 
 # today fixed at 2026-06-30 -> "yesterday" is 2026-06-29.

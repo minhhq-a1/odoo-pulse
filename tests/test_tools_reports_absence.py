@@ -2,7 +2,7 @@
 import datetime as dt
 import json
 
-from odoo_pulse import tools_reports_hr
+from odoo_pulse.tools.reports import hr as tools_reports_hr
 from odoo_pulse.services import report_context
 
 # today fixed at 2026-06-30; days=14 -> window ends 2026-07-14.
@@ -87,7 +87,7 @@ def test_absence_overview_clear_when_quiet(fake_client, monkeypatch):
 def test_off_today_counts_leave_ending_late_utc_yesterday(fake_client):
     import json
     from datetime import timedelta
-    from odoo_pulse import tools_reports_hr
+    from odoo_pulse.tools.reports import hr as tools_reports_hr
     from odoo_pulse.common.dates import today_in_tz
 
     today = today_in_tz(7)

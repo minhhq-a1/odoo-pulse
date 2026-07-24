@@ -2,7 +2,7 @@
 import datetime as dt
 import json
 
-from odoo_pulse import tools_reports_ops
+from odoo_pulse.tools.reports import operations as tools_reports_ops
 from odoo_pulse.services import report_context
 
 # today fixed at 2026-06-30
@@ -111,7 +111,7 @@ def test_procurement_watch_company_filter(fake_client, monkeypatch):
 def test_late_receipt_uses_local_date_of_date_planned(fake_client):
     import json
     from datetime import timedelta
-    from odoo_pulse import tools_reports_ops
+    from odoo_pulse.tools.reports import operations as tools_reports_ops
     from odoo_pulse.common.dates import today_in_tz
 
     today = today_in_tz(7)

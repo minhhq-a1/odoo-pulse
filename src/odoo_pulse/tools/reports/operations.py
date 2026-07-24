@@ -1,17 +1,12 @@
-# odoo_pulse/tools_reports_ops.py
-"""Operations report tools: purchasing and manufacturing health.
-
-Same composition style as tools_workflows: bounded reads shaped into the
-build_report envelope with a rule-based verdict. Read-only.
-"""
+"""Operations report tools."""
 
 from __future__ import annotations
 
-from .mcp.app import mcp
-from .mcp.result import safe
-from .mcp.runtime import get_client
-from .services.operations.procurement import build_procurement_watch
-from .services.operations.production import build_production_health
+from ...mcp.app import mcp
+from ...mcp.result import safe
+from ...mcp.runtime import get_client
+from ...services.operations.procurement import build_procurement_watch
+from ...services.operations.production import build_production_health
 
 
 @mcp.tool()

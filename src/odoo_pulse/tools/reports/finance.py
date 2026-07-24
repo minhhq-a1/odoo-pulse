@@ -1,16 +1,11 @@
-# odoo_pulse/tools_reports_finance.py
-"""Finance report tools: AR/AP aging and who owes what.
-
-Same composition style as tools_workflows: bounded reads shaped into the
-build_report envelope with a rule-based verdict. Read-only.
-"""
+"""Finance report tools."""
 
 from __future__ import annotations
 
-from .mcp.app import mcp
-from .mcp.result import safe
-from .mcp.runtime import get_client
-from .services.finance.receivables import build_receivables_health
+from ...mcp.app import mcp
+from ...mcp.result import safe
+from ...mcp.runtime import get_client
+from ...services.finance.receivables import build_receivables_health
 
 
 @mcp.tool()

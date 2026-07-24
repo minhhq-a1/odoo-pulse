@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from odoo_pulse import tools_reports_projects
+from odoo_pulse.tools.reports import projects as tools_reports_projects
 from odoo_pulse.core.errors import OdooError
 from odoo_pulse.services.projects import profitability
 from odoo_pulse.services.projects.budget import budget_by_project, burn_verdict

@@ -12,7 +12,7 @@ from odoo_pulse.services.projects.dashboard import (
     weekly_logged,
 )
 from odoo_pulse.services.projects.finance import FALLBACK_WARNING
-from odoo_pulse.tools_project_detail import (
+from odoo_pulse.tools.reports.projects import (
     portfolio_health,
     project_dashboard,
     project_subtask_hours,
@@ -93,7 +93,7 @@ def test_subtask_hours_bad_period_is_clean_error(fake_client):
 
 def test_module_registered_in_reports_group():
     from odoo_pulse.mcp.registry import GROUP_MODULES
-    assert "tools_project_detail" in GROUP_MODULES["reports"]
+    assert "tools.reports.projects" in GROUP_MODULES["reports"]
 
 
 _PROJECT_SCHEMA = {

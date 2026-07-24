@@ -2,7 +2,7 @@
 import datetime as dt
 import json
 
-from odoo_pulse import tools_reports_projects
+from odoo_pulse.tools.reports import projects as tools_reports_projects
 from odoo_pulse.core.errors import OdooError
 from odoo_pulse.services.projects import budget
 from odoo_pulse.services.projects.finance import FALLBACK_WARNING

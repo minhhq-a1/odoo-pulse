@@ -2,7 +2,7 @@
 import datetime as dt
 import json
 
-from odoo_pulse import tools_reports_sales
+from odoo_pulse.tools.reports import sales as tools_reports_sales
 from odoo_pulse.services import report_context
 
 # today fixed at 2026-06-30; period_days=7 -> current period starts

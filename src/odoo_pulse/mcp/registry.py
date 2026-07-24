@@ -15,10 +15,16 @@ import os
 # group name -> module names inside the odoo_pulse package
 GROUP_MODULES: dict[str, tuple[str, ...]] = {
     "core": ("tools.generic", "tools.writes", "mcp.resources"),
-    "reports": ("tools_workflows", "tools_reports_sales", "tools_reports_finance",
-                "tools_reports_inventory", "tools_reports_hr",
-                "tools_reports_pulse", "tools_reports_ops",
-                "tools_reports_projects", "tools_project_detail"),
+    "reports": (
+        "tools.reports.crm",
+        "tools.reports.sales",
+        "tools.reports.finance",
+        "tools.reports.inventory",
+        "tools.reports.hr",
+        "tools.reports.pulse",
+        "tools.reports.operations",
+        "tools.reports.projects",
+    ),
     "business": ("domain_tools",),
     "hr": ("tools.lists.hr",),
     "projects": ("tools.lists.project",),

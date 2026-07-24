@@ -2,7 +2,7 @@
 import datetime as dt
 import json
 
-from odoo_pulse import tools_reports_finance
+from odoo_pulse.tools.reports import finance as tools_reports_finance
 from odoo_pulse.services import report_context
 
 # today fixed at 2026-06-30.
