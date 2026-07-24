@@ -3,7 +3,7 @@
 # assert every hero report tells its story, then tear everything down.
 set -euo pipefail
 
-COMPOSE="docker compose -f docker-compose.playground.yml"
+COMPOSE="docker compose -f deploy/playground/compose.yml"
 export ODOO_URL=http://localhost:8069 ODOO_DB=playground \
        ODOO_USERNAME=admin ODOO_API_KEY=admin ODOO_READ_ONLY=true
 
@@ -27,12 +27,14 @@ done
 echo "==> Verifying report tools"
 python3 - <<'PY'
 import json, sys
-from odoo_pulse.tools_reports_sales import pipeline_review, sales_snapshot
-from odoo_pulse.tools_reports_finance import receivables_health
-from odoo_pulse.tools_reports_inventory import inventory_risk
-from odoo_pulse.tools_reports_hr import absence_overview
-from odoo_pulse.tools_reports_pulse import business_pulse
-from odoo_pulse.tools_reports_projects import project_profitability
+from odoo_pulse.tools.reports.crm import pipeline_review
+from odoo_pulse.tools.reports.sales import sales_snapshot
+from odoo_pulse.tools.reports.finance import receivables_health
+from odoo_pulse.tools.reports.inventory import inventory_risk
+from odoo_pulse.tools.reports.hr import absence_overview
+from odoo_pulse.tools.reports.pulse import business_pulse
+from odoo_pulse.tools.reports.projects import project_profitability
+
 checks = {
     "pipeline_review": lambda r: r["summary"]["verdict"] in ("at_risk", "off_track"),
     "sales_snapshot": lambda r: r["summary"]["stale_quotations"] >= 1,

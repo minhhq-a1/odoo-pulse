@@ -14,7 +14,7 @@ QUALIFIED_NAME="minhhq/odoo-pulse"
 # (registry.smithery.ai serves a heavily-cached view that can lag for minutes.)
 REGISTRY_API="https://api.smithery.ai/servers/${QUALIFIED_NAME}"
 
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 
 # ---- 0. Preconditions -------------------------------------------------------
 if [[ -z "${SMITHERY_API_KEY:-}" ]]; then

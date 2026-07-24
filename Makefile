@@ -1,4 +1,4 @@
-COMPOSE = docker compose -f docker-compose.playground.yml
+COMPOSE = docker compose -f deploy/playground/compose.yml
 
 .PHONY: playground playground-reset playground-smoke
 
@@ -10,4 +10,4 @@ playground-reset:      ## Wipe the playground (drops the database)
 	$(COMPOSE) down -v
 
 playground-smoke:      ## End-to-end: boot, seed, assert reports, tear down
-	./scripts/playground_smoke.sh
+	./scripts/smoke/playground.sh

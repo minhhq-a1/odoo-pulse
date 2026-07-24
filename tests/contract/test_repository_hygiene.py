@@ -45,3 +45,29 @@ def test_shipped_docs_are_visible_and_do_not_reference_internal_plans():
         )
         assert ignored.returncode == 1, f"Shipped doc is ignored: {relative}"
         assert "docs/superpowers/" not in path.read_text(), f"Internal plan link found in: {relative}"
+
+
+def test_active_repository_paths_use_final_layout():
+    expected = [
+        "scripts/assets/make_icon.py",
+        "scripts/assets/make_og.py",
+        "scripts/demo/demo.tape",
+        "scripts/demo/demo_pulse.py",
+        "scripts/release/publish_smithery.sh",
+        "scripts/release/sync_version.py",
+        "scripts/smoke/live.py",
+        "scripts/smoke/playground.sh",
+        "scripts/smoke/project_status.py",
+        "deploy/playground/compose.yml",
+        "deploy/playground/seed/seed.py",
+    ]
+    assert all((ROOT / path).is_file() for path in expected)
+    stale = [
+        "docker-compose.playground.yml", "docker/seed/seed.py",
+        "scripts/demo.tape", "scripts/demo_pulse.py",
+        "scripts/make_icon.py", "scripts/make_og.py",
+        "scripts/playground_smoke.sh", "scripts/publish_smithery.sh",
+        "scripts/smoke_live.py", "scripts/smoke_project_status.py",
+    ]
+    assert all(not (ROOT / path).exists() for path in stale)
+

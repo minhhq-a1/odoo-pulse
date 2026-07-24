@@ -25,4 +25,4 @@ jobs:
       - name: Install odoo-pulse
         run: pip install -e .
       - name: Run playground smoke
-        run: ./scripts/playground_smoke.sh
+        run: ./scripts/smoke/playground.sh
