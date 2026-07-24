@@ -11,8 +11,8 @@ field-name or aggregate-key-shape mismatches on a specific Odoo version.
 
 Usage:
     cp .env.example .env      # fill in your ODOO_* credentials
-    python scripts/smoke_live.py
-    python scripts/smoke_live.py --env /path/to/.env --limit 1
+    python scripts/smoke/live.py
+    python scripts/smoke/live.py --env /path/to/.env --limit 1
 
 It stays read-only and never creates/updates/deletes anything.
 """
@@ -25,7 +25,7 @@ import os
 import sys
 from pathlib import Path
 
-# Allow running as a plain script (python scripts/smoke_live.py) by making the
+# Allow running as a plain script (python scripts/smoke/live.py) by making the
 # repo root importable, since sys.path[0] would otherwise be scripts/.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 

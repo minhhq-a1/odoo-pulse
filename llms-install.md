@@ -27,7 +27,7 @@ Ask the user for these, and set them as environment variables on the server:
   `engagement`, `niche`) or set `all` for everything.
 
 If the user has no Odoo instance, they can run the bundled demo:
-`docker compose -f docker-compose.playground.yml up -d` (database `playground`,
+`docker compose -f deploy/playground/compose.yml up -d` (database `playground`,
 login `admin`/`admin` at `http://localhost:8069`).
 
 ## Step 2 — add the server to the MCP client config

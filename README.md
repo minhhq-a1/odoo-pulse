@@ -62,7 +62,7 @@ No Odoo account? Boot a demo Odoo pre-seeded with a story to tell (a stalled
 deal, a 90-day-overdue invoice, a stock shortage, someone off today):
 
 ```bash
-docker compose -f docker-compose.playground.yml up -d
+docker compose -f deploy/playground/compose.yml up -d
 ```
 
 First boot pulls ~4 GB of images (Odoo + Postgres) and seeds the demo data —

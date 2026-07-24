@@ -16,4 +16,4 @@ build
 *.egg-info
 .env
 .DS_Store
-docker-compose.playground.yml
+deploy/playground/compose.yml

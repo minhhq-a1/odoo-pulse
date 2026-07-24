@@ -505,12 +505,12 @@ server loads `.env` automatically from the working directory.
 
 ### Live smoke test (against a real Odoo)
 
-`scripts/smoke_live.py` connects with your `.env` credentials and calls every
+`scripts/smoke/live.py` connects with your `.env` credentials and calls every
 read-only list tool once — staying read-only, never writing:
 
 ```bash
 cp .env.example .env      # fill in your ODOO_* credentials
-python scripts/smoke_live.py
+python scripts/smoke/live.py
 ```
 
 Each tool reports `ok` (works, with record count), `skip` (app not installed —

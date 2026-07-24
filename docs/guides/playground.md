@@ -7,7 +7,7 @@ task — so the report tools have something real to say.
 ## 1. Boot the playground
 
 ```bash
-docker compose -f docker-compose.playground.yml up -d
+docker compose -f deploy/playground/compose.yml up -d
 ```
 
 First boot pulls ~4 GB of images (Odoo + Postgres), installs Odoo apps and
@@ -15,7 +15,7 @@ demo data, then seeds the story — allow 5-10 minutes depending on your
 connection. Follow along with:
 
 ```bash
-docker compose -f docker-compose.playground.yml logs -f seed
+docker compose -f deploy/playground/compose.yml logs -f seed
 ```
 
 When you see `[seed] done`, Odoo is ready at http://localhost:8069
@@ -63,7 +63,7 @@ try `pipeline_review`, `receivables_health`, or `inventory_risk`.
 ## Reset / tear down
 
 ```bash
-docker compose -f docker-compose.playground.yml down -v
+docker compose -f deploy/playground/compose.yml down -v
 ```
 
 `-v` drops the database so the next `up` re-seeds from scratch.

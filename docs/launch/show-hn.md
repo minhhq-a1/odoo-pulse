@@ -31,7 +31,7 @@ Design choices that mattered:
 - Mixed currencies are never silently summed — you get a by_currency
   breakdown and a risk flag instead of a wrong total.
 - No live Odoo needed to try it: `docker compose -f
-  docker-compose.playground.yml up -d` boots a seeded demo with a story
+  deploy/playground/compose.yml up -d` boots a seeded demo with a story
   (stalled deal, 90-day overdue invoice, stock shortage, someone off).
 
 Would love feedback on the report design — especially what "one-call
