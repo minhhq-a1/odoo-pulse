@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 
 PROBE = r"""
@@ -40,25 +41,25 @@ async def main():
         str(template.uriTemplate)
         for template in await mcp.list_resource_templates()
     )
-    project_contracts = {
+    contracts = {
         tool.name: {
             "description": tool.description,
             "input_schema": tool.inputSchema,
         }
         for tool in registered
-        if tool.name in PROJECT_TOOL_NAMES
+    }
+    project_contracts = {
+        name: contract for name, contract in contracts.items()
+        if name in PROJECT_TOOL_NAMES
     }
     plan4_contracts = {
-        tool.name: {
-            "description": tool.description,
-            "input_schema": tool.inputSchema,
-        }
-        for tool in registered
-        if tool.name in PLAN4_TOOL_NAMES
+        name: contract for name, contract in contracts.items()
+        if name in PLAN4_TOOL_NAMES
     }
     print(json.dumps({
         "tools": [tool.name for tool in registered],
         "resource_templates": templates,
+        "contracts": contracts,
         "project_contracts": project_contracts,
         "plan4_contracts": plan4_contracts,
     }, sort_keys=True))
@@ -188,6 +189,9 @@ EXPECTED_PLAN4_TOOL_CONTRACT = {
 }
 
 
+FIXTURE_PATH = Path(__file__).parent / "fixtures" / "mcp_surface.json"
+
+
 def text_sha256(value: str) -> str:
     # Normalize with inspect.cleandoc so the fingerprint is stable across
     # Python versions. CPython 3.13 changed the compiler to strip common
@@ -294,3 +298,24 @@ def test_text_sha256_is_stable_across_docstring_dedent_policy():
     assert text_sha256(raw_indented) == hashlib.sha256(
         inspect.cleandoc(raw_indented).encode()
     ).hexdigest()
+
+
+def test_every_registered_tool_matches_complete_contract_fixture():
+    expected = json.loads(FIXTURE_PATH.read_text())
+    surface = probe_surface("all")
+    group_by_tool = {
+        tool: group
+        for group, tools in EXPECTED_BY_GROUP.items()
+        for tool in tools
+    }
+    actual = {
+        name: {
+            "group": group_by_tool[name],
+            "description_sha256": text_sha256(contract["description"]),
+            "input_schema_sha256": json_sha256(contract["input_schema"]),
+        }
+        for name, contract in sorted(surface["contracts"].items())
+    }
+    assert len(actual) == 88
+    assert actual == expected
+

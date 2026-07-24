@@ -1,0 +1,442 @@
+{
+  "absence_overview": {
+    "group": "reports",
+    "description_sha256": "288b185244ad232264e705f98d569f4b467b1fe93dbf16a6e0696681dde55982",
+    "input_schema_sha256": "26e7522bbd5618744c164bd5916ddb44dfbabcce9c1530cab774bfe24abde682"
+  },
+  "aggregate_records": {
+    "group": "core",
+    "description_sha256": "2f3606c7fbff571a44533b0be2efcf46474ea0eb6e53049977d72df753a11440",
+    "input_schema_sha256": "f2648d8e27720b630ee78de43abe67486e7df5c6c68e9bc0626cd5f3838d6031"
+  },
+  "business_pulse": {
+    "group": "reports",
+    "description_sha256": "63a262a45d307e86e8b2403e58101c59badcdce87078507d41aebe409f68c139",
+    "input_schema_sha256": "718ba0ee33c2587f5b05032612244f65d06a89737f2cbbdbdd0e028f06e9260b"
+  },
+  "check_stock": {
+    "group": "business",
+    "description_sha256": "78ef61e631badbb990973989b71f7f7e352556a5ef86a8d6d670bfed09bfca38",
+    "input_schema_sha256": "aa1313cfe9f7674772d541abb0828528d9f3d4f404760daefdc557f182070110"
+  },
+  "confirm_sale_order": {
+    "group": "core",
+    "description_sha256": "0a9e6d7d45a3e6129367d04fb5258f063d3cfaae9740e2c3ee6c17671322e029",
+    "input_schema_sha256": "6257959ee03989d7b176fe34e6526d194bfc53e5ac1a3da0adc819bf1b245344"
+  },
+  "create_contact": {
+    "group": "core",
+    "description_sha256": "239b04c6c233c6ea047cf0181350e7f42405b56c75fa7101525362397d81ff75",
+    "input_schema_sha256": "93c5e5b0870989852c5a5c681ce6a2b2db3d2540ff37370a7860dc98aadd9fd4"
+  },
+  "create_lead": {
+    "group": "core",
+    "description_sha256": "d3e558f6b4e54dd19318e885cf0bb8e22d4f82b1ab34b6d45aff1424bff2f5b6",
+    "input_schema_sha256": "c42f53eea9834b41c10bdba25c467c4c5d2e5f5287c58594c8de87ba90c6affb"
+  },
+  "create_record": {
+    "group": "core",
+    "description_sha256": "bca645a7f9fcadf25d000d4b4aee5e855732e9eda54d9ead5b44203eacfc73e2",
+    "input_schema_sha256": "5d2a7d38e5f56403cdfaddba64b2ed91eadbac6d10935595be175b5e9b8daf26"
+  },
+  "create_task": {
+    "group": "core",
+    "description_sha256": "5bd347f3bae8399895f41854886f65f2f2409df505dad72c859fa679fad3c881",
+    "input_schema_sha256": "0187bae9ba0a6fa8c2acaf64e8efa3a8d4a7654f263a1d040c8b7aa01d834215"
+  },
+  "delete_records": {
+    "group": "core",
+    "description_sha256": "2990865d88f41701c1a32413e13be36843e3605857cc7e61dd8dd49d67a9e9e1",
+    "input_schema_sha256": "016cafc747bb15f7c70d5a9e4b359021e9260befe44353e4e7f41465a6399924"
+  },
+  "find_partner": {
+    "group": "business",
+    "description_sha256": "c6801feaaa97c1be032002263f249f92138018e8c3c942699b43adedf884a2a2",
+    "input_schema_sha256": "a3f428d55aa567c6b1ebfa679cbadacf80da1102dc00b7af3aa6da3f97c6b997"
+  },
+  "find_products": {
+    "group": "business",
+    "description_sha256": "7191c65d2b8bf06d8108174be44a61ab21b8a9347f767caa3f6909bc431098dd",
+    "input_schema_sha256": "baeac60161853078ca6b0acd44fcaadccaa167e2d46f90b0eb9d265365dc4956"
+  },
+  "get_invoice": {
+    "group": "business",
+    "description_sha256": "3cfe5ea1de395905d21f89390ccd561170a8fe18fdd41c9d1ceed46ba46ae9fe",
+    "input_schema_sha256": "3d4345e4276898bd6f82e44354a63c0dca5540cc416e6085f9b2c9be75d28b82"
+  },
+  "get_model_fields": {
+    "group": "core",
+    "description_sha256": "6de1fa95f4ab4d8b12d6c0b335a0e4eb8fb2f73c0c595f2da7ae6abe420ea037",
+    "input_schema_sha256": "4143f4579fa665025a4a7d14d6f20aa43832b71164aed6c55adafd7f1d6c81fe"
+  },
+  "get_purchase_order": {
+    "group": "business",
+    "description_sha256": "5a01daabeeb17ecc7a6e1c4c0802c77a77b7ea247297d878131891f1ac26a63e",
+    "input_schema_sha256": "7c8ae4f0ae6be7b12bbd7bb7757b145107ece39779ee939eff07080289ea6172"
+  },
+  "get_sale_order": {
+    "group": "business",
+    "description_sha256": "6b0be103f1e61a200a77def5391fc8adb71e9263e38f1fdeccd8e7272c0f6279",
+    "input_schema_sha256": "a14553e58d149c78ee34d095bd04ef06ef65a5f67b0ad14a3043fd37513bfebc"
+  },
+  "inventory_risk": {
+    "group": "reports",
+    "description_sha256": "8f54ede37cfdfc74aa2afd29776b5033f54b932c2e8b5057f1e3db0d8f9a1c5d",
+    "input_schema_sha256": "f80d2c8c402115f6c31c1c34b163ab40a5d05eb69ddfac9b5e3366f8e267272f"
+  },
+  "list_activities": {
+    "group": "engagement",
+    "description_sha256": "1e33706b8cdf10b101cf37fe0b3f15519079e0b5a0759b634c1c1bf4d678a6c1",
+    "input_schema_sha256": "a9c4f661c13f16247caf12f75ff74da156ce760025f7351cef5f819f3f4c86f3"
+  },
+  "list_applicants": {
+    "group": "hr",
+    "description_sha256": "847d49e2799661cb488ccf177a501718546fa0e3f1533516a938bf5fcb653904",
+    "input_schema_sha256": "486fa1d4d08d7e62fc2b999cb11bc6b25520bff96f8af810f958571f2c8cdaa8"
+  },
+  "list_appraisals": {
+    "group": "niche",
+    "description_sha256": "427344b725a020797d6ef2690dea090c67a01a1de989df701ac271950cffde25",
+    "input_schema_sha256": "0202ac1cfbd1d3248d674c29c292969914f7e324812ccaa5ab77162577627160"
+  },
+  "list_approval_requests": {
+    "group": "niche",
+    "description_sha256": "22b6338c2d298bab8c1b94c8e39a24a0bacc81ffa643ef90de270533808ffd06",
+    "input_schema_sha256": "00f65b9c407b2a901b287bced3b0ba92278176616cc2c805e77d309d2b74d2b7"
+  },
+  "list_attendances": {
+    "group": "hr",
+    "description_sha256": "8771d186d14a66d012336409b0ec97816ed6bed3ab4d8535bd695b030117651c",
+    "input_schema_sha256": "866405acf993bafe7e1ecc0f9695fac789767264c6bc8cdd495ee913c1498356"
+  },
+  "list_boms": {
+    "group": "operations",
+    "description_sha256": "6f14c50ff08ee78e948b414fc345653a2dc068ae95e8e4d6719b4472f16dd48b",
+    "input_schema_sha256": "2b66476c5f7c78897a3e095c075a51db6f66127d1e0c7705263aa5f615c113e8"
+  },
+  "list_calendar_events": {
+    "group": "engagement",
+    "description_sha256": "d57f1c8a16eae06eeb431e115c70d38d0b45fd0e4e3972328c0eb0b6c2d34793",
+    "input_schema_sha256": "7e2be3dcb67e2f1d13305daded2462b63d92a5aa8e0b0677bf3b7f1e83da044b"
+  },
+  "list_courses": {
+    "group": "niche",
+    "description_sha256": "5816bf2c3a59b409311da94eb44d61fe7dbe82a3ff449e0732c43e17728ffaf2",
+    "input_schema_sha256": "7d2ee9f47d62d19468a9b7fa4aa0914dca2aad6eb8d396e44ba47b70e9c0bc22"
+  },
+  "list_departments": {
+    "group": "hr",
+    "description_sha256": "c372ed6dcee4f33b00dde4388618fce0e992dc5acb55d0bb74a31fb57833da89",
+    "input_schema_sha256": "91bc2db4df579ed65ba5c8b9c3dbd3613a02e0eaadd11b18c629e1d32dcc812e"
+  },
+  "list_documents": {
+    "group": "niche",
+    "description_sha256": "bc5190d2dc6cb870cb0dd3bd559f57e0adfc05f841cb2c3e2fe2dea75a0563f6",
+    "input_schema_sha256": "5ff09f778aa7618738374d428eb7f22847a103d36a86482a3f5ade4117471d01"
+  },
+  "list_email_campaigns": {
+    "group": "engagement",
+    "description_sha256": "f861c68bcf1d729f57601d71e9e770b9237cc565bf91ab934582be17c34d7f4f",
+    "input_schema_sha256": "f68f1791ba89381e236a29ce10bcfefe3180be9e12466da31393f2c95de079cd"
+  },
+  "list_employees": {
+    "group": "hr",
+    "description_sha256": "11e26178f69fc7cf1eebeb923874b44fa7871a14322079c44485f8738bb3803d",
+    "input_schema_sha256": "69d936200eca64e1891667c1b9b2f0c248ff9cbf6dc5dcb7a8a438534edeca05"
+  },
+  "list_engineering_changes": {
+    "group": "niche",
+    "description_sha256": "83b92271073600ed03c39d8bdb9b0b197c1f19c3b1c0984ef63b5c6cd1d696a7",
+    "input_schema_sha256": "488901c5fcb550bd12234897524c192d1491f6b896cc8e36990e1b56284b9db4"
+  },
+  "list_equipment": {
+    "group": "operations",
+    "description_sha256": "b01faa3a0ca21981db63230456b1abd3705e3f934859e8b066cedb74edf09302",
+    "input_schema_sha256": "e4a2401b366938c84f8fc39eb58ed6000a5153780e0df09368abd3f9d33eb249"
+  },
+  "list_event_registrations": {
+    "group": "engagement",
+    "description_sha256": "1cb652f526fceb936d9d5be0b5c91a4b9e80e075ff25f534b645326104eb5a71",
+    "input_schema_sha256": "d7ad777be1f853db553e3336f37a8c2c85c160652d6332ebb8fab2520bd63f6c"
+  },
+  "list_events": {
+    "group": "engagement",
+    "description_sha256": "5378628610ae8449584b513b8b36f046b08d6ee33fb077ad2850ee5b7cba1de0",
+    "input_schema_sha256": "828118121bf5ea36b5e53fd5ee302992968f83c0f9517d29cf1582af3c917e3b"
+  },
+  "list_expenses": {
+    "group": "hr",
+    "description_sha256": "380afc1e54d89aa5e46be8ca2c49f574b83750dd4f82c174b4a945887910435b",
+    "input_schema_sha256": "a44177f413cb4077aadfa24a62f72f239ab5fe0a5ced540b87188bd2d3b38b7a"
+  },
+  "list_helpdesk_tickets": {
+    "group": "operations",
+    "description_sha256": "d9297419184e13e025590b316031aef45ccde13025b2b756e5c28ca4592ff9b7",
+    "input_schema_sha256": "f1dfeaf85e2c3765215ae3dc3372c043b6afb1479ad889b42ed846e518cac3d0"
+  },
+  "list_invoices": {
+    "group": "business",
+    "description_sha256": "e2c741b2d13de310eb76be55dcb7d8e3bbab87a4f5258b3cceb7a38e76eddb35",
+    "input_schema_sha256": "24676364de52f171e7067b9bdddf951f10518ceaf1fb0692180561d5a97a65c5"
+  },
+  "list_iot_devices": {
+    "group": "niche",
+    "description_sha256": "caee504250af7629e6fc202d2dd0390bf04f3e5bead37aaa79085ba25e40f0b2",
+    "input_schema_sha256": "fe498258f5b43b92c5ed969e830623dcb0656ba7da17e899b84ac3a3f356bbbd"
+  },
+  "list_job_positions": {
+    "group": "hr",
+    "description_sha256": "a92dc8f2f84fe71a55057555cf1f71257b80e01a9b8451a8ea5e28428a5c27b9",
+    "input_schema_sha256": "6bd98b55fec25e1a2a509d3e88f00d1fe1bb8b9774e358dbf117d6eaf8c0909e"
+  },
+  "list_knowledge_articles": {
+    "group": "niche",
+    "description_sha256": "efb068d82521210dec2ed81e6a869833bd212011b7b55c0424f03c7d4ac23dd7",
+    "input_schema_sha256": "b9ff949de3b91dbd29d0b88b97a2b521bd14d821b42f7c7d541388a314bf1da8"
+  },
+  "list_loyalty_cards": {
+    "group": "niche",
+    "description_sha256": "69794214811b577f282b4a5563b4cbaeaa539994d125dd5089f1627ebc34e180",
+    "input_schema_sha256": "5d7c4e83eeab60b16658b096bed0f231b98fb775804cf38f5e39e230095ad8b8"
+  },
+  "list_loyalty_programs": {
+    "group": "niche",
+    "description_sha256": "54430ae17804541fdfa1f0b66337156779c2b2df02ef5818ad44d384bc582912",
+    "input_schema_sha256": "5f870502a2e198e604337af23e26a249f64022b2a9808abb8217d18ebfb7432a"
+  },
+  "list_lunch_orders": {
+    "group": "niche",
+    "description_sha256": "dae7699b10783a855ec6ec83c4611280db569feeb4f83585f808e7d0b9636e1a",
+    "input_schema_sha256": "0c086843883c0e59f5f23aa77e1bd768fbdfd56735c3b8fc3a079544f257d001"
+  },
+  "list_maintenance_requests": {
+    "group": "operations",
+    "description_sha256": "b8d32f434d9ddc3dae73c8703bbe17cb4de274af12ad7726f69e58d1677c8711",
+    "input_schema_sha256": "ac2f0509c8ac09b1793132cb1ee35537d89ee71a044f0e9b885e51a49ff2c50f"
+  },
+  "list_manufacturing_orders": {
+    "group": "operations",
+    "description_sha256": "aa6419f4aad048421cce2a15ffa8c1c059411f82f22ce3991b69f6a801eb614c",
+    "input_schema_sha256": "755202c318774619af1b545a0c06670cfa925bc5fdccbae99d67a0a6356dc995"
+  },
+  "list_memberships": {
+    "group": "niche",
+    "description_sha256": "1964a8f69291952720c00c6702529802ea972b1d2277256cfcb4703abd069363",
+    "input_schema_sha256": "f1cefef3bae7aeb1720b954f91938c5de4d740211aa97d42a381bc9183e553d6"
+  },
+  "list_models": {
+    "group": "core",
+    "description_sha256": "18a1e167cb741407327d314ff7d23b25adf845bac0dd3199fbda075b1f552186",
+    "input_schema_sha256": "b1c3bcb6a436d02ae3187bd1078fcde1c49583cb4d0593de94d39c5b24568f1f"
+  },
+  "list_notes": {
+    "group": "niche",
+    "description_sha256": "24ee63e547a7619aabf5653aae7745781f5cff7587ec3bfc7f2a3ecf9fb70dba",
+    "input_schema_sha256": "deb85195df2257f4e46fcb30e299701b581abeef1a588c0329da739d41a1980a"
+  },
+  "list_opportunities": {
+    "group": "business",
+    "description_sha256": "73a6eedc0f18ca6b7db956fc16b86ddcf1874750fec5c535c05fd7423bebd360",
+    "input_schema_sha256": "053f5b637c96cae3086599a7c5f7b56ddce2f3c5c7b3fda7d39fed39f99d87c4"
+  },
+  "list_payments": {
+    "group": "business",
+    "description_sha256": "d9da4e5bf4fff95140292b7bd804db9b857190359a87a223717a93e2bb66056e",
+    "input_schema_sha256": "43fba76b015fe98274f5216bbad53fe1e512a06aacde8eff94731497b956485f"
+  },
+  "list_payslips": {
+    "group": "niche",
+    "description_sha256": "5e3d48f804a2c289d236f56db93fe995ec429da43eff6917e236bfa17ef64740",
+    "input_schema_sha256": "e0b1a40abfb00520b1b39af259ff6d79ad581ba39996503e3ac51b2afd603d6c"
+  },
+  "list_pickings": {
+    "group": "business",
+    "description_sha256": "3086d3532db614022d22f9c1bf8e547bdc39a54eda6f11fcbd2d93927213cd96",
+    "input_schema_sha256": "e7c8bec392b1671762a78de91fc196ac3151baa099032fc1e38bbd9e801613a3"
+  },
+  "list_planning_slots": {
+    "group": "niche",
+    "description_sha256": "b61fde201ce1cba4dc688b6f9aa8b7cc347659f7d3d02bd9ebcd88460e5e4362",
+    "input_schema_sha256": "dce10610edf551bd98fa54df56011c5814a267c24f786fc0e5a7641203c1f111"
+  },
+  "list_pos_orders": {
+    "group": "operations",
+    "description_sha256": "1ebdb5940cb296d32df79885d0c5b7479252d6962f170d071ed1e879d1801b65",
+    "input_schema_sha256": "ff3eb1a8f0765eaf426b9715b7ad2ff7a9d9e1c9f00e6ab00187af8f035284e2"
+  },
+  "list_pos_sessions": {
+    "group": "operations",
+    "description_sha256": "e93ab4d5f8761c05f4018ba3a0b2eb4931e4f4ce22ede583bbec96716f60847a",
+    "input_schema_sha256": "39c8ddc3fcff0f20cc6f7156b69e97805ba029ad9264358f39a897714b5da1a0"
+  },
+  "list_projects": {
+    "group": "projects",
+    "description_sha256": "054a131ef3f56cbe803146b543be5530590e98477e5a7cb3d042cd6ba5550785",
+    "input_schema_sha256": "046e479b8fe0d2d15ee62f6856cd36129c355fa88aad2b0b9e61b6fcef5b27eb"
+  },
+  "list_purchase_orders": {
+    "group": "business",
+    "description_sha256": "7efd2405826618eea7cb01dcc2d54a7dab235aa3fea6f1b18515cf2c303b976f",
+    "input_schema_sha256": "d9273ac5502dd6b7a4581fdc3a28316ebc8b4d5a5130645ac85c0aa7f90118e1"
+  },
+  "list_quality_alerts": {
+    "group": "niche",
+    "description_sha256": "1a8540d6e0a780dc77190e8c9e70ce4c54f65ad7d5d0db50e7612b420f2eaa89",
+    "input_schema_sha256": "2691419b5df68a91a71b90625883df8819f0585681b8b00ddb8683bb494cb818"
+  },
+  "list_quality_checks": {
+    "group": "niche",
+    "description_sha256": "834952568e319d80eaabf12abb136e5a5104e87f9e7f94477f8eb8d9200a4006",
+    "input_schema_sha256": "cee0f85c25a8d4764665b36bac46840f2eb5a92d2b102332b53ae6b809ce1388"
+  },
+  "list_repair_orders": {
+    "group": "operations",
+    "description_sha256": "b2713a5a2fd80bc749af4772a4f865973ed1e31a5d2fa61a486bb138940f6659",
+    "input_schema_sha256": "e50af1573268f4b7efc245e8cc7decca3be8e976a0fc2655d70f0f2a19777e42"
+  },
+  "list_sale_orders": {
+    "group": "business",
+    "description_sha256": "00cf40db03564bc1502b08e079373450b0e982961488c30b130448d7b935a22d",
+    "input_schema_sha256": "b123642741fb64e5134398d020e42df7fac175046ad285f1ee39fda0d125611b"
+  },
+  "list_sign_requests": {
+    "group": "niche",
+    "description_sha256": "cb851fe69490860b83946fdd79975114362f22eab2c2a874f87789a77fa7234d",
+    "input_schema_sha256": "bd8641ec29fc61f39677e2187805eb8dda011434fa8f4cb37fbd055911226cf8"
+  },
+  "list_social_posts": {
+    "group": "niche",
+    "description_sha256": "50b35b2147c10d501c5420eb5d992741f8cf358bb58d3ce0d8209e13c8cbe0a4",
+    "input_schema_sha256": "ddd4b58c46fd19c075f0f235f58d744793555dd4e10a78780373587afc44b280"
+  },
+  "list_subscriptions": {
+    "group": "niche",
+    "description_sha256": "bd7b8cfb720a23d44c69ef79e9298b49c94fd60811421b97e58914c8ac0e0a08",
+    "input_schema_sha256": "07f3c109aae8dde3dd386f14aa347a59021a9d08b917d14d384db0ed57e2d800"
+  },
+  "list_surveys": {
+    "group": "engagement",
+    "description_sha256": "d6198eae81ee685e6d7ecaa539b95ee58b66069f9b7daa0ae350708d740227d3",
+    "input_schema_sha256": "94a98f2ef07706bb8eaf56462cd7102a1a4197aace6a3c57ab8c71af1167f665"
+  },
+  "list_tasks": {
+    "group": "projects",
+    "description_sha256": "d32ff9d2c4bf1ff096cfa61bce06b112d8c291fc35512b8b94102723be389b15",
+    "input_schema_sha256": "06c922b6389c79b63699aea9cf6bdf484078bc2d9914af70da3d25ee8e5865c1"
+  },
+  "list_time_off": {
+    "group": "hr",
+    "description_sha256": "8efb57a4d3f7a3e3482ae50ece5b155fffa01e5a1dbcc486c12c848d920d8334",
+    "input_schema_sha256": "615f29be5d356bc3de6e0803cf65eecec9e13a17232aff4c48fa874acc981c7f"
+  },
+  "list_timesheets": {
+    "group": "projects",
+    "description_sha256": "27385b333cd268f3636fc682daa5d277e8e63120decd645e647a2df7d7d7d935",
+    "input_schema_sha256": "04ebe2ad001e74b3694f9cc6115102fe3895af9c6ba3aa0f3049a26ca1c8bc07"
+  },
+  "list_vehicles": {
+    "group": "operations",
+    "description_sha256": "35928632ea5cbe837365076352019d00a3380f31c4966f35a6d3cdb0ced3f0a8",
+    "input_schema_sha256": "cfe750ee55353ea5a66105dd8b583fa94a04282a6fbb7a6a2e15273cc4e7f251"
+  },
+  "list_website_visitors": {
+    "group": "niche",
+    "description_sha256": "bd57032d7c9a575239e43a97f37abaa334ae1a11401a0ce57d3460c6009788bc",
+    "input_schema_sha256": "89b58f4b3b6eef5784c19b3821461b4620ba2459e873fde0e9858dea08dfe4da"
+  },
+  "odoo_version": {
+    "group": "core",
+    "description_sha256": "48099e2f0fd0f2dd5dc24f28dfa58bf0bef227c659e0a854553c96dc98b0bf89",
+    "input_schema_sha256": "90a392c2c7bde558326c72474baea4baca33119acca6ff87e807223c9c4411e0"
+  },
+  "pipeline_review": {
+    "group": "reports",
+    "description_sha256": "12eca53ff9c2433151f4cc4095d0ef04852a899e726e5009a3981ecc55b7c153",
+    "input_schema_sha256": "9d7ef4da84130e155c0e42dca664092ee3110095b761348fedf1df6a00ab758a"
+  },
+  "portfolio_health": {
+    "group": "reports",
+    "description_sha256": "180bca5ba6dcc8188ab99cd57a5167bf9fd01880e7867b19081aa859ea1c757f",
+    "input_schema_sha256": "f891a13ac81caa9ffd255f008fb33c7176c0d463a3269e134f275ed6d311b71f"
+  },
+  "procurement_watch": {
+    "group": "reports",
+    "description_sha256": "fe86a853f970ed7291d5d533aee84e54bacb99a2fe107c3f7ee61f7fe7bf580a",
+    "input_schema_sha256": "0cb0a9db82def6563fd20edc90dcb90e5d4522d60e60dd74347b897c3a731396"
+  },
+  "production_health": {
+    "group": "reports",
+    "description_sha256": "ac66780e4c10067abd7de3e39755b76bf4f79fdf7f754a32d498bc2092d3332b",
+    "input_schema_sha256": "e5a2421aa25dc6c7fb0d39631a13e714e4406d7eddda8190453fbf53bc770ce4"
+  },
+  "project_budget": {
+    "group": "reports",
+    "description_sha256": "587c62889141f91013fe2cb0f3faaeaec3aebc5ee142c84a97cda7f054a7d54b",
+    "input_schema_sha256": "c183c7a58a433f3ea302777a1224986ddf33d9d173a993b7e0c29794f362ff6e"
+  },
+  "project_dashboard": {
+    "group": "reports",
+    "description_sha256": "61041ef220d424b05d64c76f74946ffd0bb7f09a79dedf111411e33620a5ca8d",
+    "input_schema_sha256": "7b60ee446f274c18d26a80294e089089738ecd4581bec382d6809b69536bc41a"
+  },
+  "project_profitability": {
+    "group": "reports",
+    "description_sha256": "7b79be3ea8eacba825e6d598d4cb88dcde9813e92814d56c7dafc181db57ba20",
+    "input_schema_sha256": "6c6a559bb6122e5096e3bcb46a4e7dc759c07d3bd97de3ac6992586d46d7f02f"
+  },
+  "project_status_report": {
+    "group": "reports",
+    "description_sha256": "e67b606e912198804d8444012ac624ea95838c5745d46fc5bacab5d2d728009f",
+    "input_schema_sha256": "550f88a23f098b7502706944a38aea69fe8c4e71d67e56aba7798447ca0102b0"
+  },
+  "project_subtask_hours": {
+    "group": "reports",
+    "description_sha256": "74cb95d873791eea38189e3bc3e4df47f5f36a442e427057027136ea65c43822",
+    "input_schema_sha256": "d34f1055a6f854a98929499d5f15e8b46debaecad7ff85444d4414e6cdba57d8"
+  },
+  "read_attachment": {
+    "group": "core",
+    "description_sha256": "09c7bc612d9ff342bd4c1a3b830cd1507f78c53682d4bd26bad7b325a32b68bc",
+    "input_schema_sha256": "090a7d85b0af08c757a3b7e3870194b2eb81b4ff2a80d24f3a8d779fde58d111"
+  },
+  "read_records": {
+    "group": "core",
+    "description_sha256": "6405ff7b9472bdfeaeb79f56fa8977135ad79200cea87a3647e1da8eb9cf5349",
+    "input_schema_sha256": "0625ba3805671598e65799d51cf91dc98691463acbdc72bc754ceda81b3076f0"
+  },
+  "receivables_health": {
+    "group": "reports",
+    "description_sha256": "de035192878fb88bb2cf7ab4a3762e0e8c00365c3e9594995face17838534249",
+    "input_schema_sha256": "8aef37f4b37cf330a70b585af6f858bcf89a400961f1efabb9ea3496c59aff98"
+  },
+  "sales_snapshot": {
+    "group": "reports",
+    "description_sha256": "c0bcc11ffb1c169dd6669df15ba91917d9dfe55063ffee99104ed9fb64fa450b",
+    "input_schema_sha256": "e931ce30b493246b2e2d05bcb6560a1e983d62a13d30b77fb3cf98724923ea0d"
+  },
+  "search_count": {
+    "group": "core",
+    "description_sha256": "d8cff6ab6b4417f9e343a4c30fa96e54075e24d8c9fbd40aa6a0e9ea4ade76de",
+    "input_schema_sha256": "4cb9953c70435c53a558b0ecba1c271f677fbcaf813a1c4e2334d58824f957f4"
+  },
+  "search_read": {
+    "group": "core",
+    "description_sha256": "4fe70062b0ff8aea181025f71ec43f8a20fc0f6e82d8dcda54c65110c2f439db",
+    "input_schema_sha256": "a040c622ffda731e7d2ab662f28994c9f9abc6f5f0168f21726e99d522e66b54"
+  },
+  "standup_digest": {
+    "group": "reports",
+    "description_sha256": "ddf962b6378301f7c80833947c97769c08a07908989956fde9c5a6bf95496a9c",
+    "input_schema_sha256": "7a20b7bba34c76f9ea552bf83672be14037c69273a2d312b2bfc2f220bb65e04"
+  },
+  "team_workload": {
+    "group": "reports",
+    "description_sha256": "6deedd7ecbacf3dac0677865c0e908c3c375b8ea0ef6e7272bda4d8074b4ab15",
+    "input_schema_sha256": "30c277f6b067d1f0e0ed989c1a44404b5a93eb1ba4fa4b12e615a0b5ba67d464"
+  },
+  "update_records": {
+    "group": "core",
+    "description_sha256": "e43c245c0d87a0a9ca012d262edbe0cac1cfcb121570bf89ffbe32b25ed9c4fc",
+    "input_schema_sha256": "05465293cbcedc6739193808a95b432b50d830f490dde1a29ffb88e5dbebd4c8"
+  }
+}
