@@ -6,7 +6,8 @@ import json
 
 import pytest
 
-from odoo_pulse import domain_tools, tools_generic
+from odoo_pulse import domain_tools
+from odoo_pulse.tools import generic as tools_generic
 
 
 # --- Generic tools ------------------------------------------------------------

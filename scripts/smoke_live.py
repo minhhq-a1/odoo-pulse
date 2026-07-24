@@ -61,13 +61,13 @@ def _read_records_probe(model: str = "res.partner", **_ignored) -> str:
     """read_records has no discovery path of its own, so look up one real id
     via search_read first. display_name is present on every model, so this
     stays generic instead of hard-coding a model-specific field."""
-    from odoo_pulse import tools_generic
+    from odoo_pulse.tools import generic
 
     probe = json.loads(
-        tools_generic.search_read(model=model, domain=[], fields=["id"], limit=1)
+        generic.search_read(model=model, domain=[], fields=["id"], limit=1)
     )
     ids = [probe[0]["id"]] if isinstance(probe, list) and probe else [1]
-    return tools_generic.read_records(model=model, ids=ids, fields=["id", "display_name"])
+    return generic.read_records(model=model, ids=ids, fields=["id", "display_name"])
 
 
 # Tools whose *success* contract is plain text/markdown rather than JSON
@@ -81,7 +81,6 @@ def build_cases(limit: int):
     from odoo_pulse import (
         domain_tools,
         tools_engagement,
-        tools_generic,
         tools_hr,
         tools_niche,
         tools_operations,
@@ -94,34 +93,35 @@ def build_cases(limit: int):
         tools_reports_sales,
         tools_workflows,
     )
+    from odoo_pulse.tools import generic
 
     return [
         # group, label, func, kwargs
         # --- Generic (core group) ---
-        ("Generic", "list_models", tools_generic.list_models, {"name_filter": "sale"}),
+        ("Generic", "list_models", generic.list_models, {"name_filter": "sale"}),
         (
             "Generic",
             "get_model_fields",
-            tools_generic.get_model_fields,
+            generic.get_model_fields,
             {"model": "res.partner", "fields": ["name", "email"]},
         ),
         (
             "Generic",
             "search_read",
-            tools_generic.search_read,
+            generic.search_read,
             {"model": "res.partner", "domain": [], "fields": ["id", "name"], "limit": limit},
         ),
         (
             "Generic",
             "search_count",
-            tools_generic.search_count,
+            generic.search_count,
             {"model": "res.partner", "domain": []},
         ),
         ("Generic", "read_records", _read_records_probe, {"model": "res.partner"}),
         (
             "Generic",
             "aggregate_records (ir.attachment)",
-            tools_generic.aggregate_records,
+            generic.aggregate_records,
             {
                 # ir.attachment always exists (base model) and always holds
                 # rows even on a fresh DB (web assets), so the key contract
