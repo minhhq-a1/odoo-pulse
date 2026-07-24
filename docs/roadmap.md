@@ -1,16 +1,15 @@
 # Roadmap
 
-Follow-up work deferred from the 2026-07 analyst-gap closure
-(`docs/superpowers/plans/2026-07-03-analyst-gaps.md`). Nothing here is
+Follow-up work deferred from the analyst-gap closure. Nothing here is
 scheduled — pick items up when a real need appears.
 
 ## Trend bucketing: move server-side
 
 `sales_snapshot`'s `weekly_revenue` trend currently fetches up to 200 raw
 `sale.order` rows and buckets them into weeks client-side
-(`src/odoo_pulse/services/sales/snapshot.py`, adapted in `tools_reports_sales.py`). On an instance with more
+(`src/odoo_pulse/services/sales/snapshot.py`, adapted in `tools/reports/sales.py`). On an instance with more
 than ~200 confirmed orders in the trend window, the fetch truncates and the
-tool now reports `trend: null` (fixed 2026-07-03) rather than a
+tool now reports `trend: null` rather than a
 biased direction — correct, but it means busy instances lose the trend
 entirely.
 
@@ -36,7 +35,7 @@ invoice's rate) since the two produce different — both defensible — numbers.
 
 `pipeline_review`, `sales_snapshot`, and `receivables_health` verdict
 cut-offs (stalled %, growth %, overdue %) are now tool call parameters
-(shipped 2026-07-03) instead of hardcoded, but every LLM-driven call still
+instead of hardcoded, but every LLM-driven call still
 needs to pass them explicitly to override the default.
 
 **Fix (only if users ask to calibrate once per deployment rather than
@@ -47,5 +46,5 @@ thresholds every time.
 
 ## Smaller items
 
-- `docs/tools.md`'s tool-groups table doesn't cross-link the "Analyst
+- `docs/reference/tools.md`'s tool-groups table doesn't cross-link the "Analyst
   reports" section — pure polish.

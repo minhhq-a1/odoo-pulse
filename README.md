@@ -68,7 +68,7 @@ docker compose -f docker-compose.playground.yml up -d
 First boot pulls ~4 GB of images (Odoo + Postgres) and seeds the demo data —
 allow 5-10 minutes depending on your connection. Then point Claude at it and
 ask it to **`run business_pulse`**. Full walkthrough:
-[docs/playground.md](docs/playground.md).
+[docs/guides/playground.md](docs/guides/playground.md).
 
 ## Install & connect
 
@@ -86,9 +86,9 @@ claude mcp add odoo-pulse \
 
 Generate the API key in Odoo under **Settings → Users → (your user) → Account
 Security → New API Key**. Config for **Claude Desktop** and **Cursor**, plus pip
-and Docker alternatives: [docs/install.md](docs/install.md). If a key may have
+and Docker alternatives: [docs/guides/install.md](docs/guides/install.md). If a key may have
 been exposed, see [If an API key may have been
-exposed](docs/install.md#if-an-api-key-may-have-been-exposed).
+exposed](docs/guides/install.md#if-an-api-key-may-have-been-exposed).
 
 Or one-click:
 
@@ -102,14 +102,14 @@ four independent controls to line up: `ODOO_READ_ONLY=false`,
 `ODOO_WRITABLE_MODELS` (a comma-separated model allow-list),
 `ODOO_ALLOW_DELETE=true` additionally for deletes, and a per-call `confirm=true`
 — every write tool returns a dry-run preview without it. System models are never
-writable. Details: [docs/tools.md#write-operations](docs/tools.md#write-operations).
+writable. Details: [docs/reference/tools.md#write-operations](docs/reference/tools.md#write-operations).
 
 ## More tools
 
 Beyond the analyst reports, there are ~60 model-aware query tools spanning CRM,
 Sales, Inventory, Accounting, HR, Project, Manufacturing, PoS, and Enterprise
 apps — opt in via `ODOO_TOOL_GROUPS`. Full catalogue and configuration:
-[docs/tools.md](docs/tools.md).
+[docs/reference/tools.md](docs/reference/tools.md).
 
 ## Testing
 
@@ -121,7 +121,7 @@ pytest
 ```
 
 For a live check against a real Odoo (read-only), see
-[docs/tools.md#live-smoke-test-against-a-real-odoo](docs/tools.md#live-smoke-test-against-a-real-odoo).
+[docs/reference/tools.md#live-smoke-test-against-a-real-odoo](docs/reference/tools.md#live-smoke-test-against-a-real-odoo).
 
 ## License
 

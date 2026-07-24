@@ -28,13 +28,9 @@ env/
 # Subagent-driven-development scratch (progress ledger, task briefs/reports)
 .superpowers/
 
-# Local design docs / plans (internal); shipped docs are re-included below
-docs/*
-!docs/playground.md
-!docs/install.md
-!docs/tools.md
-!docs/roadmap.md
-!docs/launch/
-!docs/release-notes-project-finance-consistency.md
+# Local design/planning and operational notes (not shipped)
+docs/superpowers/
+docs/launch-registries.md
+docs/release-notes-v1.8.0-project-status-artifact.md
 
 /mcp-registry-fork/

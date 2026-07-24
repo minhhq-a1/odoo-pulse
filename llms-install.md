@@ -69,4 +69,4 @@ company briefing.
   (a comma-separated model allow-list), and additionally
   `ODOO_ALLOW_DELETE=true` for deletes. Even then, every write tool returns a
   dry-run preview unless called with `confirm=true`.
-- Full tool catalogue and configuration: see `README.md` and `docs/tools.md`.
+- Full tool catalogue and configuration: see `README.md` and `docs/reference/tools.md`.
