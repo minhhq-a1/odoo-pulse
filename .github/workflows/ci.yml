@@ -41,4 +41,37 @@ jobs:
           python -m venv --system-site-packages "$RUNNER_TEMP/odoo-pulse-wheel"
           "$RUNNER_TEMP/odoo-pulse-wheel/bin/pip" install --no-deps dist/*.whl
           cd "$RUNNER_TEMP"
-          "$RUNNER_TEMP/odoo-pulse-wheel/bin/python" -c 'import asyncio; from odoo_pulse import server; from odoo_pulse.runtime import mcp; tools = asyncio.run(mcp.list_tools()); assert len(tools) == 31'
+          "$RUNNER_TEMP/odoo-pulse-wheel/bin/python" -c 'import asyncio; from odoo_pulse import server; from odoo_pulse.mcp.app import mcp; tools = asyncio.run(mcp.list_tools()); assert len(tools) == 31'
+
+  mcp-floor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+          cache: pip
+      - name: Build wheel
+        run: |
+          python -m pip install --upgrade build
+          python -m build --outdir "$RUNNER_TEMP/dist"
+      - name: Install exact MCP floor and wheel
+        run: |
+          python -m venv "$RUNNER_TEMP/odoo-pulse-floor"
+          "$RUNNER_TEMP/odoo-pulse-floor/bin/pip" install \
+            "mcp[cli]==1.3.0" "$RUNNER_TEMP"/dist/*.whl
+      - name: Probe default surface at MCP floor
+        working-directory: ${{ runner.temp }}
+        run: |
+          "$RUNNER_TEMP/odoo-pulse-floor/bin/python" \
+            "$GITHUB_WORKSPACE/tests/integration/mcp_surface_probe.py" \
+            --groups core,reports --expected-tools 31 --expected-resources 1 \
+            --expected-sdk 1.3.0 --require-instructions
+      - name: Probe complete surface at MCP floor
+        working-directory: ${{ runner.temp }}
+        run: |
+          "$RUNNER_TEMP/odoo-pulse-floor/bin/python" \
+            "$GITHUB_WORKSPACE/tests/integration/mcp_surface_probe.py" \
+            --groups all --expected-tools 88 --expected-resources 1 \
+            --expected-sdk 1.3.0 --require-instructions
+

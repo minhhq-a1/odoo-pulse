@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 
 STARTUP_PROBE = r"""
@@ -26,3 +27,23 @@ def test_installed_package_starts_outside_repository(tmp_path):
         cwd=tmp_path,
         env=env,
     )
+
+
+def test_surface_probe_reports_current_environment(tmp_path):
+    probe = Path(__file__).with_name("mcp_surface_probe.py")
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+    subprocess.run(
+        [
+            sys.executable,
+            str(probe),
+            "--groups", "all",
+            "--expected-tools", "88",
+            "--expected-resources", "1",
+            "--require-instructions",
+        ],
+        check=True,
+        cwd=tmp_path,
+        env=env,
+    )
+

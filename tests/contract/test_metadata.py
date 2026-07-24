@@ -1,9 +1,11 @@
 import json
 import re
+import tomllib
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+
 
 
 def project_version() -> str:
@@ -32,3 +34,12 @@ def test_env_example_documents_groups_without_volatile_count():
     assert "Default: core,reports" in text
     assert not re.search(r"Default: core,reports \(\d+ tools\)", text)
     assert "business, hr, projects, operations, engagement, niche" in text
+
+
+def test_project_declares_tested_mcp_v1_range():
+    data = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    dependencies = data["project"]["dependencies"]
+    assert "mcp[cli]>=1.3,<2" in dependencies
+    assert not any(dep.startswith("mcp") and dep != "mcp[cli]>=1.3,<2"
+                   for dep in dependencies)
+
