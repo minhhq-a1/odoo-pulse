@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from . import common, core, mcp as mcp_pkg, services, tools
+from importlib.metadata import PackageNotFoundError, version
+
+from . import common, core, mcp, services, tools
 from .core.errors import OdooConfigError, OdooError
-from .mcp.app import mcp
 from .mcp.runtime import get_client
 
-__version__ = "0.1.0"
+try:
+    __version__ = version("odoo-pulse")
+except PackageNotFoundError:
+    __version__ = "1.8.2"
 
 __all__ = [
     "__version__",
@@ -15,7 +19,6 @@ __all__ = [
     "core",
     "get_client",
     "mcp",
-    "mcp_pkg",
     "services",
     "tools",
     "OdooConfigError",

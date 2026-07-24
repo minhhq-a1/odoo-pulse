@@ -22,6 +22,15 @@ from ..services.writes import (
 )
 
 
+def _client_for(confirm: bool):
+    if not confirm:
+        try:
+            return get_client()
+        except Exception:
+            return None
+    return get_client()
+
+
 @mcp.tool()
 def create_record(model: str, values: dict, confirm: bool = False) -> str:
     """Create one record. Returns a preview unless confirm=True.
@@ -33,7 +42,7 @@ def create_record(model: str, values: dict, confirm: bool = False) -> str:
     """
     return safe(
         lambda: build_create_record(
-            get_client(), model=model, values=values, confirm=confirm
+            _client_for(confirm), model=model, values=values, confirm=confirm
         )
     )
 
@@ -52,7 +61,7 @@ def update_records(
     """
     return safe(
         lambda: build_update_records(
-            get_client(), model=model, ids=ids, values=values, confirm=confirm
+            _client_for(confirm), model=model, ids=ids, values=values, confirm=confirm
         )
     )
 
@@ -70,7 +79,7 @@ def delete_records(model: str, ids: list[int], confirm: bool = False) -> str:
     """
     return safe(
         lambda: build_delete_records(
-            get_client(), model=model, ids=ids, confirm=confirm
+            _client_for(confirm), model=model, ids=ids, confirm=confirm
         )
     )
 
@@ -92,7 +101,7 @@ def create_lead(
     """
     return safe(
         lambda: build_create_lead(
-            get_client(), name=name, contact_name=contact_name, email=email,
+            _client_for(confirm), name=name, contact_name=contact_name, email=email,
             phone=phone, description=description, extra_values=extra_values,
             confirm=confirm,
         )
@@ -115,7 +124,7 @@ def create_contact(
     """
     return safe(
         lambda: build_create_contact(
-            get_client(), name=name, email=email, phone=phone,
+            _client_for(confirm), name=name, email=email, phone=phone,
             is_company=is_company, parent_id=parent_id,
             extra_values=extra_values, confirm=confirm,
         )
@@ -139,7 +148,7 @@ def create_task(
     """
     return safe(
         lambda: build_create_task(
-            get_client(), name=name, project_id=project_id, user_id=user_id,
+            _client_for(confirm), name=name, project_id=project_id, user_id=user_id,
             description=description, date_deadline=date_deadline,
             extra_values=extra_values, confirm=confirm,
         )
@@ -151,6 +160,6 @@ def confirm_sale_order(order_id: int, confirm: bool = False) -> str:
     """Confirm a quotation into a sales order (sale.order action_confirm)."""
     return safe(
         lambda: build_confirm_sale_order(
-            get_client(), order_id=order_id, confirm=confirm
+            _client_for(confirm), order_id=order_id, confirm=confirm
         )
     )

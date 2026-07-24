@@ -170,3 +170,25 @@ def test_confirm_sale_order_preview(fake_client):
     assert out["preview"] is True
     assert out["ids"] == [9]
     assert fake_client.calls == []
+
+
+def test_write_previews_work_without_credentials(monkeypatch):
+    from odoo_pulse.mcp import runtime as mcp_runtime
+    monkeypatch.setattr(mcp_runtime, "_client", None)
+
+    # All write tools return previews without throwing OdooConfigError
+    create_rec = json.loads(tools_write.create_record("crm.lead", {"name": "X"}, confirm=False))
+    assert create_rec["preview"] is True
+
+    create_ld = json.loads(tools_write.create_lead("Deal", confirm=False))
+    assert create_ld["preview"] is True
+
+    confirm_so = json.loads(tools_write.confirm_sale_order(5, confirm=False))
+    assert confirm_so["preview"] is True
+
+    upd_rec = json.loads(tools_write.update_records("crm.lead", [1], {"name": "Y"}, confirm=False))
+    assert upd_rec["preview"] is True
+
+    del_rec = json.loads(tools_write.delete_records("crm.lead", [1], confirm=False))
+    assert del_rec["preview"] is True
+
