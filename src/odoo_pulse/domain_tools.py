@@ -17,7 +17,6 @@ Everything here is read-only.
 
 from __future__ import annotations
 
-from typing import Any
 
 from .common.dates import date_domain
 from .common.domains import name_domain
@@ -25,6 +24,7 @@ from .common.schema import optional_fields
 from .mcp.app import mcp
 from .mcp.result import safe
 from .mcp.runtime import get_client
+from .services.records import read_invoice, read_purchase_order, read_sale_order
 
 
 # --- Contacts -----------------------------------------------------------------
@@ -165,47 +165,11 @@ def get_sale_order(order_id: int | None = None, order_name: str | None = None) -
     Provide either the numeric `order_id` or the `order_name` (e.g. 'S00042').
     Returns the order header plus its order lines (product, qty, price).
     """
-
-    def _run() -> dict[str, Any]:
-        client = get_client()
-        oid = order_id
-        if oid is None:
-            if not order_name:
-                return {"error": "Provide order_id or order_name."}
-            found = client.search_read(
-                "sale.order", domain=[("name", "=", order_name)], fields=["id"], limit=1
-            )
-            if not found:
-                return {"error": f"No sale order named {order_name!r}."}
-            oid = found[0]["id"]
-
-        header = client.read(
-            "sale.order",
-            [oid],
-            fields=[
-                "name",
-                "partner_id",
-                "date_order",
-                "amount_untaxed",
-                "amount_tax",
-                "amount_total",
-                "state",
-                "order_line",
-            ],
+    return safe(
+        lambda: read_sale_order(
+            get_client(), order_id=order_id, order_name=order_name
         )
-        if not header:
-            return {"error": f"No sale order with id {oid}."}
-        order = header[0]
-        lines = client.read(
-            "sale.order.line",
-            order.get("order_line", []),
-            fields=["product_id", "name", "product_uom_qty", "price_unit", "price_subtotal"],
-        )
-        order["lines"] = lines
-        order.pop("order_line", None)
-        return order
-
-    return safe(_run)
+    )
 
 
 # --- Purchase -----------------------------------------------------------------
@@ -354,51 +318,9 @@ def get_invoice(move_id: int | None = None, number: str | None = None) -> str:
 
     Provide either the numeric `move_id` or the `number` (e.g. 'INV/2026/0001').
     """
-
-    def _run() -> dict[str, Any]:
-        client = get_client()
-        mid = move_id
-        if mid is None:
-            if not number:
-                return {"error": "Provide move_id or number."}
-            found = client.search_read(
-                "account.move", domain=[("name", "=", number)], fields=["id"], limit=1
-            )
-            if not found:
-                return {"error": f"No invoice numbered {number!r}."}
-            mid = found[0]["id"]
-
-        header = client.read(
-            "account.move",
-            [mid],
-            fields=[
-                "name",
-                "partner_id",
-                "move_type",
-                "invoice_date",
-                "invoice_date_due",
-                "amount_untaxed",
-                "amount_tax",
-                "amount_total",
-                "amount_residual",
-                "payment_state",
-                "state",
-                "invoice_line_ids",
-            ],
-        )
-        if not header:
-            return {"error": f"No invoice with id {mid}."}
-        move = header[0]
-        lines = client.read(
-            "account.move.line",
-            move.get("invoice_line_ids", []),
-            fields=["name", "product_id", "quantity", "price_unit", "price_subtotal", "account_id"],
-        )
-        move["lines"] = lines
-        move.pop("invoice_line_ids", None)
-        return move
-
-    return safe(_run)
+    return safe(
+        lambda: read_invoice(get_client(), move_id=move_id, number=number)
+    )
 
 
 @mcp.tool()
@@ -445,47 +367,11 @@ def get_purchase_order(order_id: int | None = None, order_name: str | None = Non
 
     Provide either the numeric `order_id` or the `order_name` (e.g. 'P00007').
     """
-
-    def _run() -> dict[str, Any]:
-        client = get_client()
-        oid = order_id
-        if oid is None:
-            if not order_name:
-                return {"error": "Provide order_id or order_name."}
-            found = client.search_read(
-                "purchase.order", domain=[("name", "=", order_name)], fields=["id"], limit=1
-            )
-            if not found:
-                return {"error": f"No purchase order named {order_name!r}."}
-            oid = found[0]["id"]
-
-        header = client.read(
-            "purchase.order",
-            [oid],
-            fields=[
-                "name",
-                "partner_id",
-                "date_order",
-                "amount_untaxed",
-                "amount_tax",
-                "amount_total",
-                "state",
-                "order_line",
-            ],
+    return safe(
+        lambda: read_purchase_order(
+            get_client(), order_id=order_id, order_name=order_name
         )
-        if not header:
-            return {"error": f"No purchase order with id {oid}."}
-        order = header[0]
-        lines = client.read(
-            "purchase.order.line",
-            order.get("order_line", []),
-            fields=["product_id", "name", "product_qty", "price_unit", "price_subtotal"],
-        )
-        order["lines"] = lines
-        order.pop("order_line", None)
-        return order
-
-    return safe(_run)
+    )
 
 
 # --- Inventory (supplement) ---------------------------------------------------
