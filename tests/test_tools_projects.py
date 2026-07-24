@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 
-from odoo_pulse import tools_projects, tools_workflows
+from odoo_pulse import tools_workflows
+from odoo_pulse.tools.lists import project as tools_projects
 
 
 def test_list_tasks_default_excludes_subtasks(fake_client):
@@ -123,7 +124,7 @@ def test_standup_digest_shaping_bug_returns_json_error(fake_client):
 
 def test_list_timesheets_friendly_error_without_hr_timesheet(fake_client):
     import json
-    from odoo_pulse import tools_projects
+    from odoo_pulse.tools.lists import project as tools_projects
 
     fake_client.fields_responses["account.analytic.line"] = {
         "name": {"type": "char"}}

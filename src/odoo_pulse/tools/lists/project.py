@@ -10,15 +10,13 @@ from __future__ import annotations
 
 import json
 
-from .common.dates import date_domain
-from .common.domains import name_domain
-from .common.schema import ensure_field
-from .core.errors import OdooConfigError, OdooError
-from .mcp.app import mcp
-from .mcp.result import safe
-from .mcp.runtime import get_client
-from .services.projects.queries import resolve_user_names
-
+from ...common.domains import name_domain
+from ...core.errors import OdooConfigError, OdooError
+from ...mcp.app import mcp
+from ...mcp.result import safe
+from ...mcp.runtime import get_client
+from ...services.generic import search_records
+from ...services.projects.queries import build_task_list, build_timesheet_list
 
 
 @mcp.tool()
@@ -31,7 +29,8 @@ def list_projects(query: str | None = None, limit: int = 20) -> str:
     """
     domain = name_domain(query, ["name"])
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "project.project",
             domain=domain,
             fields=[
@@ -75,46 +74,17 @@ def list_tasks(
         limit: Max results per page (Odoo hard-caps at 200).
         offset: Number of records to skip; use with limit to paginate.
     """
-    domain = name_domain(query, ["name"])
-    if not include_subtasks:
-        domain.append(("parent_id", "=", False))
-    if project:
-        domain.append(("project_id.name", "ilike", project))
-    if assignee:
-        domain.append(("user_ids.name", "ilike", assignee))
-    if stage:
-        domain.append(("stage_id.name", "ilike", stage))
-
     try:
-        client = get_client()
-        fields = [
-            "name",
-            "project_id",
-            "user_ids",
-            "stage_id",
-            "date_deadline",
-            "priority",
-            "state",
-            "parent_id",
-        ]
-        tasks = client.search_read(
-            "project.task",
-            domain=domain,
-            fields=fields,
+        tasks = build_task_list(
+            get_client(),
+            query=query,
+            project=project,
+            assignee=assignee,
+            stage=stage,
+            include_subtasks=include_subtasks,
             limit=limit,
             offset=offset,
-            order="priority desc, date_deadline",
         )
-
-        all_user_ids = {uid for t in tasks for uid in t.get("user_ids", [])}
-        if all_user_ids:
-            user_map = resolve_user_names(client, all_user_ids)
-            for task in tasks:
-                task["user_ids"] = [
-                    {"id": uid, "name": user_map.get(uid, str(uid))}
-                    for uid in task.get("user_ids", [])
-                ]
-
         return json.dumps(tasks, ensure_ascii=False, indent=2, default=str)
     except (OdooConfigError, OdooError) as exc:
         return json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2)
@@ -137,27 +107,13 @@ def list_timesheets(
         date_to: Inclusive upper bound on the entry date (YYYY-MM-DD).
         limit: Max results.
     """
-
-    def run():
-        client = get_client()
-        ensure_field(
-            client,
-            "account.analytic.line",
-            "project_id",
-            hint="Timesheets require the hr_timesheet app; install it or use list_tasks instead.",
-        )
-        domain: list = [("project_id", "!=", False)]
-        if employee:
-            domain.append(("employee_id.name", "ilike", employee))
-        if project:
-            domain.append(("project_id.name", "ilike", project))
-        domain.extend(date_domain("date", date_from, date_to))
-        return client.search_read(
-            "account.analytic.line",
-            domain=domain,
-            fields=["name", "employee_id", "project_id", "task_id", "unit_amount", "date"],
+    return safe(
+        lambda: build_timesheet_list(
+            get_client(),
+            employee=employee,
+            project=project,
+            date_from=date_from,
+            date_to=date_to,
             limit=limit,
-            order="date desc",
         )
-
-    return safe(run)
+    )

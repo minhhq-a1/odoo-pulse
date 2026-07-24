@@ -34,7 +34,7 @@ def test_modules_to_load_default(monkeypatch):
 
 def test_modules_to_load_reads_env(monkeypatch):
     monkeypatch.setenv("ODOO_TOOL_GROUPS", "core,projects")
-    assert modules_to_load() == ["tools.generic", "tools.writes", "mcp.resources", "tools_projects"]
+    assert modules_to_load() == ["tools.generic", "tools.writes", "mcp.resources", "tools.lists.project"]
 
 
 def test_modules_to_load_deduplicates():

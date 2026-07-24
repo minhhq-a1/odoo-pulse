@@ -81,10 +81,8 @@ def build_cases(limit: int):
     from odoo_pulse import (
         domain_tools,
         tools_engagement,
-        tools_hr,
         tools_niche,
         tools_operations,
-        tools_projects,
         tools_reports_finance,
         tools_reports_hr,
         tools_reports_inventory,
@@ -94,6 +92,7 @@ def build_cases(limit: int):
         tools_workflows,
     )
     from odoo_pulse.tools import generic
+    from odoo_pulse.tools.lists import hr as tools_hr, project as tools_projects
 
     return [
         # group, label, func, kwargs

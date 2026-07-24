@@ -5,10 +5,9 @@ import pytest
 from odoo_pulse import (
     domain_tools,
     tools_engagement,
-    tools_hr,
     tools_operations,
-    tools_projects,
 )
+from odoo_pulse.tools.lists import hr as tools_hr, project as tools_projects
 
 
 @pytest.mark.parametrize(

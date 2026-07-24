@@ -11,6 +11,11 @@ from __future__ import annotations
 from typing import Any
 
 
+from ...common.dates import date_domain
+from ...common.domains import name_domain
+from ...common.schema import ensure_field
+
+
 def resolve_user_names(client: Any, user_ids: Any) -> dict[int, str]:
     """Map res.users ids to names, including archived users.
 
@@ -85,3 +90,77 @@ def account_ids_by_project(projects: list[dict], opt: list[str]
     field = account_field_of(opt)
     return {p["id"]: p[field][0] for p in projects
             if field and p.get(field)}
+
+
+def build_task_list(client: Any, *, query: str | None = None,
+                    project: str | None = None,
+                    assignee: str | None = None,
+                    stage: str | None = None,
+                    include_subtasks: bool = False,
+                    limit: int = 20, offset: int = 0) -> list[dict]:
+    domain = name_domain(query, ["name"])
+    if not include_subtasks:
+        domain.append(("parent_id", "=", False))
+    if project:
+        domain.append(("project_id.name", "ilike", project))
+    if assignee:
+        domain.append(("user_ids.name", "ilike", assignee))
+    if stage:
+        domain.append(("stage_id.name", "ilike", stage))
+
+    fields = [
+        "name",
+        "project_id",
+        "user_ids",
+        "stage_id",
+        "date_deadline",
+        "priority",
+        "state",
+        "parent_id",
+    ]
+    tasks = client.search_read(
+        "project.task",
+        domain=domain,
+        fields=fields,
+        limit=limit,
+        offset=offset,
+        order="priority desc, date_deadline",
+    )
+
+    all_user_ids = {uid for t in tasks for uid in t.get("user_ids", [])}
+    if all_user_ids:
+        user_map = resolve_user_names(client, all_user_ids)
+        for task in tasks:
+            task["user_ids"] = [
+                {"id": uid, "name": user_map.get(uid, str(uid))}
+                for uid in task.get("user_ids", [])
+            ]
+
+    return tasks
+
+
+def build_timesheet_list(client: Any, *, employee: str | None = None,
+                         project: str | None = None,
+                         date_from: str | None = None,
+                         date_to: str | None = None,
+                         limit: int = 20) -> list[dict]:
+    ensure_field(
+        client,
+        "account.analytic.line",
+        "project_id",
+        hint="Timesheets require the hr_timesheet app; install it or use list_tasks instead.",
+    )
+    domain: list = [("project_id", "!=", False)]
+    if employee:
+        domain.append(("employee_id.name", "ilike", employee))
+    if project:
+        domain.append(("project_id.name", "ilike", project))
+    domain.extend(date_domain("date", date_from, date_to))
+    return client.search_read(
+        "account.analytic.line",
+        domain=domain,
+        fields=["name", "employee_id", "project_id", "task_id", "unit_amount", "date"],
+        limit=limit,
+        order="date desc",
+    )
+

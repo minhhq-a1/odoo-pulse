@@ -15,11 +15,12 @@ Missing models surface as a friendly error rather than crashing.
 
 from __future__ import annotations
 
-from .common.dates import date_domain
-from .common.domains import name_domain
-from .mcp.app import mcp
-from .mcp.result import safe
-from .mcp.runtime import get_client
+from ...common.dates import date_domain
+from ...common.domains import name_domain
+from ...mcp.app import mcp
+from ...mcp.result import safe
+from ...mcp.runtime import get_client
+from ...services.generic import search_records
 
 
 @mcp.tool()
@@ -37,7 +38,8 @@ def list_employees(
     if department:
         domain.append(("department_id.name", "ilike", department))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "hr.employee",
             domain=domain,
             fields=[
@@ -58,7 +60,8 @@ def list_employees(
 def list_departments(limit: int = 50) -> str:
     """List HR departments (hr.department) with employee headcount."""
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "hr.department",
             domain=[],
             fields=["name", "manager_id", "parent_id", "total_employee"],
@@ -92,7 +95,8 @@ def list_time_off(
         if state:
             domain.append(("state", "=", state))
         domain.extend(date_domain("date_from", date_from, date_to, as_datetime=True))
-        return get_client().search_read(
+        return search_records(
+            get_client(),
             "hr.leave",
             domain=domain,
             fields=[
@@ -127,7 +131,8 @@ def list_expenses(
     if state:
         domain.append(("state", "=", state))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "hr.expense",
             domain=domain,
             fields=["name", "employee_id", "product_id", "total_amount", "date", "state"],
@@ -142,7 +147,8 @@ def list_job_positions(query: str | None = None, limit: int = 20) -> str:
     """List recruitment job positions (hr.job) with expected/recruited counts."""
     domain = name_domain(query, ["name"])
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "hr.job",
             domain=domain,
             fields=[
@@ -174,7 +180,8 @@ def list_applicants(
     if stage:
         domain.append(("stage_id.name", "ilike", stage))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "hr.applicant",
             domain=domain,
             fields=[
@@ -210,7 +217,8 @@ def list_attendances(
         if employee:
             domain.append(("employee_id.name", "ilike", employee))
         domain.extend(date_domain("check_in", date_from, date_to, as_datetime=True))
-        return get_client().search_read(
+        return search_records(
+            get_client(),
             "hr.attendance",
             domain=domain,
             fields=["employee_id", "check_in", "check_out", "worked_hours"],
