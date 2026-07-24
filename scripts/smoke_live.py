@@ -78,23 +78,23 @@ TEXT_RESULT_TOOLS = {"standup_digest"}
 def build_cases(limit: int):
     """(group, label, callable, kwargs) for every read-only tool in the
     default (core, reports) surface plus the opt-in breadth wrappers."""
-    from odoo_pulse import (
-        domain_tools,
-        tools_reports_finance,
-        tools_reports_hr,
-        tools_reports_inventory,
-        tools_reports_ops,
-        tools_reports_pulse,
-        tools_reports_sales,
-        tools_workflows,
-    )
     from odoo_pulse.tools import generic
     from odoo_pulse.tools.lists import (
+        business as domain_tools,
         engagement as tools_engagement,
         hr as tools_hr,
         niche as tools_niche,
         operations as tools_operations,
         project as tools_projects,
+    )
+    from odoo_pulse.tools.reports import (
+        crm as tools_reports_sales,
+        finance as tools_reports_finance,
+        hr as tools_reports_hr,
+        inventory as tools_reports_inventory,
+        operations as tools_reports_ops,
+        projects as tools_workflows,
+        pulse as tools_reports_pulse,
     )
 
     return [

@@ -1,7 +1,7 @@
 """Domain-specific convenience tools.
 
-These wrap the generic ``search_read`` with sensible defaults (filters, field
-sets, ordering) for the most common Odoo business objects so an LLM can answer
+These wrap search_records with sensible defaults (filters, field sets,
+ordering) for the most common Odoo business objects so an LLM can answer
 typical questions without knowing technical model/field names.
 
 Covered modules:
@@ -17,14 +17,14 @@ Everything here is read-only.
 
 from __future__ import annotations
 
-
-from .common.dates import date_domain
-from .common.domains import name_domain
-from .common.schema import optional_fields
-from .mcp.app import mcp
-from .mcp.result import safe
-from .mcp.runtime import get_client
-from .services.records import read_invoice, read_purchase_order, read_sale_order
+from ...common.dates import date_domain
+from ...common.domains import name_domain
+from ...common.schema import optional_fields
+from ...mcp.app import mcp
+from ...mcp.result import safe
+from ...mcp.runtime import get_client
+from ...services.generic import search_records
+from ...services.records import read_invoice, read_purchase_order, read_sale_order
 
 
 # --- Contacts -----------------------------------------------------------------
@@ -46,7 +46,8 @@ def find_partner(query: str, limit: int = 20) -> str:
         client = get_client()
         mobile = optional_fields(client, "res.partner", ["mobile"])
         domain = name_domain(query, ["name", "email", "phone", *mobile, "ref", "vat"])
-        return client.search_read(
+        return search_records(
+            client,
             "res.partner",
             domain=domain,
             fields=[
@@ -92,7 +93,8 @@ def list_opportunities(
     if salesperson:
         domain.append(("user_id.name", "ilike", salesperson))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "crm.lead",
             domain=domain,
             fields=[
@@ -140,7 +142,8 @@ def list_sale_orders(
         if state and state in _SALE_STATES:
             domain.append(("state", "=", state))
         domain.extend(date_domain("date_order", date_from, date_to, as_datetime=True))
-        return get_client().search_read(
+        return search_records(
+            get_client(),
             "sale.order",
             domain=domain,
             fields=[
@@ -194,7 +197,8 @@ def list_purchase_orders(
     if state:
         domain.append(("state", "=", state))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "purchase.order",
             domain=domain,
             fields=["name", "partner_id", "date_order", "amount_total", "state"],
@@ -217,7 +221,8 @@ def find_products(query: str | None = None, limit: int = 20) -> str:
     """
     domain = name_domain(query, ["name", "default_code", "barcode"])
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "product.product",
             domain=domain,
             fields=[
@@ -252,7 +257,8 @@ def check_stock(product_query: str, limit: int = 50) -> str:
         ("location_id.usage", "=", "internal"),
     ]
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "stock.quant",
             domain=domain,
             fields=["product_id", "location_id", "quantity", "reserved_quantity", "available_quantity"],
@@ -292,7 +298,8 @@ def list_invoices(
         if unpaid_only:
             domain.append(("payment_state", "in", ("not_paid", "partial")))
         domain.extend(date_domain("invoice_date", date_from, date_to))
-        return get_client().search_read(
+        return search_records(
+            get_client(),
             "account.move",
             domain=domain,
             fields=[
@@ -347,7 +354,8 @@ def list_payments(
         if payment_type in ("inbound", "outbound"):
             domain.append(("payment_type", "=", payment_type))
         domain.extend(date_domain("date", date_from, date_to))
-        return get_client().search_read(
+        return search_records(
+            get_client(),
             "account.payment",
             domain=domain,
             fields=["name", "partner_id", "payment_type", "amount", "date", "state", "journal_id"],
@@ -400,7 +408,8 @@ def list_pickings(
     if state:
         domain.append(("state", "=", state))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "stock.picking",
             domain=domain,
             fields=[

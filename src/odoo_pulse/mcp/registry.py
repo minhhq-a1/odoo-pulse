@@ -25,7 +25,7 @@ GROUP_MODULES: dict[str, tuple[str, ...]] = {
         "tools.reports.operations",
         "tools.reports.projects",
     ),
-    "business": ("domain_tools",),
+    "business": ("tools.lists.business",),
     "hr": ("tools.lists.hr",),
     "projects": ("tools.lists.project",),
     "operations": ("tools.lists.operations",),

@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import sys
 
-from odoo_pulse.tools_project_detail import (
+from odoo_pulse.tools.reports.projects import (
     portfolio_health,
     project_dashboard,
     project_subtask_hours,

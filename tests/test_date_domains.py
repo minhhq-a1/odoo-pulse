@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from odoo_pulse import domain_tools
 from odoo_pulse.tools.lists import (
+    business as domain_tools,
     engagement as tools_engagement,
     hr as tools_hr,
     operations as tools_operations,

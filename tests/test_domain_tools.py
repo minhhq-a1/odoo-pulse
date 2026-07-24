@@ -6,8 +6,8 @@ import json
 
 import pytest
 
-from odoo_pulse import domain_tools
 from odoo_pulse.tools import generic as tools_generic
+from odoo_pulse.tools.lists import business as domain_tools
 
 
 # --- Generic tools ------------------------------------------------------------
@@ -144,7 +144,7 @@ def test_get_invoice_expands_lines(fake_client):
 
 def test_find_partner_omits_mobile_when_absent_from_schema(fake_client):
     import json
-    from odoo_pulse import domain_tools
+    from odoo_pulse.tools.lists import business as domain_tools
 
     # Odoo 19: mobile removed from res.partner
     fake_client.fields_responses["res.partner"] = {"name": {"type": "char"}}
@@ -161,7 +161,7 @@ def test_find_partner_omits_mobile_when_absent_from_schema(fake_client):
 
 def test_find_partner_includes_mobile_when_present(fake_client):
     import json
-    from odoo_pulse import domain_tools
+    from odoo_pulse.tools.lists import business as domain_tools
 
     fake_client.search_responses["res.partner"] = []
     json.loads(domain_tools.find_partner("acme"))
