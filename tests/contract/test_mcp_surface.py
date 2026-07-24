@@ -319,3 +319,14 @@ def test_every_registered_tool_matches_complete_contract_fixture():
     assert len(actual) == 88
     assert actual == expected
 
+
+def test_all_registry_modules_use_subpackage_adapter_paths():
+    from odoo_pulse.mcp.registry import GROUP_MODULES
+
+    for group, modules in GROUP_MODULES.items():
+        for mod in modules:
+            assert mod.startswith("tools.") or mod.startswith("mcp."), (
+                f"Module '{mod}' in group '{group}' is a flat module, not a subpackage path."
+            )
+
+
