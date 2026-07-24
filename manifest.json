@@ -17,13 +17,22 @@
   },
   "homepage": "https://github.com/minhhq-a1/odoo-pulse",
   "license": "MIT",
-  "keywords": ["odoo", "mcp", "erp", "xml-rpc", "analytics", "business-intelligence"],
+  "keywords": [
+    "odoo",
+    "mcp",
+    "erp",
+    "xml-rpc",
+    "analytics",
+    "business-intelligence"
+  ],
   "server": {
     "type": "python",
     "entry_point": "src/odoo_pulse/server.py",
     "mcp_config": {
       "command": "uvx",
-      "args": ["odoo-pulse"],
+      "args": [
+        "odoo-pulse"
+      ],
       "env": {
         "ODOO_URL": "${user_config.odoo_url}",
         "ODOO_DB": "${user_config.odoo_db}",
@@ -76,7 +85,11 @@
     }
   },
   "compatibility": {
-    "platforms": ["darwin", "win32", "linux"],
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ],
     "runtimes": {
       "python": ">=3.10"
     }
