@@ -32,10 +32,11 @@ Covered models:
 
 from __future__ import annotations
 
-from .common.domains import name_domain
-from .mcp.app import mcp
-from .mcp.result import safe
-from .mcp.runtime import get_client
+from ...common.domains import name_domain
+from ...mcp.app import mcp
+from ...mcp.result import safe
+from ...mcp.runtime import get_client
+from ...services.generic import search_records
 
 
 # --- Subscriptions ------------------------------------------------------------
@@ -58,7 +59,8 @@ def list_subscriptions(
     if stage:
         domain.append(("stage_id.name", "ilike", stage))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "sale.subscription",
             domain=domain,
             fields=["name", "partner_id", "stage_id", "recurring_monthly", "date_start"],
@@ -83,7 +85,8 @@ def list_sign_requests(state: str | None = None, limit: int = 20) -> str:
     if state:
         domain.append(("state", "=", state))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "sign.request",
             domain=domain,
             fields=["reference", "state", "create_date"],
@@ -106,7 +109,8 @@ def list_documents(query: str | None = None, limit: int = 20) -> str:
     """
     domain = name_domain(query, ["name"])
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "documents.document",
             domain=domain,
             fields=["name", "folder_id", "owner_id", "mimetype", "create_date"],
@@ -129,7 +133,8 @@ def list_knowledge_articles(query: str | None = None, limit: int = 20) -> str:
     """
     domain = name_domain(query, ["name"])
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "knowledge.article",
             domain=domain,
             fields=["name", "parent_id", "is_published", "write_date"],
@@ -159,7 +164,8 @@ def list_approval_requests(
     if category:
         domain.append(("category_id.name", "ilike", category))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "approval.request",
             domain=domain,
             fields=["name", "request_owner_id", "category_id", "request_status"],
@@ -184,7 +190,8 @@ def list_lunch_orders(state: str | None = None, limit: int = 20) -> str:
     if state:
         domain.append(("state", "=", state))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "lunch.order",
             domain=domain,
             fields=["product_id", "user_id", "date", "price", "state"],
@@ -212,7 +219,8 @@ def list_quality_checks(
     if quality_state:
         domain.append(("quality_state", "=", quality_state))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "quality.check",
             domain=domain,
             fields=["name", "product_id", "quality_state", "control_date", "team_id"],
@@ -234,7 +242,8 @@ def list_quality_alerts(stage: str | None = None, limit: int = 20) -> str:
     if stage:
         domain.append(("stage_id.name", "ilike", stage))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "quality.alert",
             domain=domain,
             fields=["name", "product_id", "stage_id", "team_id"],
@@ -264,7 +273,8 @@ def list_planning_slots(
     if role:
         domain.append(("role_id.name", "ilike", role))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "planning.slot",
             domain=domain,
             fields=["resource_id", "role_id", "start_datetime", "end_datetime", "allocated_hours"],
@@ -287,7 +297,8 @@ def list_courses(query: str | None = None, limit: int = 20) -> str:
     """
     domain = name_domain(query, ["name"])
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "slide.channel",
             domain=domain,
             fields=["name", "total_slides", "members_count", "user_id"],
@@ -310,7 +321,8 @@ def list_loyalty_programs(query: str | None = None, limit: int = 20) -> str:
     """
     domain = name_domain(query, ["name"])
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "loyalty.program",
             domain=domain,
             fields=["name", "program_type", "active"],
@@ -332,7 +344,8 @@ def list_loyalty_cards(partner: str | None = None, limit: int = 20) -> str:
     if partner:
         domain.append(("partner_id.name", "ilike", partner))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "loyalty.card",
             domain=domain,
             fields=["code", "program_id", "partner_id", "points"],
@@ -362,7 +375,8 @@ def list_memberships(
     if state:
         domain.append(("state", "=", state))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "membership.membership_line",
             domain=domain,
             fields=["partner", "membership_id", "date_from", "date_to", "state"],
@@ -392,7 +406,8 @@ def list_payslips(
     if state:
         domain.append(("state", "=", state))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "hr.payslip",
             domain=domain,
             fields=["number", "employee_id", "date_from", "date_to", "state"],
@@ -422,7 +437,8 @@ def list_appraisals(
     if state:
         domain.append(("state", "=", state))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "hr.appraisal",
             domain=domain,
             fields=["employee_id", "state", "date_close"],
@@ -447,7 +463,8 @@ def list_social_posts(state: str | None = None, limit: int = 20) -> str:
     if state:
         domain.append(("state", "=", state))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "social.post",
             domain=domain,
             fields=["message", "state", "create_date"],
@@ -464,7 +481,8 @@ def list_social_posts(state: str | None = None, limit: int = 20) -> str:
 def list_website_visitors(limit: int = 20) -> str:
     """List website visitors (website.visitor) with visit counts."""
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "website.visitor",
             domain=[],
             fields=["display_name", "partner_id", "country_id", "visit_count"],
@@ -492,7 +510,8 @@ def list_engineering_changes(
     if state:
         domain.append(("state", "=", state))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "mrp.eco",
             domain=domain,
             fields=["name", "product_tmpl_id", "stage_id", "state"],
@@ -515,7 +534,8 @@ def list_iot_devices(query: str | None = None, limit: int = 20) -> str:
     """
     domain = name_domain(query, ["name"])
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "iot.device",
             domain=domain,
             fields=["name", "type", "connection"],
@@ -538,7 +558,8 @@ def list_notes(query: str | None = None, limit: int = 20) -> str:
     """
     domain = name_domain(query, ["name"])
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "note.note",
             domain=domain,
             fields=["name", "stage_id", "write_date"],

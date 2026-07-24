@@ -11,11 +11,12 @@ Covered models:
 
 from __future__ import annotations
 
-from .common.dates import date_domain
-from .common.domains import name_domain
-from .mcp.app import mcp
-from .mcp.result import safe
-from .mcp.runtime import get_client
+from ...common.dates import date_domain
+from ...common.domains import name_domain
+from ...mcp.app import mcp
+from ...mcp.result import safe
+from ...mcp.runtime import get_client
+from ...services.generic import search_records
 
 
 # --- Events -------------------------------------------------------------------
@@ -39,7 +40,8 @@ def list_events(
     def run():
         domain = name_domain(query, ["name"])
         domain.extend(date_domain("date_begin", date_from, date_to, as_datetime=True))
-        return get_client().search_read(
+        return search_records(
+            get_client(),
             "event.event",
             domain=domain,
             fields=["name", "date_begin", "date_end", "seats_expected", "seats_limited", "address_id"],
@@ -67,7 +69,8 @@ def list_event_registrations(
     if state:
         domain.append(("state", "=", state))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "event.registration",
             domain=domain,
             fields=["name", "event_id", "email", "phone", "state"],
@@ -98,7 +101,8 @@ def list_calendar_events(
     def run():
         domain = name_domain(query, ["name"])
         domain.extend(date_domain("start", date_from, date_to, as_datetime=True))
-        return get_client().search_read(
+        return search_records(
+            get_client(),
             "calendar.event",
             domain=domain,
             fields=["name", "start", "stop", "user_id", "partner_ids", "location"],
@@ -127,7 +131,8 @@ def list_activities(user: str | None = None, overdue_only: bool = False, limit: 
     if overdue_only:
         domain.append(("date_deadline", "<", "today"))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "mail.activity",
             domain=domain,
             fields=["summary", "activity_type_id", "user_id", "date_deadline", "res_model", "res_name"],
@@ -145,7 +150,8 @@ def list_surveys(query: str | None = None, limit: int = 20) -> str:
     """List surveys (survey.survey) with response counts."""
     domain = name_domain(query, ["title"])
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "survey.survey",
             domain=domain,
             fields=["title", "answer_count", "success_count", "state"],
@@ -160,7 +166,8 @@ def list_email_campaigns(query: str | None = None, limit: int = 20) -> str:
     """List email marketing mailings (mailing.mailing) with engagement stats."""
     domain = name_domain(query, ["subject"])
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "mailing.mailing",
             domain=domain,
             fields=["subject", "state", "sent", "delivered", "opened", "clicked"],

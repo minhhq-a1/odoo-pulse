@@ -16,11 +16,12 @@ Models belonging to apps that are not installed surface as a friendly error.
 
 from __future__ import annotations
 
-from .common.dates import date_domain
-from .common.domains import name_domain
-from .mcp.app import mcp
-from .mcp.result import safe
-from .mcp.runtime import get_client
+from ...common.dates import date_domain
+from ...common.domains import name_domain
+from ...mcp.app import mcp
+from ...mcp.result import safe
+from ...mcp.runtime import get_client
+from ...services.generic import search_records
 
 
 # --- Manufacturing (MRP) ------------------------------------------------------
@@ -41,7 +42,8 @@ def list_manufacturing_orders(
     if state:
         domain.append(("state", "=", state))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "mrp.production",
             domain=domain,
             fields=[
@@ -70,7 +72,8 @@ def list_boms(product: str | None = None, limit: int = 20) -> str:
         product, ["product_tmpl_id.name", "product_tmpl_id.default_code", "code"]
     )
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "mrp.bom",
             domain=domain,
             fields=["code", "product_tmpl_id", "product_qty", "type"],
@@ -103,7 +106,8 @@ def list_pos_orders(
         if state:
             domain.append(("state", "=", state))
         domain.extend(date_domain("date_order", date_from, date_to, as_datetime=True))
-        return get_client().search_read(
+        return search_records(
+            get_client(),
             "pos.order",
             domain=domain,
             fields=["name", "partner_id", "date_order", "amount_total", "state", "session_id"],
@@ -126,7 +130,8 @@ def list_pos_sessions(state: str | None = None, limit: int = 20) -> str:
     if state:
         domain.append(("state", "=", state))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "pos.session",
             domain=domain,
             fields=["name", "config_id", "user_id", "start_at", "stop_at", "state"],
@@ -154,7 +159,8 @@ def list_repair_orders(
     if state:
         domain.append(("state", "=", state))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "repair.order",
             domain=domain,
             fields=["name", "product_id", "partner_id", "state", "schedule_date"],
@@ -184,7 +190,8 @@ def list_maintenance_requests(
     if stage:
         domain.append(("stage_id.name", "ilike", stage))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "maintenance.request",
             domain=domain,
             fields=[
@@ -206,7 +213,8 @@ def list_equipment(query: str | None = None, limit: int = 20) -> str:
     """List maintenance equipment / assets (maintenance.equipment)."""
     domain = name_domain(query, ["name", "serial_no"])
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "maintenance.equipment",
             domain=domain,
             fields=["name", "category_id", "serial_no", "employee_id", "location"],
@@ -240,7 +248,8 @@ def list_helpdesk_tickets(
     if stage:
         domain.append(("stage_id.name", "ilike", stage))
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "helpdesk.ticket",
             domain=domain,
             fields=["name", "partner_id", "team_id", "stage_id", "user_id", "priority"],
@@ -263,7 +272,8 @@ def list_vehicles(query: str | None = None, limit: int = 20) -> str:
     """
     domain = name_domain(query, ["name", "license_plate"])
     return safe(
-        lambda: get_client().search_read(
+        lambda: search_records(
+            get_client(),
             "fleet.vehicle",
             domain=domain,
             fields=["name", "license_plate", "driver_id", "model_id", "state_id"],

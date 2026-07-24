@@ -2,12 +2,13 @@ import json
 
 import pytest
 
-from odoo_pulse import (
-    domain_tools,
-    tools_engagement,
-    tools_operations,
+from odoo_pulse import domain_tools
+from odoo_pulse.tools.lists import (
+    engagement as tools_engagement,
+    hr as tools_hr,
+    operations as tools_operations,
+    project as tools_projects,
 )
-from odoo_pulse.tools.lists import hr as tools_hr, project as tools_projects
 
 
 @pytest.mark.parametrize(

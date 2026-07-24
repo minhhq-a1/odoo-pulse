@@ -22,9 +22,9 @@ GROUP_MODULES: dict[str, tuple[str, ...]] = {
     "business": ("domain_tools",),
     "hr": ("tools.lists.hr",),
     "projects": ("tools.lists.project",),
-    "operations": ("tools_operations",),
-    "engagement": ("tools_engagement",),
-    "niche": ("tools_niche",),
+    "operations": ("tools.lists.operations",),
+    "engagement": ("tools.lists.engagement",),
+    "niche": ("tools.lists.niche",),
 }
 
 DEFAULT_GROUPS = "core,reports"

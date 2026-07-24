@@ -56,3 +56,10 @@ def test_reports_group_includes_projects_module():
 
 def test_core_group_includes_resources_module():
     assert "mcp.resources" in GROUP_MODULES["core"]
+
+
+def test_opt_in_groups_map_to_tools_lists_subpackage():
+    for group in ("hr", "projects", "operations", "engagement", "niche"):
+        mod = GROUP_MODULES[group][0]
+        assert mod.startswith("tools.lists.")
+

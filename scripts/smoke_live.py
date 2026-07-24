@@ -80,9 +80,6 @@ def build_cases(limit: int):
     default (core, reports) surface plus the opt-in breadth wrappers."""
     from odoo_pulse import (
         domain_tools,
-        tools_engagement,
-        tools_niche,
-        tools_operations,
         tools_reports_finance,
         tools_reports_hr,
         tools_reports_inventory,
@@ -92,7 +89,13 @@ def build_cases(limit: int):
         tools_workflows,
     )
     from odoo_pulse.tools import generic
-    from odoo_pulse.tools.lists import hr as tools_hr, project as tools_projects
+    from odoo_pulse.tools.lists import (
+        engagement as tools_engagement,
+        hr as tools_hr,
+        niche as tools_niche,
+        operations as tools_operations,
+        project as tools_projects,
+    )
 
     return [
         # group, label, func, kwargs
