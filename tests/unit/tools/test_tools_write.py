@@ -26,6 +26,8 @@ def test_create_record_confirm_writes_once(fake_client):
 
 
 def test_update_records_preview_reads_affected_no_write(fake_client):
+    from odoo_pulse.core.errors import OdooError
+
     fake_client.read_responses["crm.lead"] = [{"id": 1, "display_name": "Lead A"}]
     out = json.loads(
         tools_write.update_records("crm.lead", [1], {"name": "Y"}, confirm=False)
@@ -33,6 +35,16 @@ def test_update_records_preview_reads_affected_no_write(fake_client):
     assert out["preview"] is True
     assert out["affected"] == ["Lead A"]
     assert "write" not in [c["method"] for c in fake_client.calls]
+
+    # OdooError during preview display_name lookup must propagate to safe() error envelope
+    def failing_read(*args, **kwargs):
+        raise OdooError("read failed")
+
+    fake_client.read = failing_read
+    out_err = json.loads(
+        tools_write.update_records("crm.lead", [1], {"name": "Y"}, confirm=False)
+    )
+    assert out_err == {"error": "read failed"}
 
 
 def test_update_records_confirm_writes(fake_client):
@@ -169,3 +181,7 @@ def test_write_previews_work_without_credentials(monkeypatch):
 
     del_rec = json.loads(tools_write.delete_records("crm.lead", [1], confirm=False))
     assert del_rec["preview"] is True
+
+    # confirm=True propagates missing credentials error instead of returning preview
+    confirm_err = json.loads(tools_write.create_record("crm.lead", {"name": "X"}, confirm=True))
+    assert "error" in confirm_err

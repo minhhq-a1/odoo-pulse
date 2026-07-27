@@ -168,12 +168,20 @@ def test_write_guards_and_decorated_tool_locations():
 
 
 def test_clean_package_layout_and_breadth_list_delegation():
-    """No flat adapter files or cross-tool imports; tools/lists/*.py delegate without direct RPC."""
+    """No flat adapter files or cross-tool imports; tools/lists/*.py locked and delegate without direct RPC."""
     assert not (PACKAGE / "domain_tools.py").exists(), "domain_tools.py still exists"
     flat_files = list(PACKAGE.glob("tools_*.py"))
     assert flat_files == [], f"Stale flat adapter files: {flat_files}"
 
     tools_dir = PACKAGE / "tools"
+    lists_dir = tools_dir / "lists"
+    expected_list_files = {
+        "business.py", "engagement.py", "hr.py",
+        "niche.py", "operations.py", "projects.py",
+    }
+    actual_list_files = {p.name for p in lists_dir.glob("*.py") if p.name != "__init__.py"}
+    assert actual_list_files == expected_list_files, f"Unexpected list files: {actual_list_files}"
+
     allowed_subpackages = {"common", "core", "mcp", "services"}
     cross_imports = []
     for path in sorted(tools_dir.rglob("*.py")):
@@ -181,20 +189,27 @@ def test_clean_package_layout_and_breadth_list_delegation():
             continue
         tree = ast.parse(path.read_text())
         for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    mod = alias.name
+                    parts = mod.split(".")
+                    if parts[0] == "tools" or (parts[0] == "odoo_pulse" and len(parts) > 1 and parts[1] == "tools"):
+                        cross_imports.append(f"{path.relative_to(ROOT)}:{node.lineno} -> {mod}")
+            elif isinstance(node, ast.ImportFrom):
                 module = node.module or ""
                 if node.level == 0:
                     parts = module.split(".")
-                    if parts[0] == "odoo_pulse" and len(parts) > 1 and parts[1] == "tools":
+                    if parts[0] == "tools" or (parts[0] == "odoo_pulse" and len(parts) > 1 and parts[1] == "tools"):
                         cross_imports.append(f"{path.relative_to(ROOT)}:{node.lineno} -> {module}")
                 else:
                     parts = module.split(".") if module else []
                     first_target = parts[0] if parts else ""
                     if first_target and first_target not in allowed_subpackages:
                         cross_imports.append(f"{path.relative_to(ROOT)}:{node.lineno} -> relative {module}")
+                    elif not first_target:
+                        cross_imports.append(f"{path.relative_to(ROOT)}:{node.lineno} -> bare relative import")
     assert cross_imports == [], f"Cross-tool imports found: {cross_imports}"
 
-    lists_dir = PACKAGE / "tools" / "lists"
     violations = []
     for path in sorted(lists_dir.glob("*.py")):
         if path.name == "__init__.py":
@@ -204,16 +219,12 @@ def test_clean_package_layout_and_breadth_list_delegation():
             if not isinstance(func_node, ast.FunctionDef):
                 continue
             for node in ast.walk(func_node):
-                if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-                    attr = node.func.attr
-                    if attr in RPC_METHODS:
-                        val = node.func.value
-                        is_direct = (
-                            (isinstance(val, ast.Name) and val.id == "client") or
-                            (isinstance(val, ast.Call) and isinstance(val.func, ast.Name) and val.func.id == "get_client")
-                        )
-                        if is_direct:
-                            violations.append(
-                                f"{path.relative_to(ROOT)}:{node.lineno} direct RPC {attr!r}"
-                            )
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr in RPC_METHODS
+                ):
+                    violations.append(
+                        f"{path.relative_to(ROOT)}:{node.lineno} direct RPC {node.func.attr!r}"
+                    )
     assert violations == [], f"Breadth list adapters contain direct RPC calls: {violations}"

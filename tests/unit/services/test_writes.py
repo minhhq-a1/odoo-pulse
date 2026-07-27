@@ -1,12 +1,23 @@
 import pytest
 
 from odoo_pulse.core.errors import OdooError
-from odoo_pulse.services.writes import delete_records, update_records
+from odoo_pulse.services.writes import delete_records, display_names, update_records
 
 
 def test_update_records_service_requires_non_empty_ids(fake_client):
     with pytest.raises(OdooError, match="non-empty list"):
         update_records(fake_client, model="res.partner", ids=[], values={"name": "X"})
+
+    # display_names with client=None returns None
+    assert display_names(None, "res.partner", [1]) is None
+
+    # display_names propagates OdooError / OdooConfigError when client is not None
+    def failing_read(*args, **kwargs):
+        raise OdooError("read failed")
+
+    fake_client.read = failing_read
+    with pytest.raises(OdooError, match="read failed"):
+        display_names(fake_client, "res.partner", [1])
 
 
 def test_delete_records_service_returns_preview_by_default(fake_client):
