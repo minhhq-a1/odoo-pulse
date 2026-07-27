@@ -7,7 +7,11 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
-import tomllib
+
+try:  # Python 3.11+ ships tomllib; 3.10 needs the tomli backport.
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - exercised on Python 3.10 only
+    import tomli as tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 

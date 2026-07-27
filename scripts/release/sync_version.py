@@ -4,8 +4,18 @@ from __future__ import annotations
 
 import argparse
 import json
-import tomllib
 from pathlib import Path
+
+try:  # Python 3.11+ ships tomllib; 3.10 needs the tomli backport.
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - exercised on Python 3.10 only
+    try:
+        import tomli as tomllib
+    except ModuleNotFoundError:  # pragma: no cover - actionable operator error
+        raise SystemExit(
+            "Reading pyproject.toml on Python 3.10 requires the tomli "
+            "backport. Install it with: pip install -e \".[dev]\""
+        ) from None
 
 JSON_TARGETS = {
     "manifest.json": [("version",)],
