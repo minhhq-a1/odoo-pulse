@@ -55,4 +55,3 @@ def test_read_one_returns_python_dict(fake_client):
 def test_mcp_resources_registered_in_core_group():
     from odoo_pulse.mcp.registry import GROUP_MODULES
     assert "mcp.resources" in GROUP_MODULES["core"]
-

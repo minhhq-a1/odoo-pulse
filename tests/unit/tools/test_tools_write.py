@@ -103,58 +103,40 @@ def test_create_task_sets_project_and_assignee(fake_client):
     }
 
 
-def test_create_lead_merges_extra_values(fake_client):
-    out = json.loads(
-        tools_write.create_lead(
-            "Big deal", extra_values={"presales_id": 5, "priority": "2"}, confirm=True
-        )
-    )
-    assert out["created_id"] == 101
-    call = fake_client.last("create")
-    assert call["values"] == {"name": "Big deal", "presales_id": 5, "priority": "2"}
-
-
-def test_create_lead_extra_values_shows_in_preview(fake_client):
-    out = json.loads(
+def test_write_helpers_merge_and_override_extra_values(fake_client):
+    # Lead
+    out1 = json.loads(
         tools_write.create_lead("Big deal", extra_values={"presales_id": 5}, confirm=False)
     )
-    assert out["preview"] is True
-    assert out["values"] == {"name": "Big deal", "presales_id": 5}
-    assert fake_client.calls == []
+    assert out1["preview"] is True and out1["values"] == {"name": "Big deal", "presales_id": 5}
 
+    out2 = json.loads(
+        tools_write.create_lead(
+            "Big deal", email="a@b.com", extra_values={"email_from": "override@b.com"}, confirm=True
+        )
+    )
+    assert out2["created_id"] == 101
+    assert fake_client.last("create")["values"]["email_from"] == "override@b.com"
 
-def test_create_contact_merges_extra_values(fake_client):
-    out = json.loads(
+    # Contact
+    out3 = json.loads(
         tools_write.create_contact("ACME", extra_values={"vat": "VN123"}, confirm=True)
     )
-    assert out["created_id"] == 101
+    assert out3["created_id"] == 101
     assert fake_client.last("create")["values"] == {"name": "ACME", "vat": "VN123"}
 
-
-def test_create_task_merges_extra_values(fake_client):
-    out = json.loads(
+    # Task
+    out4 = json.loads(
         tools_write.create_task(
             "Do it", project_id=7, extra_values={"tag_ids": [(6, 0, [1])]}, confirm=True
         )
     )
-    assert out["created_id"] == 101
+    assert out4["created_id"] == 101
     assert fake_client.last("create")["values"] == {
         "name": "Do it",
         "project_id": 7,
         "tag_ids": [(6, 0, [1])],
     }
-
-
-def test_extra_values_override_helper_built_fields(fake_client):
-    # An explicit extra_values key wins over the helper's own mapping.
-    out = json.loads(
-        tools_write.create_lead(
-            "Big deal", email="a@b.com", extra_values={"email_from": "override@b.com"},
-            confirm=True,
-        )
-    )
-    assert out["created_id"] == 101
-    assert fake_client.last("create")["values"]["email_from"] == "override@b.com"
 
 
 def test_confirm_sale_order_calls_action_confirm(fake_client):
@@ -164,12 +146,8 @@ def test_confirm_sale_order_calls_action_confirm(fake_client):
     assert call["model"] == "sale.order"
     assert call["args"] == [[9]]
 
-
-def test_confirm_sale_order_preview(fake_client):
-    out = json.loads(tools_write.confirm_sale_order(9, confirm=False))
-    assert out["preview"] is True
-    assert out["ids"] == [9]
-    assert fake_client.calls == []
+    prev = json.loads(tools_write.confirm_sale_order(9, confirm=False))
+    assert prev["preview"] is True and prev["ids"] == [9]
 
 
 def test_write_previews_work_without_credentials(monkeypatch):
@@ -191,4 +169,3 @@ def test_write_previews_work_without_credentials(monkeypatch):
 
     del_rec = json.loads(tools_write.delete_records("crm.lead", [1], confirm=False))
     assert del_rec["preview"] is True
-

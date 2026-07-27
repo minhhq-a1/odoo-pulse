@@ -76,4 +76,3 @@ jobs:
             "$GITHUB_WORKSPACE/tests/integration/mcp_surface_probe.py" \
             --groups all --expected-tools 88 --expected-resources 1 \
             --expected-sdk 1.3.0 --require-instructions
-

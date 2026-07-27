@@ -328,5 +328,3 @@ def test_all_registry_modules_use_subpackage_adapter_paths():
             assert mod.startswith("tools.") or mod.startswith("mcp."), (
                 f"Module '{mod}' in group '{group}' is a flat module, not a subpackage path."
             )
-
-

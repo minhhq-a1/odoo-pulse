@@ -85,17 +85,16 @@ def build_cases(limit: int):
         hr as tools_hr,
         niche as tools_niche,
         operations as tools_operations,
-        project as tools_projects,
+        projects as tools_projects,
     )
     from odoo_pulse.tools.reports import (
-        crm as tools_reports_crm,
         finance as tools_reports_finance,
         hr as tools_reports_hr,
         inventory as tools_reports_inventory,
         operations as tools_reports_ops,
-        projects as tools_workflows,
         pulse as tools_reports_pulse,
         sales as tools_reports_sales,
+        workflows as tools_workflows,
     )
 
     return [
@@ -137,7 +136,7 @@ def build_cases(limit: int):
             },
         ),
         # --- Reports (reports group) ---
-        ("Reports", "pipeline_review", tools_reports_crm.pipeline_review, {}),
+        ("Reports", "pipeline_review", tools_reports_sales.pipeline_review, {}),
         ("Reports", "sales_snapshot", tools_reports_sales.sales_snapshot, {}),
         ("Reports", "receivables_health", tools_reports_finance.receivables_health, {}),
         ("Reports", "inventory_risk", tools_reports_inventory.inventory_risk, {}),

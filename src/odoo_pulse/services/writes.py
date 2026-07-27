@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..core.errors import OdooConfigError, OdooError
+from ..core.errors import OdooError
 
 
 def preview(action, model, *, values=None, ids=None, affected=None) -> dict:
@@ -27,11 +27,8 @@ def preview(action, model, *, values=None, ids=None, affected=None) -> dict:
 def display_names(client: Any, model: str, ids: list[int]) -> list | None:
     if client is None:
         return None
-    try:
-        rows = client.read(model, ids, fields=["display_name"])
-        return [r.get("display_name") for r in rows]
-    except (OdooError, OdooConfigError):
-        return None
+    rows = client.read(model, ids, fields=["display_name"])
+    return [r.get("display_name") for r in rows]
 
 
 def require_ids() -> None:

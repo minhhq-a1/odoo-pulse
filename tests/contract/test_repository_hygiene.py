@@ -70,4 +70,3 @@ def test_active_repository_paths_use_final_layout():
         "scripts/smoke_live.py", "scripts/smoke_project_status.py",
     ]
     assert all(not (ROOT / path).exists() for path in stale)
-

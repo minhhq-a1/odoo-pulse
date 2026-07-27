@@ -27,8 +27,7 @@ done
 echo "==> Verifying report tools"
 python3 - <<'PY'
 import json, sys
-from odoo_pulse.tools.reports.crm import pipeline_review
-from odoo_pulse.tools.reports.sales import sales_snapshot
+from odoo_pulse.tools.reports.sales import pipeline_review, sales_snapshot
 from odoo_pulse.tools.reports.finance import receivables_health
 from odoo_pulse.tools.reports.inventory import inventory_risk
 from odoo_pulse.tools.reports.hr import absence_overview

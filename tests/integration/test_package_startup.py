@@ -46,4 +46,3 @@ def test_surface_probe_reports_current_environment(tmp_path):
         cwd=tmp_path,
         env=env,
     )
-

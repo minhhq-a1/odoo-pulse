@@ -164,4 +164,3 @@ def build_timesheet_list(client: Any, *, employee: str | None = None,
         limit=limit,
         order="date desc",
     )
-

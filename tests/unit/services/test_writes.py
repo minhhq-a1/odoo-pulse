@@ -15,5 +15,3 @@ def test_delete_records_service_returns_preview_by_default(fake_client):
     assert res["preview"] is True
     assert res["action"] == "delete"
     assert res["affected"] == ["Partner 1"]
-
-
