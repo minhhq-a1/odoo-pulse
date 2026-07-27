@@ -15,7 +15,7 @@ pytest
 pytest tests/unit/core/test_client.py
 
 # Run a single test by name
-pytest tests/unit/tools/test_tools_write.py::test_create_record_preview
+pytest tests/unit/tools/test_tools_write.py::test_create_record_preview_does_no_write
 
 # Live smoke test against a real Odoo instance (reads only, never writes)
 python scripts/smoke/live.py

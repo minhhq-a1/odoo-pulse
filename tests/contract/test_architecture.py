@@ -12,6 +12,35 @@ RPC_METHODS = {
 }
 
 
+def _import_targets(
+    node: ast.Import | ast.ImportFrom,
+    current_package: tuple[str, ...],
+) -> list[str]:
+    """Resolve import statements to the absolute targets they may load."""
+    if isinstance(node, ast.Import):
+        return [alias.name for alias in node.names]
+
+    if node.level:
+        parent_hops = node.level - 1
+        base = list(current_package[:len(current_package) - parent_hops])
+    else:
+        base = []
+    if node.module:
+        base.extend(node.module.split("."))
+
+    targets = []
+    for alias in node.names:
+        parts = base if alias.name == "*" else [*base, *alias.name.split(".")]
+        targets.append(".".join(parts))
+    return targets
+
+
+def _is_tool_import(target: str) -> bool:
+    return target == "tools" or target.startswith("tools.") or (
+        target == "odoo_pulse.tools" or target.startswith("odoo_pulse.tools.")
+    )
+
+
 def test_services_do_not_import_mcp_or_tool_adapters():
     violations = []
     for path in sorted((PACKAGE / "services").rglob("*.py")):
@@ -182,32 +211,38 @@ def test_clean_package_layout_and_breadth_list_delegation():
     actual_list_files = {p.name for p in lists_dir.glob("*.py") if p.name != "__init__.py"}
     assert actual_list_files == expected_list_files, f"Unexpected list files: {actual_list_files}"
 
-    allowed_subpackages = {"common", "core", "mcp", "services"}
     cross_imports = []
     for path in sorted(tools_dir.rglob("*.py")):
         if path.name == "__init__.py":
             continue
         tree = ast.parse(path.read_text())
+        relative = path.relative_to(PACKAGE).with_suffix("")
+        current_package = ("odoo_pulse", *relative.parts[:-1])
         for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    mod = alias.name
-                    parts = mod.split(".")
-                    if parts[0] == "tools" or (parts[0] == "odoo_pulse" and len(parts) > 1 and parts[1] == "tools"):
-                        cross_imports.append(f"{path.relative_to(ROOT)}:{node.lineno} -> {mod}")
-            elif isinstance(node, ast.ImportFrom):
-                module = node.module or ""
-                if node.level == 0:
-                    parts = module.split(".")
-                    if parts[0] == "tools" or (parts[0] == "odoo_pulse" and len(parts) > 1 and parts[1] == "tools"):
-                        cross_imports.append(f"{path.relative_to(ROOT)}:{node.lineno} -> {module}")
-                else:
-                    parts = module.split(".") if module else []
-                    first_target = parts[0] if parts else ""
-                    if first_target and first_target not in allowed_subpackages:
-                        cross_imports.append(f"{path.relative_to(ROOT)}:{node.lineno} -> relative {module}")
-                    elif not first_target:
-                        cross_imports.append(f"{path.relative_to(ROOT)}:{node.lineno} -> bare relative import")
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                for target in _import_targets(node, current_package):
+                    if _is_tool_import(target):
+                        cross_imports.append(
+                            f"{path.relative_to(ROOT)}:{node.lineno} -> {target}"
+                        )
+
+    synthetic_imports = (
+        "import odoo_pulse.tools.generic",
+        "from odoo_pulse.tools import generic",
+        "from odoo_pulse import tools",
+        "from odoo_pulse import tools as adapters",
+        "from . import sibling",
+        "from .. import generic",
+        "from ..lists import business",
+    )
+    synthetic_package = ("odoo_pulse", "tools", "reports")
+    for source in synthetic_imports:
+        node = ast.parse(source).body[0]
+        assert isinstance(node, (ast.Import, ast.ImportFrom))
+        assert any(
+            _is_tool_import(target)
+            for target in _import_targets(node, synthetic_package)
+        ), f"Cross-tool import escaped detection: {source}"
     assert cross_imports == [], f"Cross-tool imports found: {cross_imports}"
 
     violations = []

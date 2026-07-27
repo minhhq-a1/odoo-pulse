@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from odoo_pulse.core.errors import OdooConfigError, OdooError
 from odoo_pulse.tools import writes as tools_write
 
 
@@ -26,8 +27,6 @@ def test_create_record_confirm_writes_once(fake_client):
 
 
 def test_update_records_preview_reads_affected_no_write(fake_client):
-    from odoo_pulse.core.errors import OdooError
-
     fake_client.read_responses["crm.lead"] = [{"id": 1, "display_name": "Lead A"}]
     out = json.loads(
         tools_write.update_records("crm.lead", [1], {"name": "Y"}, confirm=False)
@@ -36,15 +35,16 @@ def test_update_records_preview_reads_affected_no_write(fake_client):
     assert out["affected"] == ["Lead A"]
     assert "write" not in [c["method"] for c in fake_client.calls]
 
-    # OdooError during preview display_name lookup must propagate to safe() error envelope
-    def failing_read(*args, **kwargs):
-        raise OdooError("read failed")
+    # Display-name failures must propagate to the safe() error envelope.
+    for error in (OdooError("read failed"), OdooConfigError("config read failed")):
+        def failing_read(*args, _error=error, **kwargs):
+            raise _error
 
-    fake_client.read = failing_read
-    out_err = json.loads(
-        tools_write.update_records("crm.lead", [1], {"name": "Y"}, confirm=False)
-    )
-    assert out_err == {"error": "read failed"}
+        fake_client.read = failing_read
+        out_err = json.loads(
+            tools_write.update_records("crm.lead", [1], {"name": "Y"}, confirm=False)
+        )
+        assert out_err == {"error": str(error)}
 
 
 def test_update_records_confirm_writes(fake_client):
@@ -163,8 +163,10 @@ def test_confirm_sale_order_calls_action_confirm(fake_client):
 
 
 def test_write_previews_work_without_credentials(monkeypatch):
-    from odoo_pulse.mcp import runtime as mcp_runtime
-    monkeypatch.setattr(mcp_runtime, "_client", None)
+    def missing_client():
+        raise OdooConfigError("missing credentials")
+
+    monkeypatch.setattr(tools_write, "get_client", missing_client)
 
     # All write tools return previews without throwing OdooConfigError
     create_rec = json.loads(tools_write.create_record("crm.lead", {"name": "X"}, confirm=False))
@@ -184,4 +186,13 @@ def test_write_previews_work_without_credentials(monkeypatch):
 
     # confirm=True propagates missing credentials error instead of returning preview
     confirm_err = json.loads(tools_write.create_record("crm.lead", {"name": "X"}, confirm=True))
-    assert "error" in confirm_err
+    assert confirm_err == {"error": "missing credentials"}
+
+    def broken_client():
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(tools_write, "get_client", broken_client)
+    internal_err = json.loads(
+        tools_write.create_record("crm.lead", {"name": "X"}, confirm=False)
+    )
+    assert internal_err == {"error": "internal error: RuntimeError: boom"}
