@@ -2,7 +2,7 @@
 """Render the GitHub social-preview (OG) card to assets/og-card.png.
 
 Self-contained: uses Pillow and macOS system fonts (falls back gracefully).
-Run: python3 scripts/make_og.py
+Run: python3 scripts/assets/make_og.py
 GitHub social preview wants a PNG/JPG ~1280x640 — upload it under
 Settings → General → Social preview (web UI only).
 """

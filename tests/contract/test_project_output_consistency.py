@@ -2,7 +2,7 @@ import json
 
 from odoo_pulse.tools.reports import projects as tools_project_detail
 from odoo_pulse.tools.reports import projects as tools_reports_projects
-from odoo_pulse.tools.reports import projects as tools_workflows
+from odoo_pulse.tools.reports import workflows as tools_workflows
 
 
 def reset_calls(fake_client):

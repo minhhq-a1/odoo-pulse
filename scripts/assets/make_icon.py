@@ -3,7 +3,7 @@
 
 A pulse/ECG waveform in the brand purple on a dark rounded square — small-size
 legible for registry listings (Smithery/Glama) and reusable as a repo logo.
-Run: python3 scripts/make_icon.py
+Run: python3 scripts/assets/make_icon.py
 """
 from __future__ import annotations
 

@@ -9,7 +9,7 @@ Usage:
     # against the playground (docker compose ... up):
     ODOO_URL=http://localhost:8069 ODOO_DB=playground \
     ODOO_USERNAME=admin ODOO_API_KEY=admin ODOO_READ_ONLY=true \
-    python3 scripts/demo_pulse.py assets/business_pulse.svg
+    python3 scripts/demo/demo_pulse.py assets/business_pulse.svg
 """
 from __future__ import annotations
 

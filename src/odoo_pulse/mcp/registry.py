@@ -16,7 +16,7 @@ import os
 GROUP_MODULES: dict[str, tuple[str, ...]] = {
     "core": ("tools.generic", "tools.writes", "mcp.resources"),
     "reports": (
-        "tools.reports.crm",
+        "tools.reports.workflows",
         "tools.reports.sales",
         "tools.reports.finance",
         "tools.reports.inventory",
@@ -27,7 +27,7 @@ GROUP_MODULES: dict[str, tuple[str, ...]] = {
     ),
     "business": ("tools.lists.business",),
     "hr": ("tools.lists.hr",),
-    "projects": ("tools.lists.project",),
+    "projects": ("tools.lists.projects",),
     "operations": ("tools.lists.operations",),
     "engagement": ("tools.lists.engagement",),
     "niche": ("tools.lists.niche",),

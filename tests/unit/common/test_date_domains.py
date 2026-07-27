@@ -7,7 +7,7 @@ from odoo_pulse.tools.lists import (
     engagement as tools_engagement,
     hr as tools_hr,
     operations as tools_operations,
-    project as tools_projects,
+    projects as tools_projects,
 )
 
 

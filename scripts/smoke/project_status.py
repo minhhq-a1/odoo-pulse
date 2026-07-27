@@ -6,7 +6,7 @@ budget "PASX TBS", planned 1,593,314,320 / practical 1,736,086,746 —
 verified 2026-07-17) so they can be eyeballed against the artifact.
 Never writes. Requires the usual ODOO_* env vars (see scripts/smoke/live.py).
 
-Usage: python scripts/smoke_project_status.py [PROJECT_ID]
+Usage: python scripts/smoke/project_status.py [PROJECT_ID]
 """
 
 from __future__ import annotations

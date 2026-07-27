@@ -38,8 +38,8 @@ def test_package_service_and_tool_modules_are_packaged_and_importable():
         "odoo_pulse.tools.lists.hr",
         "odoo_pulse.tools.lists.niche",
         "odoo_pulse.tools.lists.operations",
-        "odoo_pulse.tools.lists.project",
-        "odoo_pulse.tools.reports.crm",
+        "odoo_pulse.tools.lists.projects",
+        "odoo_pulse.tools.reports.workflows",
         "odoo_pulse.tools.reports.finance",
         "odoo_pulse.tools.reports.hr",
         "odoo_pulse.tools.reports.inventory",
@@ -53,3 +53,4 @@ def test_package_service_and_tool_modules_are_packaged_and_importable():
     package = Path(odoo_pulse.__file__).resolve().parent
     assert not (package / "domain_tools.py").exists()
     assert list(package.glob("tools_*.py")) == []
+    assert not (package / "tools" / "lists" / "project.py").exists()

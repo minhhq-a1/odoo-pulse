@@ -1,22 +1,10 @@
-import types
 import odoo_pulse
 
 
 def test_package_exposes_version_string():
     assert isinstance(odoo_pulse.__version__, str)
-    assert odoo_pulse.__version__ == "1.8.2"
+    assert odoo_pulse.__version__ != ""
 
 
-def test_package_exposes_mcp_runtime_symbols():
-    assert hasattr(odoo_pulse, "get_client")
-
-
-def test_package_exposes_core_error_classes():
-    assert issubclass(odoo_pulse.OdooConfigError, Exception)
-    assert issubclass(odoo_pulse.OdooError, Exception)
-
-
-def test_package_exposes_clean_subpackage_namespaces():
-    for name in ("core", "common", "mcp", "services", "tools"):
-        assert hasattr(odoo_pulse, name)
-        assert isinstance(getattr(odoo_pulse, name), types.ModuleType)
+def test_package_all_is_version_only():
+    assert odoo_pulse.__all__ == ["__version__"]

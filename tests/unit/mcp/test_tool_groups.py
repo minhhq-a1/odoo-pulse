@@ -26,7 +26,7 @@ def test_modules_to_load_default(monkeypatch):
     monkeypatch.delenv("ODOO_TOOL_GROUPS", raising=False)
     assert modules_to_load() == [
         "tools.generic", "tools.writes", "mcp.resources",
-        "tools.reports.crm", "tools.reports.sales", "tools.reports.finance",
+        "tools.reports.workflows", "tools.reports.sales", "tools.reports.finance",
         "tools.reports.inventory", "tools.reports.hr", "tools.reports.pulse",
         "tools.reports.operations", "tools.reports.projects",
     ]
@@ -34,13 +34,13 @@ def test_modules_to_load_default(monkeypatch):
 
 def test_modules_to_load_reads_env(monkeypatch):
     monkeypatch.setenv("ODOO_TOOL_GROUPS", "core,projects")
-    assert modules_to_load() == ["tools.generic", "tools.writes", "mcp.resources", "tools.lists.project"]
+    assert modules_to_load() == ["tools.generic", "tools.writes", "mcp.resources", "tools.lists.projects"]
 
 
 def test_modules_to_load_deduplicates():
     assert modules_to_load("core,core,reports") == [
         "tools.generic", "tools.writes", "mcp.resources",
-        "tools.reports.crm", "tools.reports.sales", "tools.reports.finance",
+        "tools.reports.workflows", "tools.reports.sales", "tools.reports.finance",
         "tools.reports.inventory", "tools.reports.hr", "tools.reports.pulse",
         "tools.reports.operations", "tools.reports.projects",
     ]
@@ -48,6 +48,10 @@ def test_modules_to_load_deduplicates():
 
 def test_reports_group_includes_ops_module():
     assert "tools.reports.operations" in GROUP_MODULES["reports"]
+
+
+def test_reports_group_includes_workflows_module():
+    assert "tools.reports.workflows" in GROUP_MODULES["reports"]
 
 
 def test_reports_group_includes_projects_module():

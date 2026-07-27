@@ -15,7 +15,7 @@ from odoo_pulse.tools.lists import (
     hr as tools_hr,
     niche as tools_niche,
     operations as tools_operations,
-    project as tools_projects,
+    projects as tools_projects,
 )
 
 # (callable, kwargs, expected_model)

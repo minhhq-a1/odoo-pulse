@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from odoo_pulse.tools.lists import project as tools_projects
+from odoo_pulse.tools.lists import projects as tools_projects
 
 
 def test_list_tasks_default_excludes_subtasks(fake_client):

@@ -1,10 +1,10 @@
-"""Tests for tools.reports.projects: standup_digest."""
+"""Tests for tools.reports.workflows: standup_digest."""
 
 from __future__ import annotations
 
 import json
 
-from odoo_pulse.tools.reports import projects as tools_workflows
+from odoo_pulse.tools.reports import workflows as tools_workflows
 
 
 def test_standup_digest_renders_markdown_header(fake_client):

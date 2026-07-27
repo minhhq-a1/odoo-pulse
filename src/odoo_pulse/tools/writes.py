@@ -8,6 +8,7 @@ happens with ``confirm=True``, and even then it must clear the guard in
 
 from __future__ import annotations
 
+from ..core.errors import OdooConfigError
 from ..mcp.app import mcp
 from ..mcp.result import safe
 from ..mcp.runtime import get_client
@@ -26,7 +27,7 @@ def _client_for(confirm: bool):
     if not confirm:
         try:
             return get_client()
-        except Exception:
+        except OdooConfigError:
             return None
     return get_client()
 

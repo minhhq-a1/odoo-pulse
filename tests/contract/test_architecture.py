@@ -7,7 +7,7 @@ PACKAGE = ROOT / "src" / "odoo_pulse"
 
 RPC_METHODS = {
     "aggregate_records", "fields_get", "search_count", "search_read",
-    "read", "execute_kw",
+    "read", "execute_kw", "write", "create", "unlink",
 }
 
 
@@ -41,9 +41,6 @@ def test_services_do_not_import_mcp_or_tool_adapters():
 
 def test_plan4_adapters_are_thin_and_delegate_to_designated_builders():
     adapters = {
-        "tools/reports/crm.py": {
-            "pipeline_review": ("safe", "build_pipeline_review"),
-        },
         "tools/reports/sales.py": {
             "sales_snapshot": ("safe", "build_sales_snapshot"),
         },
@@ -63,7 +60,8 @@ def test_plan4_adapters_are_thin_and_delegate_to_designated_builders():
         "tools/reports/pulse.py": {
             "business_pulse": ("safe", "build_business_pulse"),
         },
-        "tools/reports/projects.py": {
+        "tools/reports/workflows.py": {
+            "pipeline_review": ("safe", "build_pipeline_review"),
             "team_workload": ("safe", "build_team_workload"),
             "standup_digest": ("safe_text", "build_standup_digest"),
         },
@@ -122,3 +120,98 @@ def test_plan4_adapters_are_thin_and_delegate_to_designated_builders():
             assert isinstance(client_call, ast.Call)
             assert isinstance(client_call.func, ast.Name)
             assert client_call.func.id == "get_client"
+
+
+def test_write_service_does_not_reimplement_core_guards():
+    """services/writes.py must not inspect env vars or import core.client."""
+    path = PACKAGE / "services" / "writes.py"
+    source = path.read_text()
+    tree = ast.parse(source)
+    forbidden_imports = {"core.client", "OdooClient"}
+    forbidden_strings = {"ODOO_READ_ONLY", "ODOO_WRITABLE_MODELS", "_check_write"}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            assert "core.client" not in module, (
+                f"services/writes.py must not import core.client (line {node.lineno})"
+            )
+            for alias in node.names:
+                assert alias.name not in forbidden_imports, (
+                    f"Forbidden import {alias.name!r} in services/writes.py:{node.lineno}"
+                )
+    for name in forbidden_strings:
+        assert name not in source, (
+            f"services/writes.py must not reference {name!r}; "
+            "write guards belong exclusively in core.client"
+        )
+
+
+def test_all_decorated_tools_live_under_tools_package():
+    """Every @mcp.tool() decoration must be in a file under src/odoo_pulse/tools/."""
+    tools_dir = PACKAGE / "tools"
+    outside_violations = []
+    for path in sorted(PACKAGE.rglob("*.py")):
+        if path.is_relative_to(tools_dir):
+            continue
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "tool"
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "mcp"
+            ):
+                outside_violations.append(f"{path.relative_to(ROOT)}:{node.lineno}")
+    assert outside_violations == [], (
+        "Found @mcp.tool() decorations outside tools/: " + str(outside_violations)
+    )
+
+
+def test_no_flat_adapter_modules_or_cross_tool_imports_remain():
+    """No tools_*.py flat files; no tool module imports from another tool module."""
+    flat_files = list(PACKAGE.glob("tools_*.py"))
+    assert flat_files == [], f"Stale flat adapter files: {flat_files}"
+
+    tools_dir = PACKAGE / "tools"
+    tools_dotted_prefix = "odoo_pulse.tools."
+    cross_imports = []
+    for path in sorted(tools_dir.rglob("*.py")):
+        if path.name == "__init__.py":
+            continue
+        tree = ast.parse(path.read_text())
+        own_dotted = (
+            "odoo_pulse."
+            + str(path.relative_to(PACKAGE)).replace("/", ".").removesuffix(".py")
+        )
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                module = node.module or ""
+                if module.startswith(tools_dotted_prefix) and not own_dotted.startswith(
+                    module
+                ):
+                    cross_imports.append(f"{path.relative_to(ROOT)}:{node.lineno} -> {module}")
+    assert cross_imports == [], f"Cross-tool imports found: {cross_imports}"
+
+
+def test_breadth_list_adapters_delegate_without_direct_rpc():
+    """tools/lists/*.py must not call client.search_read / client.execute_kw directly."""
+    lists_dir = PACKAGE / "tools" / "lists"
+    violations = []
+    for path in sorted(lists_dir.glob("*.py")):
+        if path.name == "__init__.py":
+            continue
+        tree = ast.parse(path.read_text())
+        for func_node in ast.walk(tree):
+            if not isinstance(func_node, ast.FunctionDef):
+                continue
+            for node in ast.walk(func_node):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr in RPC_METHODS
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id in ("client", "get_client()")
+                ):
+                    violations.append(f"{path.relative_to(ROOT)}:{node.col_offset} direct RPC {node.func.attr!r}")
+    assert violations == [], f"Breadth list adapters contain direct RPC calls: {violations}"

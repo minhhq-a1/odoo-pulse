@@ -4,7 +4,7 @@
 #
 # Usage:
 #   export SMITHERY_API_KEY=sk-...          # your Smithery API key
-#   ./scripts/publish_smithery.sh           # uses dist/odoo-pulse-<pyproject version>.mcpb
+#   ./scripts/release/publish_smithery.sh           # uses dist/odoo-pulse-<pyproject version>.mcpb
 #
 # The key is read from the environment only — never hardcode it or commit it.
 set -euo pipefail

@@ -11,7 +11,7 @@ Enter
 Type "clear"
 Enter
 Show
-Type `python3 scripts/demo_pulse.py --print   # "how's the company doing today?"`
+Type `python3 scripts/demo/demo_pulse.py --print   # "how's the company doing today?"`
 Sleep 800ms
 Enter
 Sleep 7s

@@ -2,7 +2,7 @@
 import datetime as dt
 import json
 
-from odoo_pulse.tools.reports import projects as tools_workflows
+from odoo_pulse.tools.reports import workflows as tools_workflows
 from odoo_pulse.services.projects import health
 
 

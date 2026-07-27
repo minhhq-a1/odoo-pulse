@@ -14,6 +14,7 @@ from typing import Any
 from ...common.dates import date_domain
 from ...common.domains import name_domain
 from ...common.schema import ensure_field
+from ..generic import search_records
 
 
 def resolve_user_names(client: Any, user_ids: Any) -> dict[int, str]:
@@ -118,8 +119,8 @@ def build_task_list(client: Any, *, query: str | None = None,
         "state",
         "parent_id",
     ]
-    tasks = client.search_read(
-        "project.task",
+    tasks = search_records(
+        client, "project.task",
         domain=domain,
         fields=fields,
         limit=limit,
@@ -156,8 +157,8 @@ def build_timesheet_list(client: Any, *, employee: str | None = None,
     if project:
         domain.append(("project_id.name", "ilike", project))
     domain.extend(date_domain("date", date_from, date_to))
-    return client.search_read(
-        "account.analytic.line",
+    return search_records(
+        client, "account.analytic.line",
         domain=domain,
         fields=["name", "employee_id", "project_id", "task_id", "unit_amount", "date"],
         limit=limit,
