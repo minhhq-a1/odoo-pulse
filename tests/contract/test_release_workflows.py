@@ -168,6 +168,19 @@ def test_release_record_requires_a_pushed_image_digest():
     assert 'test -n "$DIGEST"' in record
 
 
+def test_no_workflow_interpolates_directly_into_a_shell_body():
+    # Values reach `run:` through env: instead, so a crafted input becomes shell
+    # data rather than shell source.
+    offenders = []
+    for path in sorted(WORKFLOWS.glob("*.yml")):
+        for job, spec in workflow_payload(path.name)["jobs"].items():
+            for step in spec.get("steps") or []:
+                body = step.get("run") or ""
+                if "${{" in body:
+                    offenders.append(f"{path.name}:{job}:{step.get('name', '?')}")
+    assert offenders == []
+
+
 def test_every_workflow_declares_a_least_privilege_default():
     for path in sorted(WORKFLOWS.glob("*.yml")):
         payload = workflow_payload(path.name)

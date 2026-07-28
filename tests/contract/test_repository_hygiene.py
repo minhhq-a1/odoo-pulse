@@ -38,6 +38,7 @@ def test_shipped_docs_are_visible_and_do_not_reference_internal_plans():
         "docs/releases/project-finance-consistency.md",
         "docs/guides/releasing.md",
         "docs/releases/v1.9.0.md",
+        "docs/releases/v1.9.0rc1.md",
     ]
     for relative in expected:
         path = ROOT / relative
@@ -67,6 +68,16 @@ def test_release_docs_define_rc_soak_retry_and_rollback():
     assert "Python 3.10-3.13" in notes
     assert "Odoo 18 and 19" in notes
     assert "Internal Python module paths" in notes
+
+
+def test_every_planned_release_tag_has_notes_the_workflow_can_find():
+    # release.yml's validate job asserts docs/releases/${TAG}.md exists before
+    # it builds anything, so a planned tag without notes cannot publish at all.
+    for tag in ["v1.9.0rc1", "v1.9.0"]:
+        path = ROOT / "docs" / "releases" / f"{tag}.md"
+        assert path.is_file(), f"No release notes for {tag}; release.yml would fail"
+    runbook = (ROOT / "docs/guides/releasing.md").read_text()
+    assert "docs/releases/<tag>.md" in runbook
 
 
 def test_active_repository_paths_use_final_layout():

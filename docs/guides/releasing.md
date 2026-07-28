@@ -33,8 +33,19 @@ git diff --check
 git status --short
 ```
 
-All five must be clean. Then confirm the release identity the tag will have to
-match:
+All five must be clean. Every tag also needs its own release notes — the
+`validate` job asserts `docs/releases/<tag>.md` exists before it builds
+anything, so a tag without notes cannot publish at all:
+
+```bash
+test -f "docs/releases/v1.9.0rc1.md"
+```
+
+Write and commit that file before tagging. A release candidate gets its own
+note, not the stable one: it must say the moving Docker aliases are untouched
+and that promotion is not guaranteed.
+
+Then confirm the release identity the tag will have to match:
 
 ```bash
 python3 scripts/release/release_contract.py identity --root . --tag v1.9.0rc1
@@ -93,6 +104,7 @@ that writes them.
 | `server.json` version | `1.9.0-rc.1` | `1.9.0` |
 | `server.json` `packages[0].version` | `1.9.0rc1` | `1.9.0` |
 | Git tag | `v1.9.0rc1` | `v1.9.0` |
+| Release notes file | `docs/releases/v1.9.0rc1.md` | `docs/releases/v1.9.0.md` |
 | Docker aliases | `1.9.0rc1` only | `1.9.0`, `1.9`, `1`, `latest` |
 
 PEP 440 `1.9.0rc1` maps to SemVer `1.9.0-rc.1`. Only MCPB, the Claude plugin,
@@ -252,7 +264,7 @@ done". When one fails, fix forward on that channel alone.
 | validate or build | Fix the source, cut a new candidate. Never re-point the tag. |
 | PyPI | Re-run the job. A duplicate filename is a provenance failure, not a no-op — investigate, do not force. |
 | Docker | Re-run `docker.yml` at the tag with `push_image=true`. The build is deterministic and the probe gates the push. |
-| GitHub Release | Re-run `release-record`, or create the release from the already-built artifacts. |
+| GitHub Release | Re-run `release-record`. `gh release create` is not idempotent, so if the release was partially created, delete the incomplete *release* first (`gh release delete <tag>` — this does not touch the tag) or upload the assets with `gh release upload <tag> --clobber`. |
 | MCP Registry | Re-dispatch `publish-mcp.yml` with the same `release_ref` once PyPI is confirmed live. |
 
 Only re-run a downstream channel when the source at the tag is unchanged. If the

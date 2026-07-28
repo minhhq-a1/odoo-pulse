@@ -57,9 +57,11 @@ jobs:
           python-version: "3.12"
 
       - name: Validate release identity of the built ref
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
           python scripts/release/release_contract.py identity \
-            --root . --tag "v${{ inputs.version }}"
+            --root . --tag "v${VERSION}"
 
       - uses: docker/setup-buildx-action@v4
 
@@ -75,10 +77,12 @@ jobs:
             type=pep440,pattern={{major}},value=${{ inputs.version }}
 
       - name: Check exact Docker aliases
+        env:
+          VERSION: ${{ inputs.version }}
+          TAGS: ${{ steps.meta.outputs.tags }}
         run: |
           python scripts/release/release_contract.py check-docker-tags \
-            --version "${{ inputs.version }}" \
-            --actual "${{ steps.meta.outputs.tags }}"
+            --version "$VERSION" --actual "$TAGS"
 
       - name: Build image once without pushing
         uses: docker/build-push-action@v7
@@ -90,9 +94,11 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Probe MCP surface
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
           docker run --rm --entrypoint python \
-            "${IMAGE}:${{ inputs.version }}" -c '
+            "${IMAGE}:${VERSION}" -c '
           import asyncio, json
           from odoo_pulse import server  # noqa: F401
           from odoo_pulse.mcp.app import mcp
@@ -110,8 +116,10 @@ jobs:
           '
 
       - name: Save the exact probed image set
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
         run: |
-          printf '%s\n' "${{ steps.meta.outputs.tags }}" > tags.txt
+          printf '%s\n' "$TAGS" > tags.txt
           docker save -o image.tar $(tr '\n' ' ' < tags.txt)
 
       - uses: actions/upload-artifact@v7

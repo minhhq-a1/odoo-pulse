@@ -71,14 +71,16 @@ jobs:
       - name: Build sdist and wheel exactly once
         run: python -m build
       - name: Check the built distributions
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
         run: |
-          VERSION="${{ needs.validate.outputs.version }}"
           python -m twine check \
             "dist/odoo_pulse-${VERSION}-py3-none-any.whl" \
             "dist/odoo_pulse-${VERSION}.tar.gz"
       - name: Assert the archive layout
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
         run: |
-          VERSION="${{ needs.validate.outputs.version }}"
           test -f "dist/odoo_pulse-${VERSION}-py3-none-any.whl"
           test -f "dist/odoo_pulse-${VERSION}.tar.gz"
           test "$(find dist -maxdepth 1 -name '*.whl' | wc -l)" -eq 1
