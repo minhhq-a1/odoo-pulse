@@ -42,6 +42,10 @@ class MissingTargetError(RuntimeError):
     """A required release metadata target is absent."""
 
 
+class MalformedTargetError(RuntimeError):
+    """A required release metadata target has no version field to update."""
+
+
 def require(root: Path, relative: str) -> Path:
     path = root / relative
     if not path.exists():
@@ -72,7 +76,14 @@ def rendered_files(root: Path) -> dict[Path, str]:
         path = require(root, relative)
         payload = json.loads(path.read_text())
         for representation, key_path in targets:
-            set_path(payload, key_path, representations[representation])
+            try:
+                set_path(payload, key_path, representations[representation])
+            except (KeyError, IndexError, TypeError) as error:
+                location = ".".join(str(key) for key in key_path)
+                raise MalformedTargetError(
+                    f"Cannot update {location} in {relative}: the release target "
+                    f"does not expose that field"
+                ) from error
         rendered[path] = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
     return rendered
 
@@ -85,7 +96,14 @@ def main(argv: list[str] | None = None) -> int:
     root = args.root.resolve()
     try:
         rendered = rendered_files(root)
-    except (MissingTargetError, ValueError, OSError, KeyError) as error:
+    except (
+        MissingTargetError,
+        MalformedTargetError,
+        ValueError,
+        OSError,
+        KeyError,
+        IndexError,
+    ) as error:
         print(error, file=sys.stderr)
         return 1
     drift = []

@@ -149,3 +149,17 @@ def test_sync_version_fails_when_required_target_is_missing(
     result = run_sync(root, *args, check=False)
     assert result.returncode != 0
     assert relative in result.stderr
+
+
+@pytest.mark.parametrize("check_mode", [False, True])
+def test_sync_version_fails_when_a_version_field_is_unreachable(tmp_path, check_mode):
+    root = metadata_fixture(tmp_path)
+    server = json.loads((root / "server.json").read_text())
+    server["packages"] = []
+    (root / "server.json").write_text(json.dumps(server, indent=2) + "\n")
+    args = ["--check"] if check_mode else []
+    result = run_sync(root, *args, check=False)
+    assert result.returncode != 0
+    assert "server.json" in result.stderr
+    assert "packages.0.version" in result.stderr
+    assert "Traceback" not in result.stderr
