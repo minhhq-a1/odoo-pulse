@@ -43,8 +43,14 @@ instance.
 
 ## Releasing (maintainers)
 
-Update `project.version` in `pyproject.toml`, then run
-`python3 scripts/release/sync_version.py` and review the manifest diff. Run
-`python3 scripts/release/sync_version.py --check` before tagging `vX.Y.Z`.
-Tagging `vX.Y.Z` publishes to PyPI via `release.yml`, then run the "Publish to MCP Registry"
-workflow (manual on purpose — it must run after the PyPI release for the same version is live).
+Follow [docs/guides/releasing.md](docs/guides/releasing.md). It is the canonical
+procedure — this section is only a pointer.
+
+Two rules before you start. Any change to the release machinery itself
+(workflows, `scripts/release/`, their tests) must be merged and green on `main`
+*before* a release candidate is tagged; the version bump is a separate step. And
+every tag push or remote publish command needs explicit authorization
+immediately beforehand.
+
+The order is always: release candidate → at least a 48-hour soak → stable
+release → MCP Registry.

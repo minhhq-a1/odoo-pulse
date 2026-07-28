@@ -36,6 +36,8 @@ def test_shipped_docs_are_visible_and_do_not_reference_internal_plans():
         "docs/guides/playground.md",
         "docs/reference/tools.md",
         "docs/releases/project-finance-consistency.md",
+        "docs/guides/releasing.md",
+        "docs/releases/v1.9.0.md",
     ]
     for relative in expected:
         path = ROOT / relative
@@ -47,6 +49,26 @@ def test_shipped_docs_are_visible_and_do_not_reference_internal_plans():
         assert "docs/superpowers/" not in path.read_text(), f"Internal plan link found in: {relative}"
 
 
+def test_release_docs_define_rc_soak_retry_and_rollback():
+    runbook = (ROOT / "docs/guides/releasing.md").read_text()
+    notes = (ROOT / "docs/releases/v1.9.0.md").read_text()
+    for required in [
+        "v1.9.0rc1",
+        "48 hours",
+        "Do not move or recreate a release tag",
+        "type=pep440",
+        "Odoo 18",
+        "Odoo 19",
+        "v1.9.1",
+    ]:
+        assert required in runbook
+    assert "88 tools" in notes
+    assert "31 default tools" in notes
+    assert "Python 3.10-3.13" in notes
+    assert "Odoo 18 and 19" in notes
+    assert "Internal Python module paths" in notes
+
+
 def test_active_repository_paths_use_final_layout():
     expected = [
         "scripts/assets/make_icon.py",
@@ -54,6 +76,7 @@ def test_active_repository_paths_use_final_layout():
         "scripts/demo/demo.tape",
         "scripts/demo/demo_pulse.py",
         "scripts/release/publish_smithery.sh",
+        "scripts/release/release_contract.py",
         "scripts/release/sync_version.py",
         "scripts/smoke/live.py",
         "scripts/smoke/playground.sh",
