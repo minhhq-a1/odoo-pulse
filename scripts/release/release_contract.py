@@ -17,7 +17,13 @@ import sys
 try:  # Python 3.11+ ships tomllib; 3.10 needs the tomli backport.
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover - exercised on Python 3.10 only
-    import tomli as tomllib
+    try:
+        import tomli as tomllib
+    except ModuleNotFoundError:  # pragma: no cover - actionable operator error
+        raise SystemExit(
+            "Reading pyproject.toml on Python 3.10 requires the tomli "
+            "backport. Install it with: pip install -e \".[dev]\""
+        ) from None
 
 VERSION_RE = re.compile(
     r"^(?P<major>0|[1-9]\d*)\."

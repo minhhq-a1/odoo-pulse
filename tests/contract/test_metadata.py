@@ -65,6 +65,20 @@ def run_sync(root, *args, check=True):
     )
 
 
+def test_release_scripts_give_the_same_tomli_guidance_on_python_310():
+    # sync_version.py imports release_contract before its own tomllib guard, so
+    # if only one script carries the actionable message the other one's raw
+    # ModuleNotFoundError reaches the operator first.
+    guidance = "requires the tomli "
+    for relative in [
+        "scripts/release/release_contract.py",
+        "scripts/release/sync_version.py",
+    ]:
+        text = (ROOT / relative).read_text()
+        assert "import tomli as tomllib" in text, relative
+        assert guidance in text, relative
+
+
 def test_project_declares_tested_mcp_v1_range():
     with (ROOT / "pyproject.toml").open("rb") as handle:
         project = tomllib.load(handle)["project"]
