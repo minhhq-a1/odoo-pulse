@@ -106,7 +106,13 @@ jobs:
           name: dist
           path: dist/
       - name: Drop non-distribution files before upload
-        run: rm -f dist/SHA256SUMS.txt
+        run: |
+          # The publish action globs the whole directory and hands every file to
+          # twine, which rejects a checksums file as an unknown distribution.
+          # Assert before removing: a missing file means the build job changed,
+          # and release-record needs it after PyPI has already published.
+          test -f dist/SHA256SUMS.txt
+          rm dist/SHA256SUMS.txt
       - name: Publish to PyPI
         # Deliberately no option here to tolerate already-published filenames:
         # a filename that already exists on PyPI means this tag is republishing

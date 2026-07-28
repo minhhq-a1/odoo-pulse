@@ -75,6 +75,16 @@ def test_docker_workflow_probes_before_any_push():
     assert text.index("Probe MCP surface") < text.index("docker push --all-tags")
 
 
+def test_docker_workflow_verifies_the_pushed_set_against_the_probed_set():
+    text = docker_text()
+    push = text.index("docker push --all-tags")
+    # The recorded alias list must gate the push and be re-checked after it,
+    # rather than being uploaded and then ignored.
+    assert text.index("diff probed.txt loaded.txt") < push
+    assert text.rindex("tags.txt") > push
+    assert "Manifest.Digest" in text
+
+
 def test_docker_workflow_scopes_package_write_to_push_job():
     jobs = workflow_payload("docker.yml")["jobs"]
     assert jobs["build-probe"]["permissions"] == {"contents": "read"}

@@ -135,12 +135,19 @@ jobs:
     outputs:
       digest: ${{ steps.digest.outputs.digest }}
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: docker-image-${{ inputs.version }}
 
       - name: Load the probed image
         run: docker load -i image.tar
+
+      - name: Verify the loaded set is exactly the probed set
+        run: |
+          docker images --format '{{ .Repository }}:{{ .Tag }}' \
+            | grep "^${IMAGE}:" | sort > loaded.txt
+          sort tags.txt > probed.txt
+          diff probed.txt loaded.txt
 
       - name: Log in to GHCR
         uses: docker/login-action@v4
@@ -153,12 +160,29 @@ jobs:
         run: docker push --all-tags ghcr.io/minhhq-a1/odoo-pulse
 
       - name: Inspect the immutable version tag
-        run: docker buildx imagetools inspect "${IMAGE}:${{ inputs.version }}"
+        env:
+          VERSION: ${{ inputs.version }}
+        run: docker buildx imagetools inspect "${IMAGE}:${VERSION}"
 
-      - name: Expose registry digest
+      - name: Verify every published alias resolves to the probed image
         id: digest
         run: |
-          digest="$(docker buildx imagetools inspect \
-            "${IMAGE}:${{ inputs.version }}" --format '{{ .Manifest.Digest }}')"
+          # docker push --all-tags does not reliably fail per tag, so a partial
+          # push could leave a moving alias such as latest stale while this job
+          # still reported success. Confirm each recorded alias in the registry.
+          digest=""
+          while read -r ref; do
+            [ -n "$ref" ] || continue
+            actual="$(docker buildx imagetools inspect "$ref" \
+              --format '{{ .Manifest.Digest }}')"
+            test -n "$actual"
+            if [ -z "$digest" ]; then
+              digest="$actual"
+            elif [ "$actual" != "$digest" ]; then
+              echo "::error::$ref resolves to $actual, expected $digest" >&2
+              exit 1
+            fi
+            echo "$ref -> $actual"
+          done < tags.txt
           test -n "$digest"
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
