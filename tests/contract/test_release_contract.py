@@ -88,6 +88,42 @@ def test_identity_cli_writes_github_outputs(tmp_path):
     ]
 
 
+def write_project(root: Path, version: str) -> None:
+    (root / "pyproject.toml").write_text(
+        f'[project]\nname = "odoo-pulse"\nversion = "{version}"\n'
+    )
+
+
+def run_identity(root: Path, tag: str, *extra: str):
+    return subprocess.run(
+        [sys.executable, str(SCRIPT), "identity", "--root", str(root), "--tag", tag, *extra],
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_identity_cli_require_stable_accepts_stable(tmp_path):
+    write_project(tmp_path, "1.9.0")
+    output = tmp_path / "github-output"
+    result = run_identity(
+        tmp_path, "v1.9.0", "--require-stable", "--github-output", str(output)
+    )
+    assert result.returncode == 0, result.stderr
+    assert "prerelease=false" in output.read_text()
+
+
+def test_identity_cli_require_stable_rejects_rc(tmp_path):
+    write_project(tmp_path, "1.9.0rc1")
+    output = tmp_path / "github-output"
+    result = run_identity(
+        tmp_path, "v1.9.0rc1", "--require-stable", "--github-output", str(output)
+    )
+    assert result.returncode != 0
+    assert "prerelease" in result.stderr
+    # A rejected prerelease must leave no output a later step could misread.
+    assert not output.exists() or "prerelease=true" not in output.read_text()
+
+
 def test_expected_docker_tags_stable():
     module = load_contract()
     assert module.expected_docker_tags(module.release_identity("1.9.0")) == (

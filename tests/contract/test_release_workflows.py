@@ -149,7 +149,10 @@ def test_mcp_publish_checks_out_explicit_ref():
 def test_mcp_publish_rejects_prerelease_before_oidc_login():
     text = mcp_text()
     login = text.index("mcp-publisher login")
-    assert text.index("prerelease=true") < login
+    # The gate must be fail-closed: a non-zero exit from the release contract,
+    # not a shell string match that treats any anomaly as "stable".
+    assert text.index("--require-stable") < login
+    assert "grep -qx 'prerelease=true'" not in text
     assert text.index("sync_version.py --check") < login
 
 

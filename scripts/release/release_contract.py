@@ -118,6 +118,11 @@ def build_parser() -> argparse.ArgumentParser:
     identity.add_argument("--root", type=Path, required=True)
     identity.add_argument("--tag", required=True)
     identity.add_argument("--github-output", type=Path)
+    identity.add_argument(
+        "--require-stable",
+        action="store_true",
+        help="Exit non-zero for a prerelease, before writing any output",
+    )
     docker = commands.add_parser(
         "check-docker-tags",
         help="Fail unless the derived Docker tag list is exactly the expected aliases",
@@ -140,6 +145,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         identity = release_identity(project_version(args.root.resolve()))
         validate_tag(args.tag, identity)
+        # Reject before writing anything, so a caller can never read a partial
+        # output file and mistake a prerelease for a stable release.
+        if args.require_stable and identity.prerelease:
+            raise ValueError(
+                f"Release {identity.python_version!r} is a prerelease; this step "
+                f"requires a stable release"
+            )
     except (ValueError, OSError, KeyError) as error:
         print(error, file=sys.stderr)
         return 1

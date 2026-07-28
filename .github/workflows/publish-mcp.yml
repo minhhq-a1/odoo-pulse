@@ -20,6 +20,9 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -39,13 +42,14 @@ jobs:
       - name: Require a stable release tag
         id: identity
         run: |
+          # --require-stable exits non-zero for a prerelease before writing any
+          # output, so the gate is fail-closed: no shell string matching decides
+          # whether an RC reaches the registry.
           python scripts/release/release_contract.py identity \
-            --root . --tag "${{ inputs.release_ref }}" \
-            --github-output "$GITHUB_OUTPUT"
-          if grep -qx 'prerelease=true' "$GITHUB_OUTPUT"; then
-            echo "::error::${{ inputs.release_ref }} is a prerelease; the MCP Registry publishes stable releases only" >&2
-            exit 1
-          fi
+            --root . --tag "$RELEASE_REF" \
+            --require-stable --github-output "$GITHUB_OUTPUT"
+        env:
+          RELEASE_REF: ${{ inputs.release_ref }}
 
       - name: Require synchronized manifests
         run: python scripts/release/sync_version.py --check
