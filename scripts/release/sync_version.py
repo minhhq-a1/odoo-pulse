@@ -54,8 +54,16 @@ def require(root: Path, relative: str) -> Path:
 
 
 def project_version(root: Path) -> str:
-    with require(root, PYPROJECT).open("rb") as handle:
-        return tomllib.load(handle)["project"]["version"]
+    path = require(root, PYPROJECT)
+    with path.open("rb") as handle:
+        payload = tomllib.load(handle)
+    try:
+        return payload["project"]["version"]
+    except (KeyError, TypeError) as error:
+        raise MalformedTargetError(
+            f"Cannot read project.version from {PYPROJECT}: the release target "
+            f"does not expose that field"
+        ) from error
 
 
 def set_path(payload: dict, path: tuple, value: str) -> None:
@@ -74,7 +82,12 @@ def rendered_files(root: Path) -> dict[Path, str]:
     rendered = {}
     for relative, targets in JSON_TARGETS.items():
         path = require(root, relative)
-        payload = json.loads(path.read_text())
+        try:
+            payload = json.loads(path.read_text())
+        except json.JSONDecodeError as error:
+            raise MalformedTargetError(
+                f"Cannot parse {relative}: {error}"
+            ) from error
         for representation, key_path in targets:
             try:
                 set_path(payload, key_path, representations[representation])

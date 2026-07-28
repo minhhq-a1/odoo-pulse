@@ -151,6 +151,29 @@ def test_sync_version_fails_when_required_target_is_missing(
     assert relative in result.stderr
 
 
+@pytest.mark.parametrize(
+    "relative",
+    ["manifest.json", "server.json", ".claude-plugin/plugin.json"],
+)
+def test_sync_version_names_the_file_holding_malformed_json(tmp_path, relative):
+    root = metadata_fixture(tmp_path)
+    (root / relative).write_text("{not json\n")
+    result = run_sync(root, check=False)
+    assert result.returncode != 0
+    assert relative in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_sync_version_names_a_pyproject_without_a_project_version(tmp_path):
+    root = metadata_fixture(tmp_path)
+    (root / "pyproject.toml").write_text('[project]\nname = "odoo-pulse"\n')
+    result = run_sync(root, check=False)
+    assert result.returncode != 0
+    assert "pyproject.toml" in result.stderr
+    assert "version" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
 @pytest.mark.parametrize("check_mode", [False, True])
 def test_sync_version_fails_when_a_version_field_is_unreachable(tmp_path, check_mode):
     root = metadata_fixture(tmp_path)
