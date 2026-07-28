@@ -5,6 +5,11 @@ on:
     branches: ["**"]
   pull_request:
 
+# This workflow runs on every branch push, so it holds the broadest-reach token
+# in the repository. It only reads and tests, so deny everything else.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

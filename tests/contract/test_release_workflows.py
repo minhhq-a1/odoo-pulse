@@ -168,6 +168,15 @@ def test_release_record_requires_a_pushed_image_digest():
     assert 'test -n "$DIGEST"' in record
 
 
+def test_every_workflow_declares_a_least_privilege_default():
+    for path in sorted(WORKFLOWS.glob("*.yml")):
+        payload = workflow_payload(path.name)
+        if "workflow_call" in payload["on"]:
+            # A reusable workflow inherits the caller's grant per job instead.
+            continue
+        assert payload.get("permissions") == {"contents": "read"}, path.name
+
+
 def test_mcp_publish_requires_explicit_release_ref():
     payload = workflow_payload("publish-mcp.yml")
     inputs = payload["on"]["workflow_dispatch"]["inputs"]
