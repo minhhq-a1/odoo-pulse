@@ -48,6 +48,13 @@ As of this refactor the package is split into layered subpackages (`core`, `mcp`
 
 System models (`ir.*`, `base*`, `res.users`, `res.groups`, etc.) are permanently blocked regardless of `ODOO_WRITABLE_MODELS`.
 
-**Testing pattern:** Tests inject a `FakeClient` directly into `odoo_pulse.mcp.runtime._client` (see `conftest.py`). The fake records every call in `fake_client.calls` and returns canned data from `search_responses`/`read_responses` dicts. No real Odoo or network is needed. Tests assert on the model name and domain that a tool built, not on Odoo's actual response.
+**Testing pattern:** Tests inject a `FakeClient` directly into `odoo_pulse.mcp.runtime._client` (the class lives in `tests/support/fake_client.py`; `tests/conftest.py` registers the fixture). The fake records every call in `fake_client.calls` and returns canned data from `search_responses`/`read_responses` dicts. No real Odoo or network is needed. Tests assert on the model name and domain that a tool built, not on Odoo's actual response.
 
 **Adding a new tool module:** Create `src/odoo_pulse/tools/subpackage/foo.py`, import `mcp` from `...mcp.app` and `get_client` from `...mcp.runtime`, decorate functions with `@mcp.tool()`, then add the module path (e.g., `"tools.subpackage.foo"`) to a group in `src/odoo_pulse/mcp/registry.py`'s `GROUP_MODULES` (server.py imports modules per enabled group).
+
+## Supported Python versions
+
+`requires-python = ">=3.10"`, and CI runs the full suite on 3.10, 3.11, 3.12, and 3.13. Two rules follow:
+
+- **Do not use stdlib modules newer than 3.10.** `tomllib` is 3.11+. Where TOML must be read (`tests/contract/test_metadata.py`, `scripts/release/sync_version.py`), keep the existing `tomllib` → `tomli` fallback; `tomli` is a dev dependency gated on `python_version < "3.11"`.
+- **Verify on the lowest supported interpreter before calling work done.** A 3.11+-only import fails at *collection*, which aborts the entire run rather than failing a single test — so a green suite on 3.12 proves nothing about 3.10.
