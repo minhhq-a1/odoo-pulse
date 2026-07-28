@@ -1,31 +1,87 @@
 name: Publish to MCP Registry
 
 # Publishes server.json to the official MCP registry via GitHub OIDC (no secrets).
-# Run this AFTER the PyPI release for the same version is live (release.yml), so
-# the registry's ownership check finds the `mcp-name` marker in the published
-# package description.
 #
-# Manual (workflow_dispatch) on purpose: a `push: tags` trigger races with
-# release.yml on the same tag and the registry 404s on the not-yet-published
-# package. Release flow: push the tag -> wait for release.yml to finish -> run
-# this workflow from the Actions tab.
+# Manual and stable-only on purpose. Three things are enforced before any
+# credential is minted:
+#   1. the workflow builds from an explicit release tag, never default-branch HEAD;
+#   2. that tag is a stable release, never an RC;
+#   3. the exact version already exists on PyPI, so the registry's ownership
+#      check can find the `mcp-name` marker in the published package.
+#
+# Release flow: push the tag -> wait for release.yml to finish -> confirm PyPI is
+# live -> run this workflow from the Actions tab with release_ref=vX.Y.Z.
 
 on:
   workflow_dispatch:
+    inputs:
+      release_ref:
+        description: Stable release tag, for example v1.9.0
+        required: true
+        type: string
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write # required for OIDC authentication to the MCP registry
       contents: read
+      id-token: write # required for OIDC authentication to the MCP registry
     steps:
-      - name: Checkout code
+      - name: Checkout the explicit release ref
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_ref }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Require a stable release tag
+        id: identity
+        run: |
+          python scripts/release/release_contract.py identity \
+            --root . --tag "${{ inputs.release_ref }}" \
+            --github-output "$GITHUB_OUTPUT"
+          if grep -qx 'prerelease=true' "$GITHUB_OUTPUT"; then
+            echo "::error::${{ inputs.release_ref }} is a prerelease; the MCP Registry publishes stable releases only" >&2
+            exit 1
+          fi
+
+      - name: Require synchronized manifests
+        run: python scripts/release/sync_version.py --check
 
       - name: Install mcp-publisher
         run: |
           curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+          # Recorded for provenance; older builds may not accept the flag.
+          ./mcp-publisher --version || echo "mcp-publisher version flag unavailable"
+
+      - name: Validate the server manifest
+        run: ./mcp-publisher validate server.json
+
+      - name: Require the exact version to be live on PyPI
+        env:
+          VERSION: ${{ steps.identity.outputs.version }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.error
+          import urllib.request
+
+          version = os.environ["VERSION"]
+          url = f"https://pypi.org/pypi/odoo-pulse/{version}/json"
+          try:
+              with urllib.request.urlopen(url, timeout=30) as response:
+                  payload = json.load(response)
+          except urllib.error.HTTPError as error:
+              sys.exit(f"{url} returned HTTP {error.code}; PyPI must be live first")
+          released = payload["info"]["version"]
+          if released != version:
+              sys.exit(f"PyPI reported {released!r}, expected {version!r}")
+          print(f"PyPI has odoo-pulse {released}")
+          PY
 
       - name: Authenticate to MCP Registry (GitHub OIDC)
         run: ./mcp-publisher login github-oidc

@@ -23,6 +23,10 @@ def release_text() -> str:
     return (WORKFLOWS / "release.yml").read_text()
 
 
+def mcp_text() -> str:
+    return (WORKFLOWS / "publish-mcp.yml").read_text()
+
+
 def job_slice(text: str, job: str) -> str:
     """Return the raw text of one job, from its key to the next sibling key."""
 
@@ -127,3 +131,34 @@ def test_release_record_marks_rc_as_prerelease():
     assert record.count("--prerelease") == 1
     branch = record.index('= "true"')
     assert branch < record.index("--prerelease") < record.index("else")
+
+
+def test_mcp_publish_requires_explicit_release_ref():
+    payload = workflow_payload("publish-mcp.yml")
+    inputs = payload["on"]["workflow_dispatch"]["inputs"]
+    assert inputs["release_ref"]["required"] == "true"
+    assert inputs["release_ref"]["type"] == "string"
+    assert "workflow_call" not in payload["on"]
+    assert "push" not in payload["on"]
+
+
+def test_mcp_publish_checks_out_explicit_ref():
+    assert "ref: ${{ inputs.release_ref }}" in mcp_text()
+
+
+def test_mcp_publish_rejects_prerelease_before_oidc_login():
+    text = mcp_text()
+    login = text.index("mcp-publisher login")
+    assert text.index("prerelease=true") < login
+    assert text.index("sync_version.py --check") < login
+
+
+def test_mcp_publish_validates_manifest_and_live_pypi_before_publish():
+    text = mcp_text()
+    publish = text.index("mcp-publisher publish")
+    assert text.index("mcp-publisher validate server.json") < publish
+    assert text.index("pypi.org/pypi/odoo-pulse/") < publish
+    permissions = workflow_payload("publish-mcp.yml")["jobs"]["publish"][
+        "permissions"
+    ]
+    assert permissions == {"contents": "read", "id-token": "write"}
