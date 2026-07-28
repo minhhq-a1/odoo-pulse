@@ -52,6 +52,9 @@ def test_docker_workflow_is_reusable_and_manual_not_tag_triggered():
     assert "workflow_call:" in text
     assert "workflow_dispatch:" in text
     assert 'tags:\n      - "v*"' not in text
+    # Structural, so a tag trigger cannot slip back in at another indentation
+    # or in flow style.
+    assert "push" not in workflow_payload("docker.yml")["on"]
 
 
 def test_docker_workflow_uses_pep440_and_removes_raw_latest():
@@ -98,8 +101,10 @@ def test_release_workflow_is_the_only_tag_orchestrator():
     text = release_text()
     assert 'tags:\n      - "v*"' in text
     assert "release_contract.py identity" in text
+    assert workflow_payload("release.yml")["on"]["push"] == {"tags": ["v*"]}
     for name in ["docker.yml", "publish-mcp.yml", "ci.yml", "playground.yml"]:
-        assert 'tags:\n      - "v*"' not in (WORKFLOWS / name).read_text(), name
+        triggers = workflow_payload(name)["on"]
+        assert "tags" not in (triggers.get("push") or {}), name
 
 
 def test_release_validates_before_build_or_publish():
