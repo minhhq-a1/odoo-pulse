@@ -88,6 +88,11 @@ gh workflow run docker.yml \
 gh run list --commit "$(git rev-parse HEAD)"
 ```
 
+Use `git rev-parse HEAD` rather than a short SHA. `actions/checkout` only treats
+a **full 40-character** SHA as a commit; an abbreviated one is read as a branch
+or tag name, and the job fails inside checkout with an opaque
+`git fetch … refs/heads/<short-sha>*` error after retrying for about a minute.
+
 A `push_image=false` dispatch must never run the push job. Confirm that in the
 run's job list before continuing.
 
