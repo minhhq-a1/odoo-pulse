@@ -1,10 +1,19 @@
-"""Synchronize project version across metadata manifests."""
+"""Synchronize project version across metadata manifests.
+
+`pyproject.toml` holds the canonical PEP 440 version. Each ecosystem manifest
+receives the representation it actually accepts: MCPB, the Claude plugin, and
+the MCP server descriptor use SemVer, while the PyPI package entry inside
+`server.json` keeps the canonical PEP 440 string.
+"""
 
 from __future__ import annotations
 
 import argparse
 import json
 from pathlib import Path
+import sys
+
+from release_contract import release_identity
 
 try:  # Python 3.11+ ships tomllib; 3.10 needs the tomli backport.
     import tomllib
@@ -17,15 +26,31 @@ except ModuleNotFoundError:  # pragma: no cover - exercised on Python 3.10 only
             "backport. Install it with: pip install -e \".[dev]\""
         ) from None
 
+PYPROJECT = "pyproject.toml"
+
 JSON_TARGETS = {
-    "manifest.json": [("version",)],
-    "server.json": [("version",), ("packages", 0, "version")],
-    ".claude-plugin/plugin.json": [("version",)],
+    "manifest.json": [("semver", ("version",))],
+    "server.json": [
+        ("semver", ("version",)),
+        ("python", ("packages", 0, "version")),
+    ],
+    ".claude-plugin/plugin.json": [("semver", ("version",))],
 }
 
 
+class MissingTargetError(RuntimeError):
+    """A required release metadata target is absent."""
+
+
+def require(root: Path, relative: str) -> Path:
+    path = root / relative
+    if not path.exists():
+        raise MissingTargetError(f"Missing required release target: {relative}")
+    return path
+
+
 def project_version(root: Path) -> str:
-    with (root / "pyproject.toml").open("rb") as handle:
+    with require(root, PYPROJECT).open("rb") as handle:
         return tomllib.load(handle)["project"]["version"]
 
 
@@ -37,15 +62,17 @@ def set_path(payload: dict, path: tuple, value: str) -> None:
 
 
 def rendered_files(root: Path) -> dict[Path, str]:
-    wanted = project_version(root)
+    identity = release_identity(project_version(root))
+    representations = {
+        "semver": identity.semver_version,
+        "python": identity.python_version,
+    }
     rendered = {}
-    for relative, paths in JSON_TARGETS.items():
-        path = root / relative
-        if not path.exists():
-            continue
+    for relative, targets in JSON_TARGETS.items():
+        path = require(root, relative)
         payload = json.loads(path.read_text())
-        for key_path in paths:
-            set_path(payload, key_path, wanted)
+        for representation, key_path in targets:
+            set_path(payload, key_path, representations[representation])
         rendered[path] = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
     return rendered
 
@@ -55,14 +82,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--root", type=Path, default=Path.cwd())
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args(argv)
-    drift = []
     root = args.root.resolve()
-    for path, rendered in rendered_files(root).items():
-        if path.read_text() == rendered:
+    try:
+        rendered = rendered_files(root)
+    except (MissingTargetError, ValueError, OSError, KeyError) as error:
+        print(error, file=sys.stderr)
+        return 1
+    drift = []
+    for path, text in rendered.items():
+        if path.read_text() == text:
             continue
         drift.append(path)
         if not args.check:
-            path.write_text(rendered)
+            path.write_text(text)
     if drift:
         for path in drift:
             print(path.relative_to(root))
