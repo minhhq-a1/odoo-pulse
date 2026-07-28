@@ -19,6 +19,24 @@ def docker_text() -> str:
     return (WORKFLOWS / "docker.yml").read_text()
 
 
+def release_text() -> str:
+    return (WORKFLOWS / "release.yml").read_text()
+
+
+def job_slice(text: str, job: str) -> str:
+    """Return the raw text of one job, from its key to the next sibling key."""
+
+    lines = text.splitlines()
+    start = lines.index(f"  {job}:")
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        line = lines[index]
+        if line.startswith("  ") and not line.startswith("   ") and line.strip():
+            end = index
+            break
+    return "\n".join(lines[start:end])
+
+
 def workflow_payload(name: str) -> dict:
     """Parse a workflow with BaseLoader so YAML 1.1 keeps ``on`` a string key."""
 
@@ -60,3 +78,52 @@ def test_docker_workflow_scopes_package_write_to_push_job():
         "contents": "read",
         "packages": "write",
     }
+
+
+def test_release_workflow_is_the_only_tag_orchestrator():
+    text = release_text()
+    assert 'tags:\n      - "v*"' in text
+    assert "release_contract.py identity" in text
+    for name in ["docker.yml", "publish-mcp.yml", "ci.yml", "playground.yml"]:
+        assert 'tags:\n      - "v*"' not in (WORKFLOWS / name).read_text(), name
+
+
+def test_release_validates_before_build_or_publish():
+    text = release_text()
+    validate = text.index("release_contract.py identity")
+    assert validate < text.index("python -m build")
+    assert validate < text.index("pypa/gh-action-pypi-publish")
+
+
+def test_release_builds_once_and_downstream_jobs_download_dist():
+    text = release_text()
+    assert text.count("python -m build") == 1
+    assert "actions/download-artifact" in job_slice(text, "publish-pypi")
+    assert "actions/download-artifact" in job_slice(text, "release-record")
+
+
+def test_release_does_not_skip_existing_pypi_files():
+    assert "skip-existing" not in release_text()
+
+
+def test_release_sequences_docker_after_pypi():
+    docker = job_slice(release_text(), "docker")
+    assert "publish-pypi" in docker
+    assert "./.github/workflows/docker.yml" in docker
+
+
+def test_release_record_waits_for_docker_and_owns_contents_write():
+    text = release_text()
+    record = job_slice(text, "release-record")
+    assert "docker" in record
+    assert "contents: write" in record
+    assert "contents: write" not in job_slice(text, "build")
+    assert "contents: write" not in job_slice(text, "publish-pypi")
+
+
+def test_release_record_marks_rc_as_prerelease():
+    record = job_slice(release_text(), "release-record")
+    assert "needs.validate.outputs.prerelease" in record
+    assert record.count("--prerelease") == 1
+    branch = record.index('= "true"')
+    assert branch < record.index("--prerelease") < record.index("else")
