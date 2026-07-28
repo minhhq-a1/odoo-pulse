@@ -86,3 +86,44 @@ def test_identity_cli_writes_github_outputs(tmp_path):
         "tag=v1.9.0rc1",
         "prerelease=true",
     ]
+
+
+def test_expected_docker_tags_stable():
+    module = load_contract()
+    assert module.expected_docker_tags(module.release_identity("1.9.0")) == (
+        "1.9.0", "1.9", "1", "latest"
+    )
+
+
+def test_expected_docker_tags_rc():
+    module = load_contract()
+    assert module.expected_docker_tags(module.release_identity("1.9.0rc1")) == (
+        "1.9.0rc1",
+    )
+
+
+def test_check_docker_tags_accepts_exact_stable():
+    module = load_contract()
+    module.check_docker_tags(
+        "1.9.0",
+        "ghcr.io/minhhq-a1/odoo-pulse:1.9.0\n"
+        "ghcr.io/minhhq-a1/odoo-pulse:1.9\n"
+        "ghcr.io/minhhq-a1/odoo-pulse:1\n"
+        "ghcr.io/minhhq-a1/odoo-pulse:latest",
+    )
+
+
+def test_check_docker_tags_accepts_exact_rc():
+    load_contract().check_docker_tags(
+        "1.9.0rc1", "ghcr.io/minhhq-a1/odoo-pulse:1.9.0rc1"
+    )
+
+
+def test_check_docker_tags_rejects_latest_on_rc():
+    module = load_contract()
+    with pytest.raises(ValueError, match="unexpected Docker aliases"):
+        module.check_docker_tags(
+            "1.9.0rc1",
+            "ghcr.io/minhhq-a1/odoo-pulse:1.9.0rc1\n"
+            "ghcr.io/minhhq-a1/odoo-pulse:latest",
+        )

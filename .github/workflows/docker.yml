@@ -1,26 +1,146 @@
 name: docker
 
-# Build and push the MCP server image to GHCR
+# Build, introspect, and optionally publish the MCP server image to GHCR
 # (ghcr.io/minhhq-a1/odoo-pulse), which backs the docker-run install recipe.
-# Runs on version tags and on demand.
+#
+# This workflow never triggers itself on a tag. `release.yml` calls it, and a
+# maintainer can dispatch it manually with push_image=false as a preflight. The
+# image that gets pushed is byte-for-byte the image that passed the probe.
 
 on:
+  workflow_call:
+    inputs:
+      release_ref:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
+      push_image:
+        required: true
+        type: boolean
+    outputs:
+      digest:
+        description: Registry digest of the pushed version tag; empty on preflight
+        value: ${{ jobs.push_image.outputs.digest }}
   workflow_dispatch:
-  push:
-    tags:
-      - "v*"
+    inputs:
+      release_ref:
+        description: Immutable branch, SHA, or release tag to build
+        required: true
+        type: string
+      version:
+        description: Canonical PEP 440 project version
+        required: true
+        type: string
+      push_image:
+        description: Push the probed image to GHCR
+        required: true
+        default: false
+        type: boolean
 
-permissions:
-  contents: read
-  packages: write
+env:
+  IMAGE: ghcr.io/minhhq-a1/odoo-pulse
 
 jobs:
-  build-push:
+  build-probe:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_ref }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Validate release identity of the built ref
+        run: |
+          python scripts/release/release_contract.py identity \
+            --root . --tag "v${{ inputs.version }}"
 
       - uses: docker/setup-buildx-action@v4
+
+      - name: Derive image tags
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: latest=auto
+          tags: |
+            type=pep440,pattern={{version}},value=${{ inputs.version }}
+            type=pep440,pattern={{major}}.{{minor}},value=${{ inputs.version }}
+            type=pep440,pattern={{major}},value=${{ inputs.version }}
+
+      - name: Check exact Docker aliases
+        run: |
+          python scripts/release/release_contract.py check-docker-tags \
+            --version "${{ inputs.version }}" \
+            --actual "${{ steps.meta.outputs.tags }}"
+
+      - name: Build image once without pushing
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          push: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Probe MCP surface
+        run: |
+          docker run --rm --entrypoint python \
+            "${IMAGE}:${{ inputs.version }}" -c '
+          import asyncio, json
+          from odoo_pulse import server  # noqa: F401
+          from odoo_pulse.mcp.app import mcp
+
+          async def main():
+              tools = await mcp.list_tools()
+              resources = sorted(
+                  str(t.uriTemplate) for t in await mcp.list_resource_templates()
+              )
+              assert len(tools) == 31, (len(tools), sorted(t.name for t in tools))
+              assert resources == ["odoo://{model}/{id}"], resources
+              print(json.dumps({"tools": len(tools), "resources": resources}))
+
+          asyncio.run(main())
+          '
+
+      - name: Save the exact probed image set
+        run: |
+          printf '%s\n' "${{ steps.meta.outputs.tags }}" > tags.txt
+          docker save -o image.tar $(tr '\n' ' ' < tags.txt)
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: docker-image-${{ inputs.version }}
+          path: |
+            image.tar
+            tags.txt
+          retention-days: 7
+          if-no-files-found: error
+
+  push_image:
+    # The underscore in this job ID is deliberate: the contract tests select the
+    # parsed job and must not confuse it with the `push: false` build input.
+    if: inputs.push_image
+    needs: build-probe
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.digest.outputs.digest }}
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: docker-image-${{ inputs.version }}
+
+      - name: Load the probed image
+        run: docker load -i image.tar
 
       - name: Log in to GHCR
         uses: docker/login-action@v4
@@ -29,19 +149,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Derive image tags
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/minhhq-a1/odoo-pulse
-          tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=latest
+      - name: Publish the probed image
+        run: docker push --all-tags ghcr.io/minhhq-a1/odoo-pulse
 
-      - name: Build and push
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+      - name: Inspect the immutable version tag
+        run: docker buildx imagetools inspect "${IMAGE}:${{ inputs.version }}"
+
+      - name: Expose registry digest
+        id: digest
+        run: |
+          digest="$(docker buildx imagetools inspect \
+            "${IMAGE}:${{ inputs.version }}" --format '{{ .Manifest.Digest }}')"
+          test -n "$digest"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"

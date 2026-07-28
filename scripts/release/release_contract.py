@@ -46,6 +46,45 @@ def release_identity(value: str) -> ReleaseIdentity:
     return ReleaseIdentity(value, semver, f"v{value}", rc is not None)
 
 
+def expected_docker_tags(identity: ReleaseIdentity) -> tuple[str, ...]:
+    """Return the exact Docker aliases this release may publish.
+
+    A prerelease owns only its own immutable version. Moving `latest`, `1.9`, or
+    `1` to an RC would silently upgrade every user tracking a stable alias.
+    """
+
+    if identity.prerelease:
+        return (identity.python_version,)
+    match = VERSION_RE.fullmatch(identity.python_version)
+    assert match is not None  # release_identity already validated the shape
+    major, minor = match.group("major"), match.group("minor")
+    return (identity.python_version, f"{major}.{minor}", major, "latest")
+
+
+def check_docker_tags(version: str, actual: str) -> None:
+    identity = release_identity(version)
+    expected = expected_docker_tags(identity)
+    aliases = [
+        line.strip().rsplit(":", 1)[-1]
+        for line in actual.splitlines()
+        if line.strip()
+    ]
+    duplicates = sorted({alias for alias in aliases if aliases.count(alias) > 1})
+    if duplicates:
+        raise ValueError(
+            f"Docker tag list for {version!r} repeats aliases {duplicates}; "
+            f"expected exactly {list(expected)}"
+        )
+    missing = [alias for alias in expected if alias not in aliases]
+    unexpected = [alias for alias in aliases if alias not in expected]
+    if missing or unexpected:
+        raise ValueError(
+            f"Docker tag list for {version!r} has missing aliases {missing} and "
+            f"unexpected Docker aliases {unexpected}; "
+            f"expected exactly {list(expected)}, got {aliases}"
+        )
+
+
 def validate_tag(tag: str, identity: ReleaseIdentity) -> None:
     if tag != identity.tag:
         raise ValueError(
@@ -79,11 +118,25 @@ def build_parser() -> argparse.ArgumentParser:
     identity.add_argument("--root", type=Path, required=True)
     identity.add_argument("--tag", required=True)
     identity.add_argument("--github-output", type=Path)
+    docker = commands.add_parser(
+        "check-docker-tags",
+        help="Fail unless the derived Docker tag list is exactly the expected aliases",
+    )
+    docker.add_argument("--version", required=True)
+    docker.add_argument("--actual", required=True)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "check-docker-tags":
+        try:
+            check_docker_tags(args.version, args.actual)
+        except ValueError as error:
+            print(error, file=sys.stderr)
+            return 1
+        print(f"Docker aliases for {args.version} match the release contract")
+        return 0
     try:
         identity = release_identity(project_version(args.root.resolve()))
         validate_tag(args.tag, identity)
