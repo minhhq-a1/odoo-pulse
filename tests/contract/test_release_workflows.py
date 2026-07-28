@@ -129,8 +129,28 @@ def test_release_record_marks_rc_as_prerelease():
     record = job_slice(release_text(), "release-record")
     assert "needs.validate.outputs.prerelease" in record
     assert record.count("--prerelease") == 1
-    branch = record.index('= "true"')
-    assert branch < record.index("--prerelease") < record.index("else")
+    true_branch = record.index("true)")
+    false_branch = record.index("false)")
+    wildcard = record.index("*)")
+    assert true_branch < record.index("--prerelease") < false_branch < wildcard
+    # Fail closed: an unexpected value must abort, never fall through to stable.
+    assert "exit 1" in record[wildcard:]
+
+
+def test_release_checks_the_notes_file_before_publishing():
+    text = release_text()
+    # The notes path must follow the tag, not be pinned to one release.
+    assert "docs/releases/v1.9.0.md" not in text
+    assert 'test -f "docs/releases/${TAG}.md"' in job_slice(text, "validate")
+    assert '--notes-file "docs/releases/${TAG}.md"' in job_slice(
+        text, "release-record"
+    )
+
+
+def test_release_record_requires_a_pushed_image_digest():
+    record = job_slice(release_text(), "release-record")
+    assert "needs.docker.outputs.digest" in record
+    assert 'test -n "$DIGEST"' in record
 
 
 def test_mcp_publish_requires_explicit_release_ref():

@@ -45,6 +45,17 @@ jobs:
             --root . --tag "$GITHUB_REF_NAME" --github-output "$GITHUB_OUTPUT"
           python scripts/release/sync_version.py --check
 
+      - name: Require the release notes for this tag
+        env:
+          TAG: ${{ steps.identity.outputs.tag }}
+        run: |
+          # release-record is the last job, so a missing notes file would only
+          # surface after PyPI and GHCR had already published irreversibly.
+          test -f "docs/releases/${TAG}.md" || {
+            echo "::error::docs/releases/${TAG}.md is missing; refusing to start a release that cannot be recorded" >&2
+            exit 1
+          }
+
   build:
     needs: validate
     runs-on: ubuntu-latest
@@ -126,23 +137,38 @@ jobs:
         with:
           name: dist
           path: dist/
-      - name: Create the GitHub Release
+      - name: Require a pushed container image
+        env:
+          DIGEST: ${{ needs.docker.outputs.digest }}
         run: |
-          TAG="${{ needs.validate.outputs.tag }}"
-          VERSION="${{ needs.validate.outputs.version }}"
-          if [ "${{ needs.validate.outputs.prerelease }}" = "true" ]; then
-            gh release create "$TAG" \
-              --title "odoo-pulse $VERSION" \
-              --notes-file docs/releases/v1.9.0.md \
-              --prerelease \
-              "dist/odoo_pulse-${VERSION}-py3-none-any.whl" \
-              "dist/odoo_pulse-${VERSION}.tar.gz" \
-              dist/SHA256SUMS.txt
-          else
-            gh release create "$TAG" \
-              --title "odoo-pulse $VERSION" \
-              --notes-file docs/releases/v1.9.0.md \
-              "dist/odoo_pulse-${VERSION}-py3-none-any.whl" \
-              "dist/odoo_pulse-${VERSION}.tar.gz" \
-              dist/SHA256SUMS.txt
-          fi
+          # The release notes advertise a container image, so refuse to record a
+          # release unless the Docker job actually reported a registry digest.
+          test -n "$DIGEST" || {
+            echo "::error::the Docker job reported no registry digest; no image was pushed" >&2
+            exit 1
+          }
+          echo "Pushed image digest: $DIGEST"
+
+      - name: Create the GitHub Release
+        env:
+          TAG: ${{ needs.validate.outputs.tag }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          PRERELEASE: ${{ needs.validate.outputs.prerelease }}
+        run: |
+          # Fail closed: anything other than an explicit true/false aborts
+          # rather than silently publishing an RC as a stable release.
+          case "$PRERELEASE" in
+            true) FLAGS=(--prerelease) ;;
+            false) FLAGS=() ;;
+            *)
+              echo "::error::unexpected prerelease value '$PRERELEASE'" >&2
+              exit 1
+              ;;
+          esac
+          gh release create "$TAG" \
+            --title "odoo-pulse $VERSION" \
+            --notes-file "docs/releases/${TAG}.md" \
+            "${FLAGS[@]}" \
+            "dist/odoo_pulse-${VERSION}-py3-none-any.whl" \
+            "dist/odoo_pulse-${VERSION}.tar.gz" \
+            dist/SHA256SUMS.txt
