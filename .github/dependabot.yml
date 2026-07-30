@@ -1,0 +1,26 @@
+version: 2
+
+# Every third-party action in .github/workflows/ is pinned to a full commit SHA.
+# That stops a compromised or retagged upstream from silently changing what runs
+# in a release — but it also freezes us on those exact commits, so a pin without
+# update automation rots into an unpatched dependency. This file is the other
+# half of that trade: Dependabot re-resolves the pinned SHAs weekly and opens a
+# PR carrying the new SHA and an updated `# vX.Y.Z` comment.
+#
+# Merging that PR is a release prerequisite (docs/guides/releasing.md, § 1).
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # One PR for all action bumps rather than up to five. A release cycle opens
+    # with "merge the pending action bump", and that should be a single merge
+    # landing on main, not a queue to drain during a feature freeze.
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    # The repo requires conventional commits; Dependabot's default subject line
+    # ("Bump x from a to b") is not one.
+    commit-message:
+      prefix: "chore"
