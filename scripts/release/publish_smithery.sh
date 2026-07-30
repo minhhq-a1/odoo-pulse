@@ -49,19 +49,22 @@ echo "==> Bundle OK: ${BUNDLE} (manifest version ${BUNDLE_VER})"
 echo "==> Publishing to Smithery as ${QUALIFIED_NAME}"
 npx -y @smithery/cli mcp publish "$BUNDLE" -n "$QUALIFIED_NAME"
 
-# ---- 3. Verify the live config schema now advertises odoo_verify_ssl --------
-# (odoo_verify_ssl was ADDED after the old 1.0.3 bundle, so it is the marker
-#  that proves the registry served the new bundle, not the stale one.)
-echo "==> Verifying live registry config (allowing a few seconds to propagate)"
+# ---- 3. Verify the live registry serves THIS version ------------------------
+# Look for the exact version string. A schema-shape marker cannot be used here:
+# every field of this bundle also exists in the previously published one, so a
+# shape check would match the stale entry and report a false success.
+echo "==> Verifying live registry reports ${VERSION} (allowing a few seconds to propagate)"
 for attempt in 1 2 3 4 5 6; do
   sleep 5
-  if curl -sf "$REGISTRY_API" | grep -q "odoo_verify_ssl"; then
-    echo "==> VERIFIED: live Smithery config schema includes odoo_verify_ssl (bundle ${VERSION} is live)."
+  if curl -sf "$REGISTRY_API" | grep -q "\"${VERSION}\""; then
+    echo "==> VERIFIED: live Smithery entry reports version ${VERSION}."
     exit 0
   fi
-  echo "    attempt ${attempt}: not visible yet..."
+  echo "    attempt ${attempt}: ${VERSION} not visible yet..."
 done
 
-echo "WARNING: published, but odoo_verify_ssl not yet visible in the registry API." >&2
-echo "         Re-check in a minute: curl -s ${REGISTRY_API} | python3 -m json.tool | grep -A3 verify" >&2
+echo "WARNING: publish command succeeded, but the registry API has not reported" >&2
+echo "         version ${VERSION} yet. This is NOT a confirmation that ${VERSION}" >&2
+echo "         is live; treat the mirror as unverified until it is." >&2
+echo "         Re-check: curl -s ${REGISTRY_API} | python3 -m json.tool | grep -i version" >&2
 exit 0
