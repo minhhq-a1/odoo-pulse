@@ -14,6 +14,11 @@ Before starting a release cycle:
   environment.
 - `main == origin/main`, and `git status --short` is empty.
 - PyPI Trusted Publishing is configured for `release.yml` / environment `pypi`.
+- No Dependabot `github-actions` PR is open. Every action is pinned to a commit
+  SHA, so an unmerged bump means the release publishes through stale — possibly
+  unpatched — actions, including the one holding `id-token: write` against PyPI.
+  Merge it now: once the release candidate is tagged, the freeze below forbids
+  it, and the release runs on whatever was pinned at tag time.
 
 From the moment a release candidate is tagged until the stable release is
 published, the tree is frozen. No new tool, tool schema, report formula, query
