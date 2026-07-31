@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Publish the odoo-pulse MCPB bundle to Smithery and verify the live config
-# picked up the new version.
+# Publish the odoo-pulse MCPB bundle to Smithery and verify the returned
+# deployment reaches SUCCESS in the authenticated releases API.
 #
 # Usage:
 #   export SMITHERY_API_KEY=sk-...          # your Smithery API key
@@ -26,7 +26,16 @@ if [[ -z "${SMITHERY_API_KEY:-}" ]]; then
   exit 1
 fi
 
-VERSION="$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+VERSION="$(python3 - <<'PY'
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib
+
+with open("pyproject.toml", "rb") as stream:
+    print(tomllib.load(stream)["project"]["version"])
+PY
+)"
 BUNDLE="dist/odoo-pulse-${VERSION}.mcpb"
 echo "==> Target version: ${VERSION}"
 
@@ -89,4 +98,4 @@ echo "WARNING: publish command succeeded, but ${RELEASES_API} has not reported" 
 echo "         deployment ${DEPLOYMENT_ID} (version ${VERSION}) as SUCCESS yet. This is NOT" >&2
 echo "         a confirmation that ${VERSION} is live; treat the mirror as unverified until it is." >&2
 echo "         Re-check: curl -s -H \"Authorization: Bearer \$SMITHERY_API_KEY\" ${RELEASES_API} | python3 -m json.tool" >&2
-exit 0
+exit 1

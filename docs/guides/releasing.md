@@ -264,6 +264,21 @@ That workflow refuses a prerelease ref, refuses drifted manifests, validates
 `server.json`, and confirms the exact version is live on PyPI — all before it
 mints an OIDC credential.
 
+### Optional Smithery mirror
+
+Smithery is a non-blocking post-release mirror. Synchronize it only after all
+first-party channels above are verified, and only with explicit owner access:
+
+```bash
+SMITHERY_API_KEY=<key> ./scripts/release/publish_smithery.sh
+```
+
+The helper validates the MCPB version before upload, captures the deployment id
+returned by Smithery, and requires that exact deployment to reach `SUCCESS` in
+the authenticated releases API. It exits non-zero when the deployment cannot
+be verified. The public `/servers/<qualified-name>` payload has no version
+field, so schema shape or version-string grep is not valid publication proof.
+
 ## 10. Per-channel retry
 
 Each channel is independent and idempotent only in the direction of "already
