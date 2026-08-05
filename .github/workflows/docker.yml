@@ -137,6 +137,7 @@ jobs:
     if: inputs.push_image
     needs: build-probe
     runs-on: ubuntu-latest
+    environment: docker
     permissions:
       contents: read
       packages: write
