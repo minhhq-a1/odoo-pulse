@@ -10,13 +10,16 @@ order of the work.
 
 Before starting a release cycle:
 
-- You have push access to `main` and can approve the protected `pypi`
-  environment. The `pypi` GitHub Environment has a `required_reviewers`
+- You have push access to `main` and can approve the protected `pypi` and
+  `docker` environments. Both GitHub Environments have a `required_reviewers`
   protection rule (reviewer: `minhhq-a1`) as of 2026-08-05 — `publish-pypi`
-  pauses for approval under Actions → the run → "Review deployments" before
-  it runs. (Before that date this rule did not exist and `publish-pypi` ran
-  straight through with no pause; v1.9.0 and v1.9.1rc1/v1.9.1 published
-  without this gate — see their `docs/releases/*-evidence.md` files.)
+  and `docker.yml`'s `push_image` job each pause for approval under Actions →
+  the run → "Review deployments" before they run. `push_image` only engages
+  on an actual publish (`push_image: true`); the `push_image=false` preflight
+  dispatch in section 3 is unaffected. (Before 2026-08-05 neither rule
+  existed and both jobs ran straight through with no pause; v1.9.0 and
+  v1.9.1rc1/v1.9.1 published without either gate — see their
+  `docs/releases/*-evidence.md` files.)
 - `main == origin/main`, and `git status --short` is empty.
 - PyPI Trusted Publishing is configured for `release.yml` / environment `pypi`.
 - No Dependabot `github-actions` PR is open. Every action is pinned to a commit
@@ -177,8 +180,8 @@ forward. Before each of these, stop and present the evidence, then wait:
 
 - `git push origin main`
 - `git tag` followed by `git push origin <tag>`
-- approving the protected `pypi` environment (enforced by a
-  `required_reviewers` rule since 2026-08-05 — the workflow run actually
+- approving the protected `pypi` and `docker` environments (each enforced by
+  a `required_reviewers` rule since 2026-08-05 — the workflow run actually
   pauses and waits here now, it does not just run through)
 - `gh workflow run publish-mcp.yml`
 
@@ -197,7 +200,8 @@ git push origin v1.9.0rc1
 
 `release.yml` then runs one sequential chain: validate, build once, PyPI,
 Docker, GitHub Release. Approve the `pypi` environment only after validate and
-build are green.
+build are green, then approve the `docker` environment once `publish-pypi`
+has completed (the `docker` job's `push_image` sub-job needs it).
 
 Verify from outside the checkout — a probe run inside the repository can import
 the working tree instead of the published artifact:
