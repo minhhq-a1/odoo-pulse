@@ -103,8 +103,6 @@ def test_team_workload_overload_threshold_flags_member(fake_client, monkeypatch)
 
 def test_team_workload_balanced_when_clean(fake_client, monkeypatch):
     _fix_today(monkeypatch)
-    # carries "state" so the balanced/no-risk scenario this test targets
-    # isn't muddied by the unrelated stage-name-fallback warning (task 9).
     fake_client.fields_responses["project.task"] = {
         "state": {"type": "selection"}}
     clean = [
@@ -162,14 +160,18 @@ def test_team_workload_no_truncation_when_under_cap(fake_client, monkeypatch):
     assert all(c["method"] != "search_count" for c in fake_client.calls)
 
 
-def test_team_workload_excludes_localized_closed_state(fake_client, monkeypatch):
+def test_team_workload_matches_done_stages_by_name_not_internal_state(
+        fake_client, monkeypatch):
+    # A task whose internal state happens to be "1_done" but whose stage
+    # name isn't in done_stages (["Done", "Delivered"] by default) must
+    # still count as open -- state must not substitute for the name match.
     _fix_today(monkeypatch)
     fake_client.fields_responses["project.task"] = {
         "state": {"type": "selection"}}
     _setup(fake_client, [{
-        "id": 8, "name": "Closed", "user_ids": [10],
-        "stage_id": [9, "Hoàn tất"], "state": "1_done",
+        "id": 8, "name": "Still open", "user_ids": [10],
+        "stage_id": [9, "In Progress"], "state": "1_done",
         "date_deadline": False, "priority": "0", "parent_id": [99, "P"],
     }])
     out = json.loads(tools_workflows.team_workload())
-    assert out["summary"]["open_tasks"] == 0
+    assert out["summary"]["open_tasks"] == 1

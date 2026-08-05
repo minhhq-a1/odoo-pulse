@@ -201,22 +201,16 @@ client-side — especially useful for the "exactly one assignee" condition,
 which Odoo domains cannot express.
 
 - `project_id`: `project.project` id (required).
-- `only_closed_stages` (default `false`): Count only tasks the schema
-  considers closed. State is primary: on instances with
-  `project.task.state`, "closed" means `state` in the stable closed set
-  (done/cancelled); with no `state` field, `is_closed` is used if present;
-  only when neither exists does it fall back to matching `stage_id.name`
-  against `closed_stage_names`. Cancelled tasks still count toward delivery
-  hours (business decision, not a bug).
+- `only_closed_stages` (default `false`): Count only tasks whose stage name
+  is in `closed_stage_names`. Matching is always by literal `stage_id.name`
+  — `project.task`'s own `state`/`is_closed` flags are Kanban fold/closed
+  markers configured per stage and do not reliably correspond to the named
+  stages requested here (a custom stage folded in the Kanban view but not
+  named "Done"/"Cancelled"/"Delivered" would otherwise be miscounted), so
+  they are never used. Cancelled tasks still count toward delivery hours
+  (business decision, not a bug).
 - `closed_stage_names` (default `["Done", "Cancelled", "Delivered"]`): Stage
-  names treated as closed. This is the sole filter on schemas with neither
-  `state` nor `is_closed` (the stage-name fallback above). On schemas that DO
-  have `state`/`is_closed`, explicitly passing `closed_stage_names` narrows
-  the result further: it becomes an additional AND condition on top of the
-  stable closed-state filter, so a task must be both state-closed AND have a
-  matching stage name — a deliberate narrowing versus the previous
-  stage-name-only population. Omit it (or rely on the default) to use only
-  the stable state filter on those schemas.
+  names treated as closed; the sole filter behind `only_closed_stages`.
 - `single_assignee_only` (default `false`): Count only tasks with exactly
   one user in `user_ids`.
 - `group_by_month` (default `false`): Also bucket totals by the local-time
@@ -286,22 +280,11 @@ Project delivery reports — per-assignee workload, portfolio-wide project healt
 
 `team_workload`'s `exclude_stages` (default `["Cancelled"]`) and
 `standup_digest`'s `exclude_stages` (default `["Done", "Cancelled",
-"Delivered"]`) are always applied as their own unconditional
-`stage_id.name not in exclude_stages` domain leaf, regardless of schema. On
-instances with `project.task.state` (or `is_closed`), that leaf is ANDed
-together with the stable closed-state filter — so `exclude_stages` always
-has an effect, layered on top of the state-based scoping rather than
-replaced by it.
-
-`team_workload` additionally takes `done_stages` (default `["Done",
-"Delivered"]`), which selects which tasks count as "done" for load
-purposes. Unlike `exclude_stages`, it is routed entirely through the same
-schema-aware `task_closed_scope`/`task_matches_scope` machinery as
-`project_subtask_hours`'s `only_closed_stages` above: `project.task.state`
-is checked first, then `is_closed`, and the stage-name list is consulted
-only when neither field exists. On a `state`/`is_closed` schema,
-`done_stages` is therefore inert — it has no effect, since the stage-name
-list is never read outside that fallback branch.
+"Delivered"]`), and `team_workload`'s additional `done_stages` (default
+`["Done", "Delivered"]`, selecting which tasks count as "done" for load
+purposes), are all applied as literal `stage_id.name` matches — same as
+`only_closed_stages`/`closed_stage_names` above. `project.task.state`/
+`is_closed` are never consulted for any of these.
 
 ### Multi-company / multi-currency
 

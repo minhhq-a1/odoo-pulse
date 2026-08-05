@@ -9,11 +9,7 @@ from ...common.paging import fetch_with_truncation
 from ...common.reporting import build_report
 from ..report_context import build_report_context
 from .queries import resolve_user_names
-from .subtasks import (
-    task_closed_scope,
-    task_matches_scope,
-    task_scope_warning,
-)
+from .subtasks import stage_name_scope, task_matches_stage
 
 
 def build_team_workload(
@@ -40,9 +36,7 @@ def build_team_workload(
     if ex:
         domain.append(("stage_id.name", "not in", ex))
 
-    scope_domain, scope_fields, scope_strategy = task_closed_scope(
-        client, closed=False, stage_names=done_names)
-    domain.extend(scope_domain)
+    domain.extend(stage_name_scope(closed=False, stage_names=done_names))
 
     tasks, truncation = fetch_with_truncation(
         client,
@@ -51,7 +45,6 @@ def build_team_workload(
         fields=[
             "id", "name", "user_ids", "stage_id",
             "date_deadline", "priority", "parent_id",
-            *scope_fields,
         ],
         limit=200,
         order="date_deadline",
@@ -71,8 +64,7 @@ def build_team_workload(
         )
 
     for t in tasks:
-        if not task_matches_scope(
-                t, scope_strategy, closed=False, stage_names=done_names):
+        if not task_matches_stage(t, closed=False, stage_names=done_names):
             continue
 
         open_tasks += 1
@@ -164,13 +156,6 @@ def build_team_workload(
     if unassigned:
         risks.append({"code": "unassigned_open_tasks", "count": unassigned,
                       "message": f"{unassigned} open task(s) with no assignee"})
-    scope_warning = task_scope_warning(scope_strategy)
-    if scope_warning:
-        risks.append({
-            "code": "task_state_fallback",
-            "count": truncation["missing"] if truncation else 1,
-            "message": scope_warning,
-        })
 
     return build_report(
         "team_workload",

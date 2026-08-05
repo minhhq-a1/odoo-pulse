@@ -39,17 +39,28 @@ def test_standup_digest_warns_on_truncation(fake_client):
     assert "10" in out
 
 
-def test_standup_digest_uses_stable_state_not_localized_stage_name(fake_client):
+def test_standup_digest_matches_stage_by_name_not_internal_state(fake_client):
+    # A task whose internal state happens to be "1_done" but whose stage is
+    # not one of exclude_stages must still count as open -- state must not
+    # substitute for the documented stage-name match.
     fake_client.fields_responses["project.task"] = {
         "state": {"type": "selection"}}
     fake_client.search_responses["project.task"] = [{
-        "id": 1, "name": "Closed", "user_ids": [10],
-        "stage_id": [9, "Hoàn tất"], "state": "1_done",
+        "id": 1, "name": "Still open", "user_ids": [10],
+        "stage_id": [9, "In Progress"], "state": "1_done",
         "date_deadline": False, "priority": "0",
     }]
-    tools_workflows.standup_digest("Acme")
-    call = fake_client.last("search_read")
-    assert ("state", "not in", ["1_done", "1_canceled"]) in call["domain"]
+    fake_client.execute_kw_responses[("res.users", "search_read")] = [
+        {"id": 10, "name": "Alice"},
+    ]
+    out = tools_workflows.standup_digest("Acme")
+    call = next(c for c in fake_client.calls
+                if c["method"] == "search_read" and c["model"] == "project.task")
+    assert ("stage_id.name", "not in", ["Done", "Cancelled", "Delivered"]) \
+        in call["domain"]
+    assert not any(leaf[0] == "state" for leaf in call["domain"]
+                   if isinstance(leaf, tuple))
+    assert "Still open" in out
 
 
 def test_standup_digest_shaping_bug_returns_json_error(fake_client):

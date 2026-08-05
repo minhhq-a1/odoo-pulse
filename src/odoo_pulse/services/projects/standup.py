@@ -8,11 +8,7 @@ from ...common.dates import parse_when
 from ...common.paging import fetch_with_truncation
 from ..report_context import build_report_context
 from .queries import resolve_user_names
-from .subtasks import (
-    task_closed_scope,
-    task_matches_scope,
-    task_scope_warning,
-)
+from .subtasks import task_matches_stage
 
 
 def build_standup_digest(
@@ -37,22 +33,17 @@ def build_standup_digest(
         ("stage_id.name", "not in", exclude_stages),
     ]
 
-    scope_domain, scope_fields, scope_strategy = task_closed_scope(
-        client, closed=False, stage_names=exclude_stages)
-    domain.extend(scope_domain)
-    scope_warning = task_scope_warning(scope_strategy)
-
     tasks, truncation = fetch_with_truncation(
         client, "project.task", domain,
         fields=["id", "name", "user_ids", "stage_id",
-                "date_deadline", "priority", *scope_fields],
+                "date_deadline", "priority"],
         limit=200, order="date_deadline",
     )
 
-    # Defensively re-filter client-side (stable state/is_closed schemas
-    # already filter server-side; the stage-name fallback needs this).
-    tasks = [t for t in tasks if task_matches_scope(
-        t, scope_strategy, closed=False, stage_names=exclude_stages)]
+    # Re-check client-side: Odoo's `not in` domain operator on a related
+    # field is case-sensitive, this catches stage names differing by case.
+    tasks = [t for t in tasks if task_matches_stage(
+        t, closed=False, stage_names=exclude_stages)]
 
     # Resolve user names including archived users (shared helper).
     all_uid = {uid for t in tasks for uid in t.get("user_ids", [])}
@@ -107,10 +98,7 @@ def build_standup_digest(
             out.append(f"| #{t['id']} | {name} | {t['assignee']} | {deadline_fn(t)} |")
         return out
 
-    lines = [f"## 🗓️ Daily Standup — {project}", f"**{today_str}**"]
-    if scope_warning:
-        lines.append(f"> ⚠️ {scope_warning}")
-    lines.append("")
+    lines = [f"## 🗓️ Daily Standup — {project}", f"**{today_str}**", ""]
 
     if truncation:
         lines.append(

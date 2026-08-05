@@ -133,7 +133,10 @@ def test_fetch_subtasks_closed_stage_domain_default_and_custom(fake_client):
     assert ("stage_id.name", "in", ["Hoàn thành"]) in call["domain"]
 
 
-def test_fetch_subtasks_uses_state_for_localized_closed_stage(fake_client):
+def test_fetch_subtasks_ignores_state_and_matches_by_stage_name_only(fake_client):
+    # A task can be flagged "1_done" internally (e.g. its stage is marked
+    # closed/folded in the Kanban config) without its stage being named one
+    # of closed_stage_names -- state must not substitute for a name match.
     fake_client.fields_responses["project.task"] = {
         **_TASK_SCHEMA, "state": {"type": "selection"}}
     fake_client.search_responses["project.task"] = [{
@@ -144,9 +147,10 @@ def test_fetch_subtasks_uses_state_for_localized_closed_stage(fake_client):
     }]
     tasks, _, _ = fetch_subtasks(
         fake_client, 59, only_closed_stages=True)
-    assert [task["id"] for task in tasks] == [1]
-    assert ("state", "in", ["1_done", "1_canceled"]) \
-        in fake_client.last("search_read")["domain"]
+    assert tasks == []
+    domain = fake_client.last("search_read")["domain"]
+    assert ("stage_id.name", "in", list(DEFAULT_CLOSED_STAGES)) in domain
+    assert not any(d[0] == "state" for d in domain if isinstance(d, tuple))
 
 
 def test_fetch_subtasks_single_assignee_zero_one_two(fake_client):

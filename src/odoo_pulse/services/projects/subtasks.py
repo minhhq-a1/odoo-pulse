@@ -1,63 +1,34 @@
 # odoo_pulse/services/projects/subtasks.py
 """Task closed/open scope resolution shared by project workflow tools.
 
-These orchestrate reads through an Odoo client (real or fake) to work out
-whether "closed" means a stored state field, a boolean is_closed field, or
-a stage-name fallback -- and then apply that same scope client-side where a
-domain alone cannot express it. They never write.
+Scope is always resolved by matching stage_id.name against the caller's
+stage_names. project.task's own `state`/`is_closed` flags are Kanban
+fold/closed markers configured per stage -- they do not reliably correspond
+to the named stages the caller asked for (a custom stage folded in the
+Kanban view but not named "Done"/"Cancelled"/"Delivered" would be miscounted
+as closed), so they are not used here. These never write.
 """
 
 from __future__ import annotations
-
-from typing import Any
 
 from ...common.dates import parse_period_date, parse_when, periods_domain, today_in_tz
 from ...common.paging import paged_search_read
 from ...common.schema import optional_fields
 
 
-CLOSED_TASK_STATES = ("1_done", "1_canceled")
-
-
-def task_closed_scope(
-    client: Any, *, closed: bool, stage_names: list[str]
-) -> tuple[list, list[str], str]:
-    """Return server domain, extra fields, and stable/fallback strategy."""
-    schema = client.fields_get("project.task")
-    if "state" in schema:
-        operator = "in" if closed else "not in"
-        return [(
-            "state", operator, list(CLOSED_TASK_STATES))], ["state"], "state"
-    if "is_closed" in schema:
-        return [], ["is_closed"], "is_closed"
+def stage_name_scope(*, closed: bool, stage_names: list[str]) -> list:
+    """Server-side domain matching tasks by literal stage name."""
     operator = "in" if closed else "not in"
-    return [("stage_id.name", operator, stage_names)], [], "stage"
+    return [("stage_id.name", operator, stage_names)]
 
 
-def task_matches_scope(
-    task: dict,
-    strategy: str,
-    *,
-    closed: bool,
-    stage_names: list[str],
-) -> bool:
-    if strategy == "state":
-        is_closed = task.get("state") in CLOSED_TASK_STATES
-    elif strategy == "is_closed":
-        is_closed = bool(task.get("is_closed"))
-    else:
-        stage = task.get("stage_id")
-        name = stage[1].casefold() if stage else ""
-        is_closed = name in {value.casefold() for value in stage_names}
+def task_matches_stage(task: dict, *, closed: bool, stage_names: list[str]) -> bool:
+    """Client-side case-insensitive re-check (Odoo's `in` domain operator on
+    a related field is case-sensitive)."""
+    stage = task.get("stage_id")
+    name = stage[1].casefold() if stage else ""
+    is_closed = name in {value.casefold() for value in stage_names}
     return is_closed if closed else not is_closed
-
-
-def task_scope_warning(strategy: str) -> str | None:
-    if strategy == "is_closed":
-        return "project.task.state unavailable; is_closed filtered client-side"
-    if strategy == "stage":
-        return "stable task state unavailable; stage-name fallback applied"
-    return None
 
 
 # -- subtask fetch/filter/aggregate helpers ----------------------------------
@@ -88,28 +59,18 @@ def fetch_subtasks(
                 for f in HOUR_FIELDS if f not in available]
     domain: list = [("project_id", "=", project_id),
                     ("parent_id", "!=", False)]
-    scope_fields: list[str] = []
-    scope_strategy: str | None = None
     names: list[str] = []
     if only_closed_stages:
         names = list(closed_stage_names or DEFAULT_CLOSED_STAGES)
-        scope_domain, scope_fields, scope_strategy = task_closed_scope(
-            client, closed=True, stage_names=names)
-        domain.extend(scope_domain)
-        if closed_stage_names is not None and scope_strategy != "stage":
-            domain.append(("stage_id.name", "in", closed_stage_names))
-        scope_warning = task_scope_warning(scope_strategy)
-        if scope_warning:
-            warnings.append(scope_warning)
+        domain.extend(stage_name_scope(closed=True, stage_names=names))
     domain += periods_domain("date_end", periods, timezone_offset,
                              as_datetime=True)
     tasks = paged_search_read(
         client, "project.task", domain,
-        fields=["id", "user_ids", "date_end", "stage_id",
-                *available, *scope_fields])
-    if only_closed_stages and scope_strategy == "is_closed":
-        tasks = [t for t in tasks if task_matches_scope(
-            t, scope_strategy, closed=True, stage_names=names)]
+        fields=["id", "user_ids", "date_end", "stage_id", *available])
+    if only_closed_stages:
+        tasks = [t for t in tasks if task_matches_stage(
+            t, closed=True, stage_names=names)]
     if single_assignee_only:
         tasks = [t for t in tasks if len(t.get("user_ids") or []) == 1]
     return tasks, available, warnings
