@@ -11,7 +11,12 @@ order of the work.
 Before starting a release cycle:
 
 - You have push access to `main` and can approve the protected `pypi`
-  environment.
+  environment. The `pypi` GitHub Environment has a `required_reviewers`
+  protection rule (reviewer: `minhhq-a1`) as of 2026-08-05 — `publish-pypi`
+  pauses for approval under Actions → the run → "Review deployments" before
+  it runs. (Before that date this rule did not exist and `publish-pypi` ran
+  straight through with no pause; v1.9.0 and v1.9.1rc1/v1.9.1 published
+  without this gate — see their `docs/releases/*-evidence.md` files.)
 - `main == origin/main`, and `git status --short` is empty.
 - PyPI Trusted Publishing is configured for `release.yml` / environment `pypi`.
 - No Dependabot `github-actions` PR is open. Every action is pinned to a commit
@@ -172,7 +177,9 @@ forward. Before each of these, stop and present the evidence, then wait:
 
 - `git push origin main`
 - `git tag` followed by `git push origin <tag>`
-- approving the protected `pypi` environment
+- approving the protected `pypi` environment (enforced by a
+  `required_reviewers` rule since 2026-08-05 — the workflow run actually
+  pauses and waits here now, it does not just run through)
 - `gh workflow run publish-mcp.yml`
 
 Never push with `--tags`; push the one tag by name.
