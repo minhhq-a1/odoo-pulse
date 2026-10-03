@@ -22,14 +22,17 @@ from __future__ import annotations
 from .odoo_client import OdooError
 from .runtime import get_client, mcp, safe
 from .workflow_helpers import (
+    apply_truncation,
     build_report,
     distinct_companies,
     ensure_field,
     fetch_with_truncation,
     gather_strict,
+    m2o_name,
     optional_fields,
     parse_when,
     today_in_tz,
+    truncation_risk,
 )
 
 _TIMESHEET_HINT = ("Timesheets require the hr_timesheet app; install it to "
@@ -375,9 +378,8 @@ def project_budget(
 
             rows_out.append({
                 "project": p["name"],
-                "manager": p["user_id"][1] if p.get("user_id") else None,
-                "customer": (p["partner_id"][1]
-                             if p.get("partner_id") else None),
+                "manager": m2o_name(p, "user_id"),
+                "customer": m2o_name(p, "partner_id"),
                 "budgets": budget_names,
                 "lines": len(plines),
                 "planned": round(planned, 2) if planned is not None else None,
@@ -428,9 +430,7 @@ def project_budget(
         companies = distinct_companies(projects)
         if len(companies) > 1:
             summary["companies"] = companies
-        if truncation:
-            summary["truncated"] = True
-            summary["total_matching"] = truncation["total_matching"]
+        apply_truncation(summary, truncation)
 
         breakdown: dict = {"projects": rows_out}
         if drill_id is not None and budgets_available:
@@ -482,21 +482,14 @@ def project_budget(
 
         risks: list[dict] = []
         if truncation:
-            risks.append({
-                "code": "truncated_data", "count": truncation["missing"],
-                "message": (
-                    f"Report covers only {truncation['fetched']} of "
-                    f"{truncation['total_matching']} matching projects."),
-            })
+            risks.append(truncation_risk(truncation, "projects"))
         if line_truncation:
-            risks.append({
-                "code": "truncated_budget_lines",
-                "count": line_truncation["missing"],
-                "message": (
+            risks.append(truncation_risk(
+                line_truncation, "budget lines", code="truncated_budget_lines",
+                message=(
                     f"Only {line_truncation['fetched']} of "
                     f"{line_truncation['total_matching']} matching budget "
-                    "lines were read; totals are incomplete."),
-            })
+                    "lines were read; totals are incomplete.")))
         if ids and not budgets_available:
             risks.append({
                 "code": "budgets_unavailable", "count": len(projects),
@@ -760,8 +753,8 @@ def project_profitability(
 
             rows_out.append({
                 "project": p["name"],
-                "manager": p["user_id"][1] if p.get("user_id") else None,
-                "customer": p["partner_id"][1] if p.get("partner_id") else None,
+                "manager": m2o_name(p, "user_id"),
+                "customer": m2o_name(p, "partner_id"),
                 "hours_logged": round(hours, 2),
                 "hours_allocated": round(alloc, 2),
                 "hours_burn_pct": hours_burn,
@@ -813,9 +806,7 @@ def project_profitability(
         companies = distinct_companies(projects)
         if len(companies) > 1:
             summary["companies"] = companies
-        if truncation:
-            summary["truncated"] = True
-            summary["total_matching"] = truncation["total_matching"]
+        apply_truncation(summary, truncation)
 
         highlights = [
             f"{summary['hours_logged']} h logged across {len(projects)} "
@@ -831,12 +822,7 @@ def project_profitability(
 
         risks: list[dict] = []
         if truncation:
-            risks.append({
-                "code": "truncated_data", "count": truncation["missing"],
-                "message": (
-                    f"Report covers only {truncation['fetched']} of "
-                    f"{truncation['total_matching']} matching projects."),
-            })
+            risks.append(truncation_risk(truncation, "projects"))
         if off_track:
             risks.append({
                 "code": "over_budget", "count": off_track,
