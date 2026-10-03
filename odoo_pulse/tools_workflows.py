@@ -13,11 +13,15 @@ from datetime import timedelta
 from .odoo_client import OdooConfigError, OdooError
 from .runtime import dumps, get_client, mcp, safe
 from .workflow_helpers import (
+    apply_truncation,
     build_report,
     fetch_with_truncation,
+    m2o_id,
+    m2o_name,
     parse_when,
     resolve_user_names,
     today_in_tz,
+    truncation_risk,
 )
 
 
@@ -92,7 +96,7 @@ def team_workload(
             )
 
         for t in tasks:
-            stage = t["stage_id"][1] if t.get("stage_id") else "(none)"
+            stage = m2o_name(t, "stage_id", "(none)")
             if stage.lower() in done_set:
                 continue
 
@@ -159,9 +163,7 @@ def team_workload(
             "avg_open_per_member": avg_open_per_member,
             "verdict": verdict,
         }
-        if truncation:
-            summary["truncated"] = True
-            summary["total_matching"] = truncation["total_matching"]
+        apply_truncation(summary, truncation)
 
         highlights = [f"{open_tasks} open task(s) across {members} member(s)"]
         if busiest:
@@ -171,14 +173,9 @@ def team_workload(
 
         risks: list[dict] = []
         if truncation:
-            risks.append({
-                "code": "truncated_data", "count": truncation["missing"],
-                "message": (
-                    f"Report covers only {truncation['fetched']} of "
-                    f"{truncation['total_matching']} matching task(s); "
-                    "workload figures may not reflect everyone in scope."
-                ),
-            })
+            risks.append(truncation_risk(
+                truncation, "task(s)",
+                detail="Workload figures may not reflect everyone in scope."))
         if overloaded_members:
             risks.append({"code": "overloaded_members", "count": overloaded_members,
                           "message": f"{overloaded_members} member(s) above {overload_threshold} open tasks"})
@@ -272,7 +269,7 @@ def project_status_report(
 
         ms_by_project: dict[int, list] = {}
         for m in milestones:
-            pid = m["project_id"][0] if m.get("project_id") else None
+            pid = m2o_id(m, "project_id")
             if pid is not None:
                 ms_by_project.setdefault(pid, []).append(m)
 
@@ -332,8 +329,8 @@ def project_status_report(
 
             rows.append({
                 "project": p["name"],
-                "manager": p["user_id"][1] if p.get("user_id") else None,
-                "customer": p["partner_id"][1] if p.get("partner_id") else None,
+                "manager": m2o_name(p, "user_id"),
+                "customer": m2o_name(p, "partner_id"),
                 "end_date": p.get("date") or None,
                 "task_count": p.get("task_count", 0),
                 "milestones": {"reached": reached_ms, "total": total_ms},
@@ -364,12 +361,8 @@ def project_status_report(
             "divergent": divergent,
             "verdict": verdict,
         }
-        if projects_truncation:
-            summary["projects_truncated"] = True
-            summary["total_projects_matching"] = projects_truncation["total_matching"]
-        if milestones_truncation:
-            summary["milestones_truncated"] = True
-            summary["total_milestones_matching"] = milestones_truncation["total_matching"]
+        apply_truncation(summary, projects_truncation, prefix="projects")
+        apply_truncation(summary, milestones_truncation, prefix="milestones")
 
         highlights = [f"{off_track} of {len(projects)} project(s) off track"]
         if rows and rows[0]["overdue_milestones"] > 0:
@@ -382,23 +375,13 @@ def project_status_report(
 
         risks: list[dict] = []
         if projects_truncation:
-            risks.append({
-                "code": "truncated_data", "count": projects_truncation["missing"],
-                "message": (
-                    f"Report covers only {projects_truncation['fetched']} of "
-                    f"{projects_truncation['total_matching']} matching project(s); "
-                    "the portfolio verdict may not reflect the full set."
-                ),
-            })
+            risks.append(truncation_risk(
+                projects_truncation, "project(s)",
+                detail="The portfolio verdict may not reflect the full set."))
         if milestones_truncation:
-            risks.append({
-                "code": "truncated_milestone_data", "count": milestones_truncation["missing"],
-                "message": (
-                    f"Report covers only {milestones_truncation['fetched']} of "
-                    f"{milestones_truncation['total_matching']} matching milestone(s); "
-                    "per-project milestone counts may be incomplete."
-                ),
-            })
+            risks.append(truncation_risk(
+                milestones_truncation, "milestone(s)", code="truncated_milestone_data",
+                detail="Per-project milestone counts may be incomplete."))
         if off_track:
             risks.append({"code": "off_track_projects", "count": off_track,
                           "message": f"{off_track} project(s) off track"})
