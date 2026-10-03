@@ -16,6 +16,7 @@ from .workflow_helpers import (
     gather_strict,
     resolve_company_id,
     today_in_tz,
+    truncation_risk,
     utc_bound,
 )
 
@@ -146,13 +147,7 @@ def inventory_risk(
         risks: list[dict] = []
         for trunc in (short_trunc, stocked_trunc):
             if trunc:
-                risks.append({
-                    "code": "truncated_data", "count": trunc["missing"],
-                    "message": (
-                        f"Report covers only {trunc['fetched']} of "
-                        f"{trunc['total_matching']} matching products."
-                    ),
-                })
+                risks.append(truncation_risk(trunc, "products"))
         if shortages:
             risks.append({
                 "code": "negative_forecast", "count": len(shortages),
