@@ -11,13 +11,16 @@ from datetime import timedelta
 
 from .runtime import get_client, mcp, safe
 from .workflow_helpers import (
+    apply_truncation,
     build_report,
     fetch_with_truncation,
     gather_strict,
+    m2o_name,
     parse_when,
     resolve_company_id,
     today_in_tz,
     totals_by_currency,
+    truncation_risk,
     utc_bound,
 )
 
@@ -79,7 +82,7 @@ def procurement_watch(
         for po in orders:
             amount = po.get("amount_total") or 0.0
             open_value += amount
-            vendor = po["partner_id"][1] if po.get("partner_id") else "(unknown)"
+            vendor = m2o_name(po, "partner_id", "(unknown)")
             vrec = vendors.setdefault(
                 vendor, {"vendor": vendor, "orders": 0, "open_value": 0.0})
             vrec["orders"] += 1
@@ -114,9 +117,7 @@ def procurement_watch(
             summary["currency"] = next(iter(by_currency))
         elif len(by_currency) > 1:
             summary["by_currency"] = by_currency
-        if truncation:
-            summary["truncated"] = True
-            summary["total_matching"] = truncation["total_matching"]
+        apply_truncation(summary, truncation)
 
         top_vendors = sorted(
             ({**v, "open_value": round(v["open_value"], 2)}
@@ -137,12 +138,7 @@ def procurement_watch(
 
         risks: list[dict] = []
         if truncation:
-            risks.append({
-                "code": "truncated_data", "count": truncation["missing"],
-                "message": (
-                    f"Report covers only {truncation['fetched']} of "
-                    f"{truncation['total_matching']} matching purchase orders."),
-            })
+            risks.append(truncation_risk(truncation, "purchase orders"))
         if late:
             risks.append({
                 "code": "late_receipts", "count": len(late),
@@ -218,7 +214,7 @@ def production_health(
         for mo in orders:
             state = mo.get("state") or "(unknown)"
             by_state[state] = by_state.get(state, 0) + 1
-            product = mo["product_id"][1] if mo.get("product_id") else "(none)"
+            product = m2o_name(mo, "product_id", "(none)")
             start = parse_when(mo.get("date_start"), timezone_offset)
             if state == "confirmed" and start is not None and start < today:
                 behind.append({
@@ -251,9 +247,7 @@ def production_health(
             "stuck_in_progress": len(stuck),
             "verdict": verdict,
         }
-        if truncation:
-            summary["truncated"] = True
-            summary["total_matching"] = truncation["total_matching"]
+        apply_truncation(summary, truncation)
 
         highlights = [f"{len(orders)} open manufacturing order(s)"]
         if behind:
@@ -270,12 +264,7 @@ def production_health(
 
         risks: list[dict] = []
         if truncation:
-            risks.append({
-                "code": "truncated_data", "count": truncation["missing"],
-                "message": (
-                    f"Report covers only {truncation['fetched']} of "
-                    f"{truncation['total_matching']} matching orders."),
-            })
+            risks.append(truncation_risk(truncation, "orders"))
         if behind:
             risks.append({
                 "code": "behind_start", "count": len(behind),
