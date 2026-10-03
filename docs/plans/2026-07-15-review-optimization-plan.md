@@ -5,6 +5,46 @@ Ordered by (impact / risk); every task ends with the full suite green
 (`pytest -q`, 382+ tests) and is committed separately so any step can be
 reverted alone. No task changes the write-safety chain.
 
+## Status: implemented (all 12 tasks + 1 extra fix)
+
+Done on branch `claude/project-review-optimization-ruwn3v`, one commit per
+task. Gates after the last commit: `ruff check .`, `mypy`, and
+`pytest --cov` (434 tests, 93 % coverage, floor 91 %) all green on Python
+3.10 / 3.11 / 3.12 / 3.13. Python 3.14 is in the CI matrix as an
+informational (non-blocking) leg only: no 3.14 interpreter was available to
+verify dependency wheels locally.
+
+Deviations from the plan as written:
+
+- **Extra fix (not in the plan):** `mcp[cli]>=1.2.0` had no upper bound and
+  mcp 2.x renamed `FastMCP`, breaking every fresh install at import time.
+  Pinned to `<2` in `pyproject.toml` / `requirements.txt` (own commit).
+- **T3:** verified on a real socket (local HTTP/1.1 XML-RPC server): 11 RPCs
+  went from 11 TCP connections to 2. `gather` worker threads each open their
+  own connection once, so the win is largest for sequential calls.
+- **T5:** `bin_size` also applied to `read_records` and the
+  `odoo://{model}/{id}` resource (same unbounded all-fields risk);
+  `OdooClient.read` gained an optional `context`.
+- **T7:** unrecognised boolean values now raise `OdooConfigError`; two tests
+  that pinned "garbage -> False" were rewritten to expect the error.
+- **T9:** `truncation_risk` appends `detail` as a separate sentence (not
+  after `;`) and a few messages with different semantics (pipeline,
+  trend, budget lines) keep their text via `message=`. `tools_reports_hr`
+  and `_inventory` still set `summary["truncated"]` by hand: they combine two
+  fetches and have no single `total_matching`.
+- **T10:** instead of resolving the default at the top of every tool, the
+  three low-level helpers (`today_in_tz`, `parse_when`, `utc_bound`) resolve
+  `None`; an explicit `0` still means UTC.
+- **T11:** implemented as `workflow_helpers.fetch_all_pages` (up to 5 pages
+  of `max_records`, stable `id` order); roadmap now only tracks the Odoo 19+
+  server-side follow-up.
+- **T6:** `check_untyped_defs` is enabled (it found nothing extra); 11 real
+  type errors were fixed. Ruff is lint-only, line length 110.
+- Not run: `scripts/smoke_live.py` / `make playground-smoke` (need a live
+  Odoo / Docker, unavailable in this environment). The read path was instead
+  exercised end-to-end through FastMCP and a real XML-RPC round trip against
+  a local fake Odoo.
+
 Finding → task map:
 
 | # | Finding | Task | Size |
