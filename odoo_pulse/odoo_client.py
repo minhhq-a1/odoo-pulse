@@ -98,7 +98,7 @@ def _int_env(name: str, default: int) -> int:
     try:
         return int(raw)
     except ValueError:
-        raise OdooConfigError(f"{name} must be an integer, got {raw!r}")
+        raise OdooConfigError(f"{name} must be an integer, got {raw!r}") from None
 
 
 def _float_env(name: str, default: float) -> float:
@@ -109,7 +109,7 @@ def _float_env(name: str, default: float) -> float:
     try:
         return float(raw)
     except ValueError:
-        raise OdooConfigError(f"{name} must be a number, got {raw!r}")
+        raise OdooConfigError(f"{name} must be a number, got {raw!r}") from None
 
 
 _TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
@@ -185,7 +185,7 @@ class OdooConfig:
     timeout: float = 30.0
 
     @classmethod
-    def from_env(cls) -> "OdooConfig":
+    def from_env(cls) -> OdooConfig:
         url = os.environ.get("ODOO_URL", "").strip().rstrip("/")
         db = os.environ.get("ODOO_DB", "").strip()
         username = os.environ.get("ODOO_USERNAME", "").strip()

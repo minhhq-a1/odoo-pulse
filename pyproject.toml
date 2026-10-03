@@ -36,7 +36,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0", "tomli; python_version < '3.11'"]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.6",
+    "mypy>=1.10",
+    "tomli; python_version < '3.11'",
+]
 
 [project.urls]
 Homepage = "https://github.com/minhhq-a1/odoo-pulse"
@@ -49,6 +55,17 @@ odoo-pulse = "odoo_pulse.server:main"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+# Lint only: the code base is hand-formatted, so no `ruff format` gate.
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["odoo_pulse"]
 
 [build-system]
 requires = ["hatchling"]

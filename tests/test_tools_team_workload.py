@@ -4,7 +4,6 @@ import json
 
 from odoo_pulse import tools_workflows
 
-
 # today is fixed at 2026-06-30 (cutoff 2026-07-07 with default lookahead 7).
 TASKS = [
     {"id": 1, "name": "A", "user_ids": [10], "stage_id": [2, "In Progress"],

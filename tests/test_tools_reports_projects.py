@@ -12,7 +12,6 @@ from odoo_pulse.tools_reports_projects import (
     _verdict,
 )
 
-
 # -- helpers -----------------------------------------------------------------
 
 def test_validate_date_passthrough_and_error():

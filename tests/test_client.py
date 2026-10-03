@@ -328,6 +328,7 @@ def test_make_transport_honours_verify_ssl_false():
 
 def _counting_proxy_client(monkeypatch):
     import xmlrpc.client
+
     from odoo_pulse.odoo_client import OdooClient, OdooConfig
 
     instances = []
@@ -372,6 +373,7 @@ def test_proxies_are_never_shared_across_threads(monkeypatch):
 
 def test_uid_authenticates_once(monkeypatch):
     import xmlrpc.client
+
     from odoo_pulse.odoo_client import OdooClient, OdooConfig
 
     auth_calls = []

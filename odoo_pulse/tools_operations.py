@@ -18,7 +18,6 @@ from __future__ import annotations
 
 from .runtime import date_domain, get_client, mcp, name_domain, safe
 
-
 # --- Manufacturing (MRP) ------------------------------------------------------
 
 

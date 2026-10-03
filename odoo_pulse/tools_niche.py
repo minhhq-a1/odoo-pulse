@@ -34,7 +34,6 @@ from __future__ import annotations
 
 from .runtime import get_client, mcp, name_domain, safe
 
-
 # --- Subscriptions ------------------------------------------------------------
 
 

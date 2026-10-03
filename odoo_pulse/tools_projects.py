@@ -13,7 +13,6 @@ from .runtime import date_domain, dumps, get_client, mcp, name_domain, safe
 from .workflow_helpers import ensure_field, resolve_user_names
 
 
-
 @mcp.tool()
 def list_projects(query: str | None = None, limit: int = 20) -> str:
     """List projects (project.project).

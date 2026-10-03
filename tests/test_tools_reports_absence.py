@@ -86,6 +86,7 @@ def test_absence_overview_clear_when_quiet(fake_client, monkeypatch):
 def test_off_today_counts_leave_ending_late_utc_yesterday(fake_client):
     import json
     from datetime import timedelta
+
     from odoo_pulse import tools_reports_hr
     from odoo_pulse.workflow_helpers import today_in_tz
 

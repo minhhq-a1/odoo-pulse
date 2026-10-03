@@ -21,8 +21,6 @@ from .workflow_helpers import (
 )
 
 
-
-
 @mcp.tool()
 def team_workload(
     project: str | None = None,

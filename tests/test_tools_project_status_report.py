@@ -4,7 +4,6 @@ import json
 
 from odoo_pulse import tools_workflows
 
-
 # today is fixed at 2026-07-01 (cutoff 2026-07-08 with default lookahead 7).
 PROJECTS = [
     {"id": 1, "name": "Alpha", "user_id": [5, "PM One"], "partner_id": [7, "Cust A"],

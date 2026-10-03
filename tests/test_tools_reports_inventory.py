@@ -88,6 +88,7 @@ def test_inventory_risk_healthy_when_clean(fake_client, monkeypatch):
 
 def test_dead_stock_window_is_utc_bounded(fake_client):
     import json
+
     from odoo_pulse import tools_reports_inventory
 
     json.loads(tools_reports_inventory.inventory_risk(timezone_offset=7))

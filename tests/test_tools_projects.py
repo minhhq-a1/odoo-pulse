@@ -93,6 +93,7 @@ def test_standup_digest_warns_on_truncation(fake_client):
 
 def test_standup_digest_shaping_bug_returns_json_error(fake_client):
     import json
+
     from odoo_pulse import tools_workflows
 
     # a task row missing user_ids triggers a shaping KeyError path safely
@@ -110,6 +111,7 @@ def test_standup_digest_shaping_bug_returns_json_error(fake_client):
 
 def test_list_timesheets_friendly_error_without_hr_timesheet(fake_client):
     import json
+
     from odoo_pulse import tools_projects
 
     fake_client.fields_responses["account.analytic.line"] = {

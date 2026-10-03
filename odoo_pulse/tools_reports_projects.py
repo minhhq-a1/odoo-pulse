@@ -59,7 +59,7 @@ def _validate_date(value: str | None, param: str) -> str | None:
     try:
         parse_when(value)
     except ValueError:
-        raise OdooError(f"Invalid {param} {value!r}: expected YYYY-MM-DD")
+        raise OdooError(f"Invalid {param} {value!r}: expected YYYY-MM-DD") from None
     return str(value)[:10]
 
 
@@ -283,8 +283,9 @@ def project_budget(
                 budgets_available = True
                 src, line_opt, line_rows, line_truncation = fetched["lines"]
                 _, link_field, line_acct, amount_field, _ = src
-                pick = (lambda cands:
-                        next((f for f in cands if f in line_opt), None))
+                def pick(cands):
+                    return next((f for f in cands if f in line_opt), None)
+
                 practical_field = pick(_PRACTICAL_CANDIDATES)
                 theoretical_field = pick(_THEORETICAL_CANDIDATES)
                 parent_field = pick(_PARENT_CANDIDATES)

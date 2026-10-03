@@ -160,6 +160,7 @@ def test_pipeline_review_flags_mixed_companies(fake_client, monkeypatch):
 def test_stalled_uses_local_date_of_stage_update(fake_client):
     import json
     from datetime import timedelta
+
     from odoo_pulse import tools_reports_sales
     from odoo_pulse.workflow_helpers import today_in_tz
 

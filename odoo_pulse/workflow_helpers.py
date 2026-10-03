@@ -8,9 +8,11 @@ composed tools (and standup_digest) stay DRY and independently testable.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime, time as dt_time, timedelta, timezone
-from typing import Any, Callable
+from datetime import date, datetime, timedelta, timezone
+from datetime import time as dt_time
+from typing import Any
 
 from .odoo_client import OdooError
 

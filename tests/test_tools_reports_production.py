@@ -86,6 +86,7 @@ def test_production_health_company_filter(fake_client, monkeypatch):
 def test_behind_start_uses_local_date_of_date_start(fake_client):
     import json
     from datetime import timedelta
+
     from odoo_pulse import tools_reports_ops
     from odoo_pulse.workflow_helpers import today_in_tz
 
