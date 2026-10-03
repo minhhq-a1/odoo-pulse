@@ -20,6 +20,7 @@ def test_odoo_record_found_returns_single_dict(fake_client):
     assert call["model"] == "res.partner"
     assert call["ids"] == [5]
     assert call["fields"] is None
+    assert call["context"] == {"bin_size": True}
 
 
 def test_odoo_record_not_found_returns_error_envelope(fake_client):

@@ -96,9 +96,15 @@ class FakeClient:
                 return value
         return self.search_count_responses.get(model, 7)
 
-    def read(self, model, ids, fields=None):
+    def read(self, model, ids, fields=None, context=None):
         self.calls.append(
-            {"method": "read", "model": model, "ids": ids, "fields": fields}
+            {
+                "method": "read",
+                "model": model,
+                "ids": ids,
+                "fields": fields,
+                "context": context,
+            }
         )
         self._maybe_raise()
         return self.read_responses.get(model, [])

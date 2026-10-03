@@ -523,9 +523,16 @@ class OdooClient:
         return self.execute_kw(model, "search_count", [domain or []])
 
     def read(
-        self, model: str, ids: list[int], fields: list[str] | None = None
+        self,
+        model: str,
+        ids: list[int],
+        fields: list[str] | None = None,
+        context: dict | None = None,
     ) -> list[dict]:
-        return self.execute_kw(model, "read", [ids], {"fields": fields or []})
+        kwargs: dict[str, Any] = {"fields": fields or []}
+        if context:
+            kwargs["context"] = context
+        return self.execute_kw(model, "read", [ids], kwargs)
 
     def create(self, model: str, values: dict) -> int:
         return self.execute_kw(model, "create", [values])

@@ -19,9 +19,12 @@ from __future__ import annotations
 from .odoo_client import OdooError
 from .runtime import get_client, mcp, safe
 
+# Binary columns come back as sizes, not base64 blobs (see tools_generic).
+_BIN_SIZE_CONTEXT = {"bin_size": True}
+
 
 def _read_one(model: str, rec_id: int) -> dict:
-    rows = get_client().read(model, [rec_id])
+    rows = get_client().read(model, [rec_id], context=_BIN_SIZE_CONTEXT)
     if not rows:
         raise OdooError(f"{model} record {rec_id} not found")
     return rows[0]
@@ -29,5 +32,6 @@ def _read_one(model: str, rec_id: int) -> dict:
 
 @mcp.resource("odoo://{model}/{id}", mime_type="application/json")
 def odoo_record(model: str, id: int) -> str:
-    """One Odoo record with all stored fields, e.g. odoo://res.partner/5."""
+    """One Odoo record with all stored fields (binary columns as sizes),
+    e.g. odoo://res.partner/5."""
     return safe(lambda: _read_one(model, id))

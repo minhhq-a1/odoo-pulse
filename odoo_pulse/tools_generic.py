@@ -5,6 +5,12 @@ from __future__ import annotations
 from .odoo_client import OdooError
 from .runtime import get_client, mcp, safe
 
+# Odoo returns binary columns as human-readable sizes ("2.5 Kb") instead of
+# base64 blobs under this context key. Applied whenever the caller does not
+# name fields explicitly, so an "all fields" read can never drag megabytes of
+# binary data into the model's context window.
+_BIN_SIZE_CONTEXT = {"bin_size": True}
+
 
 @mcp.tool()
 def odoo_version() -> str:
@@ -64,14 +70,21 @@ def search_read(
         domain: Odoo search domain as a list of triplets, e.g.
             [["state", "=", "sale"], ["amount_total", ">", 1000]].
             Use 'and'/'|' operators as Odoo expects. Defaults to all records.
-        fields: Field names to return. Omit to let Odoo decide (can be large).
+        fields: Field names to return. Omit to get all fields, with binary
+            columns reduced to their size (use read_attachment for content).
         limit: Max records (capped by ODOO_MAX_RECORDS).
         offset: Pagination offset.
         order: Sort spec, e.g. 'date_order desc'.
     """
     return safe(
         lambda: get_client().search_read(
-            model, domain=domain, fields=fields, limit=limit, offset=offset, order=order
+            model,
+            domain=domain,
+            fields=fields,
+            limit=limit,
+            offset=offset,
+            order=order,
+            context=None if fields else _BIN_SIZE_CONTEXT,
         )
     )
 
@@ -84,8 +97,13 @@ def search_count(model: str, domain: list | None = None) -> str:
 
 @mcp.tool()
 def read_records(model: str, ids: list[int], fields: list[str] | None = None) -> str:
-    """Fetch specific records by their ids. Pass `fields` to limit columns."""
-    return safe(lambda: get_client().read(model, ids, fields))
+    """Fetch specific records by their ids. Pass `fields` to limit columns;
+    when omitted, binary columns come back as sizes (see read_attachment)."""
+    return safe(
+        lambda: get_client().read(
+            model, ids, fields, context=None if fields else _BIN_SIZE_CONTEXT
+        )
+    )
 
 
 _ALLOWED_AGGS = frozenset(

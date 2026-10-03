@@ -107,3 +107,26 @@ def test_friendly_error_when_model_missing(fake_client):
     fake_client.raise_error = "Object helpdesk.ticket doesn't exist"
     out = json.loads(tools_operations.list_helpdesk_tickets())
     assert "error" in out
+
+
+def test_search_read_without_fields_requests_binary_sizes(fake_client):
+    from odoo_pulse import tools_generic
+
+    tools_generic.search_read("res.partner")
+    assert fake_client.last("search_read")["context"] == {"bin_size": True}
+
+
+def test_search_read_with_explicit_fields_adds_no_context(fake_client):
+    from odoo_pulse import tools_generic
+
+    tools_generic.search_read("res.partner", fields=["name", "image_1920"])
+    assert fake_client.last("search_read")["context"] is None
+
+
+def test_read_records_binary_guard_only_when_fields_omitted(fake_client):
+    from odoo_pulse import tools_generic
+
+    tools_generic.read_records("res.partner", [1])
+    assert fake_client.last("read")["context"] == {"bin_size": True}
+    tools_generic.read_records("res.partner", [1], fields=["name"])
+    assert fake_client.last("read")["context"] is None

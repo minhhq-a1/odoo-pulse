@@ -457,3 +457,11 @@ def test_list_models_stops_at_the_runaway_ceiling():
     out = client.list_models()
     assert len(proxy.offsets) == OdooClient._LIST_MODELS_MAX_PAGES
     assert len(out) == 10 * OdooClient._LIST_MODELS_MAX_PAGES
+
+
+def test_read_forwards_context_only_when_given():
+    client, proxy = make_client(return_value=[{"id": 1}])
+    client.read("res.partner", [1])
+    assert "context" not in proxy.calls[-1][6]
+    client.read("res.partner", [1], context={"bin_size": True})
+    assert proxy.calls[-1][6]["context"] == {"bin_size": True}
