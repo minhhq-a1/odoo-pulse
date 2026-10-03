@@ -13,6 +13,7 @@ from odoo_pulse.workflow_helpers import (
     default_tz_offset,
     distinct_companies,
     ensure_field,
+    fetch_all_pages,
     m2o_id,
     m2o_name,
     optional_fields,
@@ -345,3 +346,30 @@ def test_today_in_tz_defaults_follow_env(monkeypatch):
     expected = datetime.now(timezone(timedelta(hours=-11))).date()
     assert today_in_tz() == expected
     assert today_in_tz(None) == expected
+
+
+def test_fetch_all_pages_stops_at_first_short_page(fake_client):
+    fake_client.search_responses_seq["x.model"] = [
+        [{"id": i} for i in range(200)], [{"id": 999}],
+    ]
+    rows, trunc = fetch_all_pages(fake_client, "x.model", [], ["id"])
+    assert len(rows) == 201 and trunc is None
+
+
+def test_fetch_all_pages_full_budget_not_truncated_when_count_matches(fake_client):
+    fake_client.search_responses_seq["x.model"] = [
+        [{"id": p * 1000 + i} for i in range(200)] for p in range(2)
+    ]
+    fake_client.search_count_responses["x.model"] = 400
+    rows, trunc = fetch_all_pages(fake_client, "x.model", [], ["id"], max_pages=2)
+    assert len(rows) == 400 and trunc is None
+
+
+def test_fetch_all_pages_reports_truncation(fake_client):
+    fake_client.search_responses_seq["x.model"] = [
+        [{"id": p * 1000 + i} for i in range(200)] for p in range(2)
+    ]
+    fake_client.search_count_responses["x.model"] = 650
+    rows, trunc = fetch_all_pages(fake_client, "x.model", [], ["id"], max_pages=2)
+    assert len(rows) == 400
+    assert trunc == {"total_matching": 650, "fetched": 400, "missing": 250}

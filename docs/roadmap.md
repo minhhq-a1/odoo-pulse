@@ -4,21 +4,20 @@ Follow-up work deferred from the 2026-07 analyst-gap closure
 (`docs/superpowers/plans/2026-07-03-analyst-gaps.md`). Nothing here is
 scheduled — pick items up when a real need appears.
 
-## Trend bucketing: move server-side
+## Trend bucketing: server-side on Odoo 19+ (follow-up)
 
-`sales_snapshot`'s `weekly_revenue` trend currently fetches up to 200 raw
-`sale.order` rows and buckets them into weeks client-side
-(`odoo_pulse/tools_reports_sales.py`, `sales_snapshot`). On an instance with more
-than ~200 confirmed orders in the trend window, the fetch truncates and the
-tool now reports `trend: null` (fixed 2026-07-03) rather than a
-biased direction — correct, but it means busy instances lose the trend
-entirely.
+`sales_snapshot`'s `weekly_revenue` trend now pages through the confirmed
+orders in the window (up to 5 x `ODOO_MAX_RECORDS`, ~1 000 orders, three
+small fields per row) instead of the old single 200-row fetch, so ordinary
+busy instances keep their trend. Past that budget it still reports
+`trend: null` with a `truncated_trend` risk rather than a biased direction.
 
-**Fix:** group by week via `client.aggregate_records` (already used for
-`top_products`) instead of raw `search_read` + client-side bucketing. Removes
-the truncation failure mode and cuts payload size. Watch for week-label
-stability across Odoo major versions (the reason the original plan chose
-client-side bucketing) before making the switch.
+**Remaining work (only for instances beyond ~1 000 orders per window):**
+group by week via `client.aggregate_records` (as `top_products` already
+does). Week labels from `read_group` are localised strings on Odoo <= 18 but
+ISO-style on 19+, which is why bucketing stayed client-side; a version-gated
+server-side path for 19+ only would remove the cap there without risking
+label parsing on older majors.
 
 ## FX conversion for mixed-currency totals
 

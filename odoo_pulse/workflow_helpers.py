@@ -109,6 +109,46 @@ def fetch_with_truncation(
     }
 
 
+def fetch_all_pages(
+    client: Any,
+    model: str,
+    domain: list,
+    fields: list[str],
+    *,
+    max_pages: int = 5,
+    order: str = "id",
+    context: dict | None = None,
+) -> tuple[list[dict], dict | None]:
+    """Like :func:`fetch_with_truncation`, but pages past the row cap.
+
+    Reads up to ``max_pages`` pages of ``config.max_records`` rows each
+    (a stable ``order`` keeps offsets consistent) and stops at the first
+    short page. Only when every page was full does it issue one
+    ``search_count`` to tell "exactly filled the budget" from "truncated";
+    returns ``(rows, None)`` when complete, else ``(rows, {"total_matching",
+    "fetched", "missing"})``. For compact aggregation inputs (a few small
+    fields per row) where one cap-sized page would silently drop data.
+    """
+    page = client.config.max_records
+    rows: list[dict] = []
+    for n in range(max_pages):
+        chunk = client.search_read(
+            model, domain=domain, fields=fields, limit=page,
+            offset=n * page, order=order, context=context,
+        )
+        rows.extend(chunk)
+        if len(chunk) < page:
+            return rows, None
+    total = client.search_count(model, domain)
+    if total <= len(rows):
+        return rows, None
+    return rows, {
+        "total_matching": total,
+        "fetched": len(rows),
+        "missing": total - len(rows),
+    }
+
+
 def m2o_id(row: dict, field: str) -> int | None:
     """Id of a many2one value (Odoo returns ``[id, display_name]`` or False)."""
     value = row.get(field)

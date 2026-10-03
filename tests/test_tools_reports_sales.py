@@ -230,15 +230,44 @@ def test_sales_snapshot_trend_disabled(fake_client, monkeypatch):
 def test_sales_snapshot_trend_truncated_reports_no_direction(fake_client, monkeypatch):
     _fix_today(monkeypatch)
     _prime(fake_client)
-    truncated_trend_rows = [
-        {"id": 1000 + i, "amount_total": 10.0, "date_order": "2026-06-25 09:00:00"}
-        for i in range(200)
+    # Five full pages exhaust the paging budget; the count says more exist.
+    fake_client.search_responses_seq["sale.order"] = [
+        _trend_rows(200, start=1000 * p) for p in range(5)
     ]
-    fake_client.search_responses_seq["sale.order"] = [truncated_trend_rows]
-    fake_client.search_count_responses["sale.order"] = 500
+    fake_client.search_count_responses["sale.order"] = 1500
     out = json.loads(tools_reports_sales.sales_snapshot(timezone_offset=7))
     assert out["summary"]["trend"] is None
-    assert "truncated_trend" in [r["code"] for r in out["risks"]]
+    risk = next(r for r in out["risks"] if r["code"] == "truncated_trend")
+    assert risk["count"] == 500
+    reads = [c for c in fake_client.calls
+             if c["method"] == "search_read" and c["model"] == "sale.order"]
+    assert [c["offset"] for c in reads] == [0, 200, 400, 600, 800]
+
+
+def _trend_rows(n, start=0, when="2026-06-25 09:00:00"):
+    return [{"id": start + i, "amount_total": 10.0, "date_order": when} for i in range(n)]
+
+
+def test_sales_snapshot_trend_pages_past_the_row_cap(fake_client, monkeypatch):
+    _fix_today(monkeypatch)
+    _prime(fake_client)
+    # 200 + 200 + 50 orders: more than one page, but fully fetched.
+    fake_client.search_responses_seq["sale.order"] = [
+        _trend_rows(200), _trend_rows(200, start=1000), _trend_rows(50, start=2000),
+    ]
+    out = json.loads(tools_reports_sales.sales_snapshot(timezone_offset=7))
+    assert "truncated_trend" not in [r["code"] for r in out["risks"]]
+    assert out["summary"]["trend"] is not None
+    weeks = out["breakdown"]["weekly_revenue"]
+    assert sum(w["revenue"] for w in weeks) == 4500.0
+    reads = [c for c in fake_client.calls
+             if c["method"] == "search_read" and c["model"] == "sale.order"]
+    assert [c["offset"] for c in reads] == [0, 200, 400]
+    assert all(c["order"] == "id" for c in reads)
+    # A short page ended the loop, so no truncation count was needed.
+    assert not [c for c in fake_client.calls
+                if c["method"] == "search_count" and c["model"] == "sale.order"
+                and c["domain"] and any(f == "date_order" for f, *_ in c["domain"])]
 
 
 def test_sales_snapshot_fetches_concurrently(fake_client, monkeypatch):

@@ -14,6 +14,7 @@ from .workflow_helpers import (
     apply_truncation,
     build_report,
     distinct_companies,
+    fetch_all_pages,
     fetch_with_truncation,
     gather_strict,
     m2o_name,
@@ -396,13 +397,14 @@ def sales_snapshot(
         trend_start = today - timedelta(days=7 * trend_weeks)
 
         def trend_fetch():
-            return fetch_with_truncation(
+            # Three small fields per row, so paging up to 5 x max_records
+            # orders is cheap and keeps busy instances from losing the trend.
+            return fetch_all_pages(
                 client, "sale.order",
                 [("state", "in", ["sale", "done"]),
                  ("date_order", ">=", utc_bound(trend_start, timezone_offset)),
                  *company_domain],
                 fields=["id", "amount_total", "date_order"],
-                limit=200,
             )
 
         thunks = {"sales": sale_order_aggregates, "products": product_aggregate,
