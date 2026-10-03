@@ -14,8 +14,10 @@ from .workflow_helpers import (
     build_report,
     fetch_with_truncation,
     gather_strict,
+    m2o_name,
     parse_when,
     today_in_tz,
+    truncation_risk,
     utc_bound,
 )
 
@@ -80,7 +82,7 @@ def absence_overview(
 
         headcount: dict[str, int] = {}
         for row in agg.get("rows", []):
-            dept = row["department_id"][1] if row.get("department_id") else "(none)"
+            dept = m2o_name(row, "department_id", "(none)")
             headcount[dept] = (row.get("__count")
                                or row.get("department_id_count") or 0)
 
@@ -138,13 +140,7 @@ def absence_overview(
         risks: list[dict] = []
         for trunc in (approved_trunc, pending_trunc):
             if trunc:
-                risks.append({
-                    "code": "truncated_data", "count": trunc["missing"],
-                    "message": (
-                        f"Report covers only {trunc['fetched']} of "
-                        f"{trunc['total_matching']} matching leave records."
-                    ),
-                })
+                risks.append(truncation_risk(trunc, "leave records"))
         if pending:
             risks.append({
                 "code": "pending_approvals", "count": len(pending),
