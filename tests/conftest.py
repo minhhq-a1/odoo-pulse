@@ -80,7 +80,7 @@ class FakeClient:
         self._maybe_raise()
         return self.search_responses.get("ir.model", [])
 
-    def fields_get(self, model, attributes=None):
+    def fields_get(self, model, attributes=None, *, refresh=False):
         self.calls.append({"method": "fields_get", "model": model})
         self._maybe_raise()
         return self.fields_responses.get(model, dict(_DEFAULT_FIELDS))
