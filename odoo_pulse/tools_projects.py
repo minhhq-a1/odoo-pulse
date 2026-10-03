@@ -8,10 +8,8 @@ Covered models:
 
 from __future__ import annotations
 
-import json
-
 from .odoo_client import OdooConfigError, OdooError
-from .runtime import date_domain, get_client, mcp, name_domain, safe
+from .runtime import date_domain, dumps, get_client, mcp, name_domain, safe
 from .workflow_helpers import ensure_field, resolve_user_names
 
 
@@ -110,9 +108,9 @@ def list_tasks(
                     for uid in task.get("user_ids", [])
                 ]
 
-        return json.dumps(tasks, ensure_ascii=False, indent=2, default=str)
+        return dumps(tasks)
     except (OdooConfigError, OdooError) as exc:
-        return json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2)
+        return dumps({"error": str(exc)})
 
 
 @mcp.tool()

@@ -7,6 +7,7 @@ import these without creating an import cycle through ``server``.
 from __future__ import annotations
 
 import json
+import os
 import threading
 
 from mcp.server.fastmcp import FastMCP
@@ -38,17 +39,34 @@ def get_client() -> OdooClient:
     return _client
 
 
+def dumps(obj) -> str:
+    """Serialise a tool result to JSON.
+
+    Output goes straight into the calling model's context window, so
+    ``ODOO_JSON_INDENT=0`` (or ``compact``) switches to separator-free JSON,
+    which is noticeably cheaper in tokens. Any positive integer sets the
+    indent; the default stays 2 so existing output is unchanged.
+    """
+    raw = os.environ.get("ODOO_JSON_INDENT", "").strip().lower()
+    if raw in ("0", "compact"):
+        return json.dumps(
+            obj, ensure_ascii=False, separators=(",", ":"), default=str
+        )
+    try:
+        indent = int(raw) if raw else 2
+    except ValueError:
+        indent = 2
+    return json.dumps(obj, ensure_ascii=False, indent=indent if indent > 0 else 2, default=str)
+
+
 def safe(func) -> str:
     """Run a client call and serialise the result (or a friendly error) as JSON."""
     try:
-        return json.dumps(func(), ensure_ascii=False, indent=2, default=str)
+        return dumps(func())
     except (OdooConfigError, OdooError) as exc:
-        return json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2)
+        return dumps({"error": str(exc)})
     except Exception as exc:  # shaping bugs must not leak raw tracebacks
-        return json.dumps(
-            {"error": f"internal error: {type(exc).__name__}: {exc}"},
-            ensure_ascii=False, indent=2,
-        )
+        return dumps({"error": f"internal error: {type(exc).__name__}: {exc}"})
 
 
 def name_domain(query: str | None, fields: list[str]) -> list:

@@ -121,3 +121,34 @@ def test_mcp_server_declares_disambiguation_instructions():
     assert "Live business data" in text
     # ...and the not-for boundary vs code-index servers.
     assert "NOT for Odoo source-code" in text
+
+
+def test_default_output_is_indented_two_spaces(monkeypatch):
+    monkeypatch.delenv("ODOO_JSON_INDENT", raising=False)
+    assert runtime.safe(lambda: {"a": 1}) == '{\n  "a": 1\n}'
+
+
+def test_compact_output_has_no_whitespace(monkeypatch):
+    for value in ("0", "compact", " Compact "):
+        monkeypatch.setenv("ODOO_JSON_INDENT", value)
+        out = runtime.safe(lambda: {"a": [1, 2], "b": "é"})
+        assert out == '{"a":[1,2],"b":"é"}'
+
+
+def test_custom_indent_and_invalid_values(monkeypatch):
+    monkeypatch.setenv("ODOO_JSON_INDENT", "4")
+    assert runtime.safe(lambda: {"a": 1}) == '{\n    "a": 1\n}'
+    for bad in ("banana", "-3"):
+        monkeypatch.setenv("ODOO_JSON_INDENT", bad)
+        assert runtime.safe(lambda: {"a": 1}) == '{\n  "a": 1\n}'
+
+
+def test_compact_applies_to_error_envelopes(monkeypatch):
+    from odoo_pulse.odoo_client import OdooError
+
+    monkeypatch.setenv("ODOO_JSON_INDENT", "0")
+
+    def boom():
+        raise OdooError("kaboom")
+
+    assert runtime.safe(boom) == '{"error":"kaboom"}'

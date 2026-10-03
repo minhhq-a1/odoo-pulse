@@ -8,11 +8,10 @@ Read-only; no new write surface.
 
 from __future__ import annotations
 
-import json
 from datetime import timedelta
 
 from .odoo_client import OdooConfigError, OdooError
-from .runtime import get_client, mcp, safe
+from .runtime import dumps, get_client, mcp, safe
 from .workflow_helpers import (
     build_report,
     fetch_with_truncation,
@@ -574,10 +573,7 @@ def standup_digest(
     # always serialises to JSON) is unsuitable here; keep a local try/except
     # that still returns a JSON error string on failure.
     except (OdooConfigError, OdooError) as exc:
-        return json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2)
+        return dumps({"error": str(exc)})
     except Exception as exc:  # shaping bugs must not leak raw tracebacks
-        return json.dumps(
-            {"error": f"internal error: {type(exc).__name__}: {exc}"},
-            ensure_ascii=False, indent=2,
-        )
+        return dumps({"error": f"internal error: {type(exc).__name__}: {exc}"})
 

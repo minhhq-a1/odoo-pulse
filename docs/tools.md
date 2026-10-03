@@ -294,7 +294,7 @@ Mostly Enterprise apps — return a friendly error if not installed.
 | `ODOO_DB` | yes | — | Database name |
 | `ODOO_USERNAME` | yes | — | Login email |
 | `ODOO_API_KEY` | yes | — | API key (used as password) |
-| `ODOO_READ_ONLY` | no | `true` | Block write methods when true |
+| `ODOO_READ_ONLY` | no | `true` | Block write methods when true. Boolean vars accept `true/false/1/0/yes/no/on/off`; anything else is rejected |
 | `ODOO_MAX_RECORDS` | no | `200` | Cap on records per query |
 | `ODOO_VERIFY_SSL` | no | `true` | Set false for self-signed / private-CA certs |
 | `ODOO_TIMEOUT` | no | `30` | Socket timeout (seconds) per XML-RPC call |
@@ -304,6 +304,7 @@ Mostly Enterprise apps — return a friendly error if not installed.
 | `ODOO_SCHEMA_CACHE_MAX` | no | `64` | Max cached schema entries (LRU eviction) |
 | `ODOO_MAX_ATTACHMENT_BYTES` | no | `1048576` | Max attachment bytes returned by `read_attachment` |
 | `ODOO_TOOL_GROUPS` | no | `core,reports` | Tool groups to expose (see top of this page) |
+| `ODOO_JSON_INDENT` | no | `2` | JSON indent of tool output. `0`/`compact` drops whitespace to save context tokens |
 
 ## Write operations
 
