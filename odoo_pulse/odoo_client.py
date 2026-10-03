@@ -245,6 +245,9 @@ class OdooClient:
         self._major_version: Any = _UNSET
         self._uid: int | None = None
         self._uid_lock = threading.Lock()
+        # Per-thread proxy cache (see _proxy): keeps each thread's HTTP
+        # connection alive across calls without ever sharing a ServerProxy.
+        self._local = threading.local()
 
     @cached_property
     def _ssl_context(self) -> ssl.SSLContext | None:
@@ -266,13 +269,25 @@ class OdooClient:
         return _TimeoutTransport(self.config.timeout)
 
     def _proxy(self, path: str) -> xmlrpc.client.ServerProxy:
-        """Fresh proxy per call: ServerProxy is not thread-safe, and the
-        construction cost is negligible next to the XML-RPC round-trip."""
-        return xmlrpc.client.ServerProxy(
-            f"{self.config.url}{path}",
-            allow_none=True,
-            transport=self._make_transport(),
-        )
+        """Thread-local proxy per endpoint.
+
+        ServerProxy is not thread-safe, so proxies are never shared across
+        threads; but within one thread the Transport caches its HTTP
+        connection, so reusing the proxy skips a TCP + TLS handshake on every
+        RPC after the first. The stdlib transport already retries once when a
+        kept-alive connection has gone stale, and drops it on any error.
+        """
+        proxies = getattr(self._local, "proxies", None)
+        if proxies is None:
+            proxies = self._local.proxies = {}
+        proxy = proxies.get(path)
+        if proxy is None:
+            proxy = proxies[path] = xmlrpc.client.ServerProxy(
+                f"{self.config.url}{path}",
+                allow_none=True,
+                transport=self._make_transport(),
+            )
+        return proxy
 
     def _authenticate(self) -> int:
         try:

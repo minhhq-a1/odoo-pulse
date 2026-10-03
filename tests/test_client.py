@@ -326,7 +326,7 @@ def test_make_transport_honours_verify_ssl_false():
     assert transport.context.verify_mode.name == "CERT_NONE"
 
 
-def test_each_execute_kw_builds_a_fresh_proxy(monkeypatch):
+def _counting_proxy_client(monkeypatch):
     import xmlrpc.client
     from odoo_pulse.odoo_client import OdooClient, OdooConfig
 
@@ -334,6 +334,7 @@ def test_each_execute_kw_builds_a_fresh_proxy(monkeypatch):
 
     class _FakeProxy:
         def __init__(self, url, allow_none=True, transport=None):
+            self.url = url
             instances.append(self)
 
         def execute_kw(self, *a, **k):
@@ -345,10 +346,28 @@ def test_each_execute_kw_builds_a_fresh_proxy(monkeypatch):
     monkeypatch.setattr(xmlrpc.client, "ServerProxy", _FakeProxy)
     client = OdooClient(OdooConfig(
         url="http://x", db="d", username="u", api_key="k"))
+    return client, instances
+
+
+def test_proxies_are_reused_within_a_thread(monkeypatch):
+    client, instances = _counting_proxy_client(monkeypatch)
     client.execute_kw("res.partner", "search_read", [[]])
     client.execute_kw("res.partner", "search_read", [[]])
-    # 1 auth proxy + 2 object proxies
-    assert len(instances) == 3
+    # One /common proxy (auth, once) + one /object proxy reused for both
+    # calls, so the HTTP connection can stay alive.
+    assert sorted(p.url for p in instances) == [
+        "http://x/xmlrpc/2/common", "http://x/xmlrpc/2/object"]
+    assert client._proxy("/xmlrpc/2/object") is client._proxy("/xmlrpc/2/object")
+
+
+def test_proxies_are_never_shared_across_threads(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+
+    client, _ = _counting_proxy_client(monkeypatch)
+    main = client._proxy("/xmlrpc/2/object")
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        other = pool.submit(client._proxy, "/xmlrpc/2/object").result()
+    assert other is not main
 
 
 def test_uid_authenticates_once(monkeypatch):
