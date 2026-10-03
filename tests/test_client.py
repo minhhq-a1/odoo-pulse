@@ -391,3 +391,50 @@ def test_search_read_omits_context_by_default():
     client.search_read("product.product", domain=[], fields=["id"])
     kwargs = proxy.calls[0][6]
     assert "context" not in kwargs
+
+
+class _PagedProxy:
+    """Serves ir.model rows page by page from a fixed list."""
+
+    def __init__(self, total):
+        self.rows = [{"model": f"m.{i:04d}", "name": f"M{i}"} for i in range(total)]
+        self.offsets: list[int] = []
+
+    def execute_kw(self, db, uid, key, model, method, args, kwargs):
+        assert (model, method) == ("ir.model", "search_read")
+        self.offsets.append(kwargs["offset"])
+        off, lim = kwargs["offset"], kwargs["limit"]
+        return self.rows[off : off + lim]
+
+
+def _paged_client(total, max_records=200):
+    client, _ = make_client(max_records=max_records)
+    proxy = _PagedProxy(total)
+    client._proxy = lambda path: proxy
+    return client, proxy
+
+
+def test_list_models_pages_past_the_record_cap():
+    client, proxy = _paged_client(450, max_records=200)
+    out = client.list_models()
+    assert len(out) == 450
+    assert proxy.offsets == [0, 200, 400]
+
+
+def test_list_models_exact_multiple_costs_one_extra_empty_page():
+    client, proxy = _paged_client(400, max_records=200)
+    assert len(client.list_models()) == 400
+    assert proxy.offsets == [0, 200, 400]
+
+
+def test_list_models_small_result_is_a_single_call():
+    client, proxy = _paged_client(3)
+    assert len(client.list_models("sale")) == 3
+    assert proxy.offsets == [0]
+
+
+def test_list_models_stops_at_the_runaway_ceiling():
+    client, proxy = _paged_client(10_000, max_records=10)
+    out = client.list_models()
+    assert len(proxy.offsets) == OdooClient._LIST_MODELS_MAX_PAGES
+    assert len(out) == 10 * OdooClient._LIST_MODELS_MAX_PAGES

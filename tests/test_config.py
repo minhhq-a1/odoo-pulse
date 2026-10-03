@@ -51,11 +51,40 @@ def test_from_env_missing_required_raises(monkeypatch, missing):
 
 @pytest.mark.parametrize(
     "value,expected",
-    [("false", False), ("0", False), ("no", False), ("true", True), ("anything", True)],
+    [
+        ("false", False),
+        ("0", False),
+        ("no", False),
+        ("off", False),
+        (" False ", False),
+        ("true", True),
+        ("1", True),
+        ("YES", True),
+    ],
 )
 def test_read_only_parsing(monkeypatch, value, expected):
     _set_env(monkeypatch, ODOO_READ_ONLY=value)
     assert OdooConfig.from_env().read_only is expected
+
+
+@pytest.mark.parametrize(
+    "name", ["ODOO_READ_ONLY", "ODOO_VERIFY_SSL", "ODOO_ALLOW_DELETE"]
+)
+def test_bool_env_garbage_fails_loudly(monkeypatch, name):
+    _set_env(monkeypatch, **{name: "ture"})
+    with pytest.raises(OdooConfigError, match=name):
+        OdooConfig.from_env()
+
+
+def test_allow_delete_tolerates_whitespace(monkeypatch):
+    _set_env(monkeypatch, ODOO_ALLOW_DELETE="true ")
+    assert OdooConfig.from_env().allow_delete is True
+
+
+def test_bool_env_empty_uses_defaults(monkeypatch):
+    _set_env(monkeypatch, ODOO_READ_ONLY="", ODOO_VERIFY_SSL="", ODOO_ALLOW_DELETE="")
+    cfg = OdooConfig.from_env()
+    assert (cfg.read_only, cfg.verify_ssl, cfg.allow_delete) == (True, True, False)
 
 
 def test_max_records_parsing_and_fallback(monkeypatch):
@@ -103,16 +132,21 @@ def test_from_env_writable_models_defaults_empty(monkeypatch):
         ("0", False),
         ("no", False),
         ("", False),
-        # Fail-safe: anything not explicitly truthy (including typos) stays
-        # disabled, unlike the old "not in (false, 0, no, '')" logic that
-        # would have enabled deletes here.
-        ("flase", False),
-        ("anything", False),
     ],
 )
 def test_allow_delete_only_true_for_explicit_values(monkeypatch, value, expected):
     _set_env(monkeypatch, ODOO_ALLOW_DELETE=value)
     assert OdooConfig.from_env().allow_delete is expected
+
+
+@pytest.mark.parametrize("value", ["flase", "anything"])
+def test_allow_delete_typos_are_rejected_not_enabled(monkeypatch, value):
+    # Typos never enable deletes (the old "not in (false, ...)" logic would
+    # have); they now fail loudly at config load instead of silently
+    # resolving to either state.
+    _set_env(monkeypatch, ODOO_ALLOW_DELETE=value)
+    with pytest.raises(OdooConfigError, match="ODOO_ALLOW_DELETE"):
+        OdooConfig.from_env()
 
 
 def test_timeout_default(monkeypatch):

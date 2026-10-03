@@ -112,6 +112,29 @@ def _float_env(name: str, default: float) -> float:
         raise OdooConfigError(f"{name} must be a number, got {raw!r}")
 
 
+_TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
+_FALSE_VALUES = frozenset({"0", "false", "no", "off"})
+
+
+def _bool_env(name: str, default: bool) -> bool:
+    """Parse a boolean environment variable (case/whitespace-insensitive).
+
+    Empty -> ``default``; anything outside the recognised true/false words
+    fails loudly so a typo like ``ODOO_ALLOW_DELETE=ture`` cannot silently
+    resolve to either state.
+    """
+    raw = os.environ.get(name, "").strip().lower()
+    if not raw:
+        return default
+    if raw in _TRUE_VALUES:
+        return True
+    if raw in _FALSE_VALUES:
+        return False
+    raise OdooConfigError(
+        f"{name} must be one of true/false/1/0/yes/no/on/off, got {raw!r}"
+    )
+
+
 class _TimeoutTransport(xmlrpc.client.Transport):
     """Plain-HTTP transport that enforces a socket timeout.
 
@@ -183,28 +206,16 @@ class OdooConfig:
                 "Missing required environment variables: " + ", ".join(missing)
             )
 
-        read_only = os.environ.get("ODOO_READ_ONLY", "true").lower() not in (
-            "false",
-            "0",
-            "no",
-        )
+        read_only = _bool_env("ODOO_READ_ONLY", True)
         max_records = _int_env("ODOO_MAX_RECORDS", 200)
 
-        verify_ssl = os.environ.get("ODOO_VERIFY_SSL", "true").lower() not in (
-            "false",
-            "0",
-            "no",
-        )
+        verify_ssl = _bool_env("ODOO_VERIFY_SSL", True)
         writable_models = frozenset(
             m.strip()
             for m in os.environ.get("ODOO_WRITABLE_MODELS", "").split(",")
             if m.strip()
         )
-        allow_delete = os.environ.get("ODOO_ALLOW_DELETE", "false").lower() in (
-            "true",
-            "1",
-            "yes",
-        )
+        allow_delete = _bool_env("ODOO_ALLOW_DELETE", False)
         schema_cache_ttl = _float_env("ODOO_SCHEMA_CACHE_TTL", 300.0)
         schema_cache_max = _int_env("ODOO_SCHEMA_CACHE_MAX", 64)
         max_attachment_bytes = _int_env("ODOO_MAX_ATTACHMENT_BYTES", 1048576)
@@ -523,7 +534,13 @@ class OdooClient:
         self._schema_cache.set(key, value)
         return value
 
+    # Runaway guard for list_models pagination: 25 pages is far beyond the
+    # ~1000 models of a fully loaded Odoo.
+    _LIST_MODELS_MAX_PAGES = 25
+
     def list_models(self, name_filter: str | None = None) -> list[dict]:
+        """All matching ir.model rows, paged internally so an instance with
+        more models than ODOO_MAX_RECORDS is never silently truncated."""
         domain = []
         if name_filter:
             domain = [
@@ -531,9 +548,18 @@ class OdooClient:
                 ("model", "ilike", name_filter),
                 ("name", "ilike", name_filter),
             ]
-        return self.search_read(
-            "ir.model",
-            domain=domain,
-            fields=["model", "name"],
-            order="model",
-        )
+        page = self._cap_limit(None)
+        models: list[dict] = []
+        for n in range(self._LIST_MODELS_MAX_PAGES):
+            rows = self.search_read(
+                "ir.model",
+                domain=domain,
+                fields=["model", "name"],
+                limit=page,
+                offset=n * page,
+                order="model",
+            )
+            models.extend(rows)
+            if len(rows) < page:
+                break
+        return models
