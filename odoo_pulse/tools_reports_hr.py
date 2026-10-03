@@ -26,7 +26,7 @@ from .workflow_helpers import (
 def absence_overview(
     days: int = 14,
     coverage_threshold: float = 0.3,
-    timezone_offset: int = 7,
+    timezone_offset: float | None = None,
 ) -> str:
     """Report who is off and where coverage is thin, in one call.
 
@@ -39,7 +39,8 @@ def absence_overview(
         days: Look-ahead window in days (default 14).
         coverage_threshold: Department share off in the window that counts
             as a coverage risk (default 0.3).
-        timezone_offset: UTC offset for "today" (default 7 = Asia/Ho_Chi_Minh).
+        timezone_offset: UTC offset in hours for "today" (halves allowed, e.g. 5.5).
+            Default: ODOO_DEFAULT_TZ_OFFSET, else 7 (Asia/Ho_Chi_Minh).
     """
 
     def run() -> dict:

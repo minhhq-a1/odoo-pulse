@@ -179,7 +179,7 @@ def project_budget(
     top_n: int = 10,
     burn_pct_at_risk: float = 80.0,
     burn_pct_off_track: float = 100.0,
-    timezone_offset: int = 7,
+    timezone_offset: float | None = None,
 ) -> str:
     """Report planned vs actual budget per project, line by line.
 
@@ -202,7 +202,8 @@ def project_budget(
         top_n: Rows in the per-line breakdown (default 10).
         burn_pct_at_risk: Burn %% >= this -> at_risk (default 80).
         burn_pct_off_track: Burn %% >= this -> off_track (default 100).
-        timezone_offset: UTC offset for "today" (default 7).
+        timezone_offset: UTC offset in hours for "today" (halves allowed, e.g. 5.5).
+            Default: ODOO_DEFAULT_TZ_OFFSET, else 7 (Asia/Ho_Chi_Minh).
     """
 
     def run() -> dict:
@@ -557,7 +558,7 @@ def project_profitability(
     top_n: int = 5,
     burn_pct_at_risk: float = 80.0,
     burn_pct_off_track: float = 100.0,
-    timezone_offset: int = 7,
+    timezone_offset: float | None = None,
 ) -> str:
     """Report delivery hours, money and budget burn per project in one call.
 
@@ -581,7 +582,8 @@ def project_profitability(
         top_n: Rows in the drill-down breakdowns (default 5).
         burn_pct_at_risk: Worst burn %% >= this -> at_risk (default 80).
         burn_pct_off_track: Worst burn %% >= this -> off_track (default 100).
-        timezone_offset: UTC offset for "today" (default 7).
+        timezone_offset: UTC offset in hours for "today" (halves allowed, e.g. 5.5).
+            Default: ODOO_DEFAULT_TZ_OFFSET, else 7 (Asia/Ho_Chi_Minh).
     """
 
     def run() -> dict:

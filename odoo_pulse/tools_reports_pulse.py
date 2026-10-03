@@ -22,7 +22,7 @@ from .workflow_helpers import (
 
 @mcp.tool()
 def business_pulse(
-    timezone_offset: int = 7,
+    timezone_offset: float | None = None,
     company: str | int | None = None,
 ) -> str:
     """One-call company briefing: sales, leads, receivables, tasks, absences.
@@ -34,7 +34,8 @@ def business_pulse(
     renders.
 
     Args:
-        timezone_offset: UTC offset for "today" (default 7 = Asia/Ho_Chi_Minh).
+        timezone_offset: UTC offset in hours for "today" (halves allowed, e.g. 5.5).
+            Default: ODOO_DEFAULT_TZ_OFFSET, else 7 (Asia/Ho_Chi_Minh).
         company: Optional company name (ilike) or id; scopes every section.
     """
 

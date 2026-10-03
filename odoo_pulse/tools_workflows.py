@@ -32,7 +32,7 @@ def team_workload(
     done_stages: list[str] | None = None,
     lookahead_days: int = 7,
     overload_threshold: int = 8,
-    timezone_offset: int = 7,
+    timezone_offset: float | None = None,
     subtasks_only: bool = True,
 ) -> str:
     """Report who is over- or under-loaded, in one call.
@@ -49,7 +49,8 @@ def team_workload(
         lookahead_days: Days ahead that count as "due soon" (default 7).
         overload_threshold: Open-task count above which a member is flagged
             "overloaded" (default 8). Sign-off point with the workflow owner.
-        timezone_offset: UTC offset for "today" (default 7 = Asia/Ho_Chi_Minh).
+        timezone_offset: UTC offset in hours for "today" (halves allowed, e.g. 5.5).
+            Default: ODOO_DEFAULT_TZ_OFFSET, else 7 (Asia/Ho_Chi_Minh).
         subtasks_only: Count only subtasks (parent_id != False), the team's unit
             of work. Default True.
     """
@@ -204,7 +205,7 @@ def project_status_report(
     include_on_hold: bool = True,
     include_done: bool = False,
     lookahead_days: int = 7,
-    timezone_offset: int = 7,
+    timezone_offset: float | None = None,
 ) -> str:
     """Report which projects are in trouble, across a portfolio, in one call.
 
@@ -221,7 +222,8 @@ def project_status_report(
         include_on_hold: Keep projects whose declared status is on_hold (default True).
         include_done: Keep projects whose declared status is done (default False).
         lookahead_days: Days ahead that count as "due soon" for at_risk (default 7).
-        timezone_offset: UTC offset for "today" (default 7 = Asia/Ho_Chi_Minh).
+        timezone_offset: UTC offset in hours for "today" (halves allowed, e.g. 5.5).
+            Default: ODOO_DEFAULT_TZ_OFFSET, else 7 (Asia/Ho_Chi_Minh).
     """
 
     def run() -> dict:
@@ -413,7 +415,7 @@ def standup_digest(
     project: str,
     exclude_stages: list[str] | None = None,
     lookahead_days: int = 7,
-    timezone_offset: int = 7,
+    timezone_offset: float | None = None,
 ) -> str:
     """Generate a daily standup digest for a project.
 
@@ -427,7 +429,8 @@ def standup_digest(
         exclude_stages: Stage names to treat as closed. Defaults to
             ["Done", "Cancelled", "Delivered"].
         lookahead_days: Days ahead to include in UPCOMING (default 7).
-        timezone_offset: UTC offset in hours for "today" (default 7 = Asia/Ho_Chi_Minh).
+        timezone_offset: UTC offset in hours for "today" (halves allowed, e.g. 5.5).
+            Default: ODOO_DEFAULT_TZ_OFFSET, else 7 (Asia/Ho_Chi_Minh).
     """
     if exclude_stages is None:
         exclude_stages = ["Done", "Cancelled", "Delivered"]

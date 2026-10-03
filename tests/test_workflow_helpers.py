@@ -6,10 +6,11 @@ import threading
 
 import pytest
 
-from odoo_pulse.odoo_client import OdooError
+from odoo_pulse.odoo_client import OdooConfigError, OdooError
 from odoo_pulse.workflow_helpers import (
     apply_truncation,
     build_report,
+    default_tz_offset,
     distinct_companies,
     ensure_field,
     m2o_id,
@@ -303,3 +304,44 @@ def test_apply_truncation_with_prefix():
     summary: dict = {}
     apply_truncation(summary, _TRUNC, prefix="milestones")
     assert summary == {"milestones_truncated": True, "total_milestones_matching": 250}
+
+
+def test_default_tz_offset_builtin_and_env(monkeypatch):
+    monkeypatch.delenv("ODOO_DEFAULT_TZ_OFFSET", raising=False)
+    assert default_tz_offset() == 7.0
+    monkeypatch.setenv("ODOO_DEFAULT_TZ_OFFSET", "5.5")
+    assert default_tz_offset() == 5.5
+    monkeypatch.setenv("ODOO_DEFAULT_TZ_OFFSET", "banana")
+    with pytest.raises(OdooConfigError, match="ODOO_DEFAULT_TZ_OFFSET"):
+        default_tz_offset()
+
+
+def test_utc_bound_supports_half_hour_offsets():
+    from datetime import date
+
+    assert utc_bound(date(2026, 3, 10), 5.5) == "2026-03-09 18:30:00"
+    assert utc_bound(date(2026, 3, 10), 7) == "2026-03-09 17:00:00"
+
+
+def test_none_offset_uses_configured_default_but_zero_means_utc(monkeypatch):
+    from datetime import date
+
+    monkeypatch.setenv("ODOO_DEFAULT_TZ_OFFSET", "5.5")
+    d = date(2026, 3, 10)
+    assert utc_bound(d, None) == utc_bound(d, 5.5)
+    assert utc_bound(d, 0) == "2026-03-10 00:00:00"
+    # 20:00 UTC is already the next local day at +5.5, still the same at UTC.
+    assert parse_when("2026-03-10 20:00:00", None) == date(2026, 3, 11)
+    assert parse_when("2026-03-10 20:00:00", 0) == date(2026, 3, 10)
+    # Plain dates never shift, and the bare default stays UTC.
+    assert parse_when("2026-03-10", None) == date(2026, 3, 10)
+    assert parse_when("2026-03-10 20:00:00") == date(2026, 3, 10)
+
+
+def test_today_in_tz_defaults_follow_env(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    monkeypatch.setenv("ODOO_DEFAULT_TZ_OFFSET", "-11")
+    expected = datetime.now(timezone(timedelta(hours=-11))).date()
+    assert today_in_tz() == expected
+    assert today_in_tz(None) == expected

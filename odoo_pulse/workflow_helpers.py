@@ -14,21 +14,39 @@ from datetime import date, datetime, timedelta, timezone
 from datetime import time as dt_time
 from typing import Any, overload
 
-from .odoo_client import OdooError
+from .odoo_client import OdooError, _float_env
+
+# Built-in team timezone (Asia/Ho_Chi_Minh) used when neither the caller nor
+# ODOO_DEFAULT_TZ_OFFSET says otherwise.
+_FALLBACK_TZ_OFFSET = 7.0
 
 
-def today_in_tz(timezone_offset: int) -> date:
-    """Current calendar date at a fixed UTC offset (default team tz is +7)."""
-    tz = timezone(timedelta(hours=timezone_offset))
+def default_tz_offset() -> float:
+    """UTC offset (hours) used when a tool is called without one.
+
+    ``ODOO_DEFAULT_TZ_OFFSET`` (e.g. ``5.5``) overrides the +7 built-in.
+    """
+    return _float_env("ODOO_DEFAULT_TZ_OFFSET", _FALLBACK_TZ_OFFSET)
+
+
+def _resolve_tz(timezone_offset: float | None) -> float:
+    return default_tz_offset() if timezone_offset is None else timezone_offset
+
+
+def today_in_tz(timezone_offset: float | None = None) -> date:
+    """Current calendar date at a fixed UTC offset (None -> configured default)."""
+    tz = timezone(timedelta(hours=_resolve_tz(timezone_offset)))
     return datetime.now(tz).date()
 
 
-def parse_when(raw: Any, timezone_offset: int = 0) -> date | None:
+def parse_when(raw: Any, timezone_offset: float | None = 0) -> date | None:
     """Parse an Odoo date ('YYYY-MM-DD') or UTC datetime
     ('YYYY-MM-DD HH:MM:SS') into the calendar date at the given UTC offset.
 
     Datetime values are shifted by timezone_offset hours before taking the
     date; plain date values pass through unshifted. Falsy input -> None.
+    ``timezone_offset=None`` means the configured default (see
+    :func:`default_tz_offset`); the plain default of 0 means UTC.
     """
     if not raw:
         return None
@@ -36,13 +54,13 @@ def parse_when(raw: Any, timezone_offset: int = 0) -> date | None:
     if len(s) <= 10:
         return datetime.strptime(s[:10], "%Y-%m-%d").date()
     dt = datetime.strptime(s[:19], "%Y-%m-%d %H:%M:%S")
-    return (dt + timedelta(hours=timezone_offset)).date()
+    return (dt + timedelta(hours=_resolve_tz(timezone_offset))).date()
 
 
-def utc_bound(day: date, timezone_offset: int) -> str:
+def utc_bound(day: date, timezone_offset: float | None = None) -> str:
     """Local midnight of `day` at the given UTC offset, expressed as a UTC
     datetime string suitable for domain comparisons on datetime fields."""
-    dt = datetime.combine(day, dt_time.min) - timedelta(hours=timezone_offset)
+    dt = datetime.combine(day, dt_time.min) - timedelta(hours=_resolve_tz(timezone_offset))
     return dt.strftime("%Y-%m-%d %H:%M:%S")
 
 

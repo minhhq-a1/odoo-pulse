@@ -161,3 +161,15 @@ def test_business_pulse_runs_sections_concurrently(fake_client, monkeypatch):
     monkeypatch.setattr(fake_client, "search_count", spying_count)
     out = json.loads(tools_reports_pulse.business_pulse())
     assert out["summary"]["verdict"] == "attention"
+
+
+def test_report_without_timezone_offset_uses_env_default(fake_client, monkeypatch):
+    from odoo_pulse import tools_reports_pulse
+
+    monkeypatch.setenv("ODOO_DEFAULT_TZ_OFFSET", "5.5")
+    tools_reports_pulse.business_pulse()
+    leads = [c for c in fake_client.calls
+             if c["method"] == "search_count" and c["model"] == "crm.lead"][0]
+    lo = next(v for f, op, v in leads["domain"] if f == "create_date" and op == ">=")
+    # Local midnight at +5.5 is 18:30 UTC the previous day.
+    assert lo.endswith("18:30:00")

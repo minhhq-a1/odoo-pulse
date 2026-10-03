@@ -34,7 +34,7 @@ def pipeline_review(
     lookahead_days: int = 30,
     win_rate_days: int = 90,
     top_n: int = 5,
-    timezone_offset: int = 7,
+    timezone_offset: float | None = None,
     company: str | int | None = None,
     stalled_pct_at_risk: float = 25.0,
     stalled_pct_off_track: float = 50.0,
@@ -54,7 +54,8 @@ def pipeline_review(
         lookahead_days: Days ahead that count as "closing soon" (default 30).
         win_rate_days: Look-back window for the won/lost ratio (default 90).
         top_n: Max stalled deals listed in the breakdown (default 5).
-        timezone_offset: UTC offset for "today" (default 7 = Asia/Ho_Chi_Minh).
+        timezone_offset: UTC offset in hours for "today" (halves allowed, e.g. 5.5).
+            Default: ODOO_DEFAULT_TZ_OFFSET, else 7 (Asia/Ho_Chi_Minh).
         company: Optional company name (ilike) or id; scopes every count
             and total to that company.
         stalled_pct_at_risk: Stalled share (%) at which the verdict drops
@@ -295,7 +296,7 @@ def sales_snapshot(
     period_days: int = 7,
     stale_quote_days: int = 7,
     top_n: int = 5,
-    timezone_offset: int = 7,
+    timezone_offset: float | None = None,
     growth_threshold_pct: float = 10.0,
     company: str | int | None = None,
     trend_weeks: int = 8,
@@ -312,7 +313,8 @@ def sales_snapshot(
         stale_quote_days: Age in days after which a draft/sent quotation
             counts as stale (default 7).
         top_n: Rows in the top-customers / top-products lists (default 5).
-        timezone_offset: UTC offset for "today" (default 7 = Asia/Ho_Chi_Minh).
+        timezone_offset: UTC offset in hours for "today" (halves allowed, e.g. 5.5).
+            Default: ODOO_DEFAULT_TZ_OFFSET, else 7 (Asia/Ho_Chi_Minh).
         growth_threshold_pct: Delta (%) beyond which the verdict is
             growing / declining (default 10).
         company: Optional company name (ilike) or id to scope the report.

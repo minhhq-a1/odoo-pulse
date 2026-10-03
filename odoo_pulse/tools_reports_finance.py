@@ -23,7 +23,7 @@ from .workflow_helpers import (
 @mcp.tool()
 def receivables_health(
     top_n: int = 5,
-    timezone_offset: int = 7,
+    timezone_offset: float | None = None,
     company: str | int | None = None,
     overdue_pct_at_risk: float = 25.0,
     overdue_pct_off_track: float = 50.0,
@@ -36,7 +36,8 @@ def receivables_health(
 
     Args:
         top_n: Rows in the top-overdue-customers list (default 5).
-        timezone_offset: UTC offset for "today" (default 7 = Asia/Ho_Chi_Minh).
+        timezone_offset: UTC offset in hours for "today" (halves allowed, e.g. 5.5).
+            Default: ODOO_DEFAULT_TZ_OFFSET, else 7 (Asia/Ho_Chi_Minh).
         company: Optional company name (ilike) or id to scope the report.
         overdue_pct_at_risk: Overdue AR share (%) that drops the verdict
             to at_risk (default 25).

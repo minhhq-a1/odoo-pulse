@@ -304,6 +304,7 @@ Mostly Enterprise apps — return a friendly error if not installed.
 | `ODOO_SCHEMA_CACHE_MAX` | no | `64` | Max cached schema entries (LRU eviction) |
 | `ODOO_MAX_ATTACHMENT_BYTES` | no | `1048576` | Max attachment bytes returned by `read_attachment` |
 | `ODOO_TOOL_GROUPS` | no | `core,reports` | Tool groups to expose (see top of this page) |
+| `ODOO_DEFAULT_TZ_OFFSET` | no | `7` | UTC offset (hours, halves allowed, e.g. `5.5`) used for "today" when a report tool gets no `timezone_offset` |
 | `ODOO_JSON_INDENT` | no | `2` | JSON indent of tool output. `0`/`compact` drops whitespace to save context tokens |
 
 ## Write operations

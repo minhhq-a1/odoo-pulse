@@ -25,7 +25,7 @@ from .workflow_helpers import (
 def inventory_risk(
     dead_stock_days: int = 90,
     top_n: int = 10,
-    timezone_offset: int = 7,
+    timezone_offset: float | None = None,
     company: str | int | None = None,
 ) -> str:
     """Report stock at risk — shortages and dead stock — in one call.
@@ -39,7 +39,8 @@ def inventory_risk(
     Args:
         dead_stock_days: No-movement window for dead stock (default 90).
         top_n: Rows listed per breakdown section (default 10).
-        timezone_offset: UTC offset for "today" (default 7 = Asia/Ho_Chi_Minh).
+        timezone_offset: UTC offset in hours for "today" (halves allowed, e.g. 5.5).
+            Default: ODOO_DEFAULT_TZ_OFFSET, else 7 (Asia/Ho_Chi_Minh).
         company: Optional company id or name; scopes stock quantities via
             allowed_company_ids context and dead-stock moves via company_id.
     """

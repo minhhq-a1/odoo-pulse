@@ -30,7 +30,7 @@ def procurement_watch(
     late_grace_days: int = 0,
     rfq_stale_days: int = 7,
     top_n: int = 5,
-    timezone_offset: int = 7,
+    timezone_offset: float | None = None,
     company: str | int | None = None,
 ) -> str:
     """Report purchasing health — late receipts and stale RFQs — in one call.
@@ -45,7 +45,8 @@ def procurement_watch(
         rfq_stale_days: Age in days after which a draft/sent RFQ counts as
             stale (default 7).
         top_n: Rows in the late-receipts / top-vendors lists (default 5).
-        timezone_offset: UTC offset for "today" (default 7 = Asia/Ho_Chi_Minh).
+        timezone_offset: UTC offset in hours for "today" (halves allowed, e.g. 5.5).
+            Default: ODOO_DEFAULT_TZ_OFFSET, else 7 (Asia/Ho_Chi_Minh).
         company: Optional company name (ilike) or id to scope the report.
     """
 
@@ -174,7 +175,7 @@ def procurement_watch(
 def production_health(
     stuck_days: int = 14,
     top_n: int = 5,
-    timezone_offset: int = 7,
+    timezone_offset: float | None = None,
     company: str | int | None = None,
 ) -> str:
     """Report manufacturing health — late starts and stuck orders — in one call.
@@ -188,7 +189,8 @@ def production_health(
         stuck_days: Days an order may run (progress/to_close) before it
             counts as stuck (default 14).
         top_n: Rows in the behind-start / stuck lists (default 5).
-        timezone_offset: UTC offset for "today" (default 7 = Asia/Ho_Chi_Minh).
+        timezone_offset: UTC offset in hours for "today" (halves allowed, e.g. 5.5).
+            Default: ODOO_DEFAULT_TZ_OFFSET, else 7 (Asia/Ho_Chi_Minh).
         company: Optional company name (ilike) or id to scope the report.
     """
 
