@@ -9,12 +9,14 @@ from __future__ import annotations
 
 from .runtime import get_client, mcp, safe
 from .workflow_helpers import (
+    apply_truncation,
     build_report,
     fetch_with_truncation,
     parse_when,
     resolve_company_id,
     today_in_tz,
     totals_by_currency,
+    truncation_risk,
 )
 
 
@@ -132,9 +134,7 @@ def receivables_health(
             "payable_total": round(ap_total, 2),
             "verdict": verdict,
         }
-        if truncation:
-            summary["truncated"] = True
-            summary["total_matching"] = truncation["total_matching"]
+        apply_truncation(summary, truncation)
 
         by_currency = totals_by_currency(ar_rows, "amount_residual")
         if len(by_currency) == 1:
@@ -153,13 +153,7 @@ def receivables_health(
 
         risks: list[dict] = []
         if truncation:
-            risks.append({
-                "code": "truncated_data", "count": truncation["missing"],
-                "message": (
-                    f"Report covers only {truncation['fetched']} of "
-                    f"{truncation['total_matching']} matching invoices."
-                ),
-            })
+            risks.append(truncation_risk(truncation, "invoices"))
         if ar_overdue > 0:
             risks.append({
                 "code": "overdue_receivables", "count": len(overdue_customers),
