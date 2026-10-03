@@ -1,3 +1,8 @@
 """odoo-pulse: an MCP server for read-only access to Odoo via XML-RPC."""
 
-__version__ = "0.1.0"
+from importlib.metadata import PackageNotFoundError, version as _version
+
+try:
+    __version__ = _version("odoo-pulse")
+except PackageNotFoundError:  # running from a source tree that is not installed
+    __version__ = "0.0.0+unknown"
