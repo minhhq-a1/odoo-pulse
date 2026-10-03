@@ -12,7 +12,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from datetime import time as dt_time
-from typing import Any
+from typing import Any, overload
 
 from .odoo_client import OdooError
 
@@ -89,6 +89,71 @@ def fetch_with_truncation(
         "fetched": len(rows),
         "missing": total - len(rows),
     }
+
+
+def m2o_id(row: dict, field: str) -> int | None:
+    """Id of a many2one value (Odoo returns ``[id, display_name]`` or False)."""
+    value = row.get(field)
+    return value[0] if value else None
+
+
+@overload
+def m2o_name(row: dict, field: str) -> str | None: ...
+
+
+@overload
+def m2o_name(row: dict, field: str, default: str) -> str: ...
+
+
+def m2o_name(row: dict, field: str, default: str | None = None) -> str | None:
+    """Display name of a many2one value, or ``default`` when it is unset."""
+    value = row.get(field)
+    return value[1] if value else default
+
+
+def truncation_risk(
+    truncation: dict,
+    noun: str,
+    *,
+    detail: str | None = None,
+    message: str | None = None,
+    code: str = "truncated_data",
+) -> dict:
+    """Risk entry for a :func:`fetch_with_truncation` truncation.
+
+    Standard wording: ``Report covers only {fetched} of {total_matching}
+    matching {noun}.`` plus an optional ``detail`` sentence on what that
+    means for the report. ``message`` replaces the whole text for the few
+    reports whose truncation semantics differ; ``code`` overrides the
+    default ``truncated_data`` for secondary datasets (milestones, trend...).
+    """
+    if message is None:
+        message = (
+            f"Report covers only {truncation['fetched']} of "
+            f"{truncation['total_matching']} matching {noun}."
+        )
+        if detail:
+            message += f" {detail}"
+    return {"code": code, "count": truncation["missing"], "message": message}
+
+
+def apply_truncation(
+    summary: dict, truncation: dict | None, *, prefix: str | None = None
+) -> None:
+    """Flag a truncated fetch on the report summary, in place.
+
+    Sets ``truncated`` / ``total_matching``; with ``prefix="projects"`` the
+    keys become ``projects_truncated`` / ``total_projects_matching`` so a
+    report with several fetches can flag each one. No-op when not truncated.
+    """
+    if not truncation:
+        return
+    if prefix:
+        summary[f"{prefix}_truncated"] = True
+        summary[f"total_{prefix}_matching"] = truncation["total_matching"]
+    else:
+        summary["truncated"] = True
+        summary["total_matching"] = truncation["total_matching"]
 
 
 def ensure_field(client: Any, model: str, field: str, hint: str = "") -> None:

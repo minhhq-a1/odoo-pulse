@@ -8,9 +8,12 @@ import pytest
 
 from odoo_pulse.odoo_client import OdooError
 from odoo_pulse.workflow_helpers import (
+    apply_truncation,
     build_report,
     distinct_companies,
     ensure_field,
+    m2o_id,
+    m2o_name,
     optional_fields,
     parse_when,
     resolve_company_id,
@@ -18,6 +21,7 @@ from odoo_pulse.workflow_helpers import (
     today_in_tz,
     totals_by_currency,
     trend_direction,
+    truncation_risk,
     utc_bound,
 )
 
@@ -253,3 +257,49 @@ def test_gather_strict_reraises_first_exception_in_key_order():
     with pytest.raises(ValueError) as exc:
         gather_strict({"a": raise_first, "b": raise_second, "c": lambda: 3})
     assert exc.value is first
+
+
+def test_m2o_id_and_name():
+    row = {"user_id": [7, "Ann"], "partner_id": False, "stage_id": None}
+    assert m2o_id(row, "user_id") == 7
+    assert m2o_id(row, "partner_id") is None
+    assert m2o_id(row, "stage_id") is None
+    assert m2o_id(row, "missing") is None
+    assert m2o_name(row, "user_id") == "Ann"
+    assert m2o_name(row, "partner_id") is None
+    assert m2o_name(row, "partner_id", "(none)") == "(none)"
+    assert m2o_name(row, "missing", "(unknown)") == "(unknown)"
+
+
+_TRUNC = {"total_matching": 250, "fetched": 200, "missing": 50}
+
+
+def test_truncation_risk_standard_wording():
+    assert truncation_risk(_TRUNC, "invoices") == {
+        "code": "truncated_data",
+        "count": 50,
+        "message": "Report covers only 200 of 250 matching invoices.",
+    }
+
+
+def test_truncation_risk_detail_code_and_message_override():
+    risk = truncation_risk(_TRUNC, "task(s)", detail="Figures may be partial.")
+    assert risk["message"] == (
+        "Report covers only 200 of 250 matching task(s). Figures may be partial."
+    )
+    custom = truncation_risk(_TRUNC, "x", message="custom", code="truncated_trend")
+    assert custom == {"code": "truncated_trend", "count": 50, "message": "custom"}
+
+
+def test_apply_truncation_flags_summary():
+    summary: dict = {}
+    apply_truncation(summary, None)
+    assert summary == {}
+    apply_truncation(summary, _TRUNC)
+    assert summary == {"truncated": True, "total_matching": 250}
+
+
+def test_apply_truncation_with_prefix():
+    summary: dict = {}
+    apply_truncation(summary, _TRUNC, prefix="milestones")
+    assert summary == {"milestones_truncated": True, "total_milestones_matching": 250}
