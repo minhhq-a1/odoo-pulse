@@ -344,7 +344,8 @@ def sales_snapshot(
                         ("date_order", "<", hi)],
                 limit=200,
             )
-            count, total, by_cur = 0, 0.0, {}
+            count, total = 0, 0.0
+            by_cur: dict[str, float] = {}
             for row in agg.get("rows", []):
                 cur = row.get("currency_id")
                 name = cur[1] if cur else "(unknown)"
@@ -502,7 +503,7 @@ def sales_snapshot(
         if verdict == "declining":
             risks.append({
                 "code": "revenue_drop", "count": cur_count,
-                "message": f"Revenue down {abs(delta_pct)}% vs the previous period",
+                "message": f"Revenue down {abs(delta_pct or 0.0)}% vs the previous period",
             })
         if stale_quotes:
             risks.append({

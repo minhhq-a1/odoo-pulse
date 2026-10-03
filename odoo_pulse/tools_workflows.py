@@ -81,7 +81,7 @@ def team_workload(
         cutoff = today + timedelta(days=lookahead_days)
 
         # uid (or None for unassigned) -> load tallies
-        load: dict[object, dict] = {}
+        load: dict[int | None, dict] = {}
         open_tasks = 0
         unassigned = 0
 

@@ -11,7 +11,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        include:
+          # Newest interpreter: informational until a green run proves the
+          # dependency wheels (pydantic-core etc.) are available for it.
+          - python-version: "3.14"
+            experimental: true
+    continue-on-error: ${{ matrix.experimental || false }}
 
     steps:
       - uses: actions/checkout@v7
@@ -20,6 +26,7 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
           cache: pip
 
       - name: Install dependencies
@@ -27,5 +34,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
-      - name: Run tests
-        run: pytest -q
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Type-check (mypy)
+        run: mypy
+
+      - name: Run tests with coverage gate
+        run: pytest -q --cov --cov-report=term-missing

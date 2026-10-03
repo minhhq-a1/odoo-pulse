@@ -11,6 +11,11 @@ pip install -e ".[dev]"
 # Run tests (no live Odoo needed)
 pytest
 
+# Same gates CI runs: lint, type-check, tests with the coverage floor
+ruff check .
+mypy
+pytest --cov
+
 # Run a single test file
 pytest tests/test_client.py
 

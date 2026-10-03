@@ -103,10 +103,9 @@ def _budget_sources(client, account_ids: list[int]):
             client.search_count(model, [])
         except OdooError:
             continue
-        link = (optional_fields(client, model, ["project_id"]) or [None])[0]
-        acct = (optional_fields(client, model, acct_candidates) or [None])[0]
-        amount = (optional_fields(client, model, amount_candidates)
-                  or [None])[0]
+        link = next(iter(optional_fields(client, model, ["project_id"])), None)
+        acct = next(iter(optional_fields(client, model, acct_candidates)), None)
+        amount = next(iter(optional_fields(client, model, amount_candidates)), None)
         if not amount or not (link or (acct and account_ids)):
             continue
         yield model, link, acct, amount, extra_domain
@@ -702,12 +701,12 @@ def project_profitability(
                     m2o = row.get("account_id")
                     if m2o:
                         target[m2o[0]] = row.get("amount:sum") or 0.0
-            for agg, target, key, label in (
+            for agg, out_rows, key, label in (
                     (emp_agg, by_employee, "employee_id", "employee"),
                     (task_agg, by_task, "task_id", "task")):
                 for row in (agg.get("rows", []) if agg else []):
                     m2o = row.get(key)
-                    target.append({
+                    out_rows.append({
                         label: m2o[1] if m2o else "(none)",
                         "hours": round(row.get("unit_amount:sum") or 0.0, 2),
                     })

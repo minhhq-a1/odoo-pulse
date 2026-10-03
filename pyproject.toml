@@ -27,6 +27,8 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Office/Business",
     "Topic :: Software Development :: Libraries",
 ]
@@ -55,6 +57,22 @@ odoo-pulse = "odoo_pulse.server:main"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["odoo_pulse"]
+check_untyped_defs = true
+warn_unused_ignores = true
+# mcp / python-dotenv ship partial or no stubs for what we import.
+ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["odoo_pulse"]
+
+[tool.coverage.report]
+# Measured 93% when this gate was added; raise as coverage grows.
+fail_under = 91
+skip_covered = true
 
 [tool.ruff]
 line-length = 110

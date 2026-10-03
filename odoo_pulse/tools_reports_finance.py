@@ -115,11 +115,13 @@ def receivables_health(
         else:
             verdict = "on_track"
 
-        top_debtors = sorted(
-            ({"customer": k, "overdue_amount": round(v, 2)}
-             for k, v in overdue_customers.items()),
-            key=lambda r: -r["overdue_amount"],
-        )[:top_n]
+        ranked = sorted(
+            ((k, round(v, 2)) for k, v in overdue_customers.items()),
+            key=lambda kv: -kv[1],
+        )
+        top_debtors = [
+            {"customer": k, "overdue_amount": amount} for k, amount in ranked[:top_n]
+        ]
 
         summary = {
             "receivable_open": ar_count,

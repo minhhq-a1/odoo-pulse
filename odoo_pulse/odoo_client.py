@@ -19,7 +19,7 @@ import threading
 import xmlrpc.client
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any
+from typing import Any, cast
 
 from .cache import TTLCache
 
@@ -302,7 +302,7 @@ class OdooClient:
             raise OdooError(
                 "Authentication failed: invalid credentials or database name."
             )
-        return uid
+        return cast(int, uid)
 
     @property
     def uid(self) -> int:
@@ -314,7 +314,7 @@ class OdooClient:
 
     def version(self) -> dict[str, Any]:
         try:
-            return self._proxy("/xmlrpc/2/common").version()
+            return cast(dict[str, Any], self._proxy("/xmlrpc/2/common").version())
         except (OSError, xmlrpc.client.ProtocolError) as exc:
             raise OdooError(f"Cannot reach Odoo at {self.config.url}: {exc}") from exc
 
