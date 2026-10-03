@@ -31,3 +31,8 @@ docs/*
 !docs/launch/
 
 /mcp-registry-fork/
+
+# Coverage data (pytest --cov)
+.coverage
+.coverage.*
+htmlcov/
