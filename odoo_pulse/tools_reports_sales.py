@@ -11,14 +11,17 @@ from datetime import timedelta
 
 from .runtime import get_client, mcp, safe
 from .workflow_helpers import (
+    apply_truncation,
     build_report,
     distinct_companies,
     fetch_with_truncation,
     gather_strict,
+    m2o_name,
     parse_when,
     resolve_company_id,
     today_in_tz,
     trend_direction,
+    truncation_risk,
     utc_bound,
 )
 
@@ -123,13 +126,13 @@ def pipeline_review(
             weighted_by_cur[cur_name] = (
                 weighted_by_cur.get(cur_name, 0.0) + revenue * prob / 100.0)
 
-            stage = lead["stage_id"][1] if lead.get("stage_id") else "(none)"
+            stage = m2o_name(lead, "stage_id", "(none)")
             srec = by_stage.setdefault(
                 stage, {"stage": stage, "count": 0, "expected_revenue": 0.0})
             srec["count"] += 1
             srec["expected_revenue"] += revenue
 
-            rep = lead["user_id"][1] if lead.get("user_id") else "(unassigned)"
+            rep = m2o_name(lead, "user_id", "(unassigned)")
             rrec = by_rep.setdefault(
                 rep, {"salesperson": rep, "count": 0, "expected_revenue": 0.0})
             rrec["count"] += 1
@@ -213,9 +216,8 @@ def pipeline_review(
             "win_rate_pct": win_rate,
             "verdict": verdict,
         }
+        apply_truncation(summary, truncation)
         if truncation:
-            summary["truncated"] = True
-            summary["total_matching"] = truncation["total_matching"]
             summary["partial_fields"] = partial_fields
 
         stages = sorted(by_stage.values(), key=lambda r: -r["expected_revenue"])
@@ -233,15 +235,12 @@ def pipeline_review(
 
         risks: list[dict] = []
         if truncation:
-            risks.append({
-                "code": "truncated_data", "count": truncation["missing"],
-                "message": (
-                    f"Summary totals and verdict cover all "
-                    f"{truncation['total_matching']} matching opportunities; "
-                    f"breakdowns and the stalled list cover only the top "
-                    f"{truncation['fetched']} by expected revenue."
-                ),
-            })
+            risks.append(truncation_risk(truncation, "opportunities", message=(
+                f"Summary totals and verdict cover all "
+                f"{truncation['total_matching']} matching opportunities; "
+                f"breakdowns and the stalled list cover only the top "
+                f"{truncation['fetched']} by expected revenue."
+            )))
         if total == 0:
             risks.append({"code": "empty_pipeline", "count": 0,
                           "message": "No open opportunities match the filter."})
@@ -417,14 +416,14 @@ def sales_snapshot(
                      if prev_total else None)
 
         top_customers = [
-            {"customer": r["partner_id"][1] if r.get("partner_id") else "(unknown)",
+            {"customer": m2o_name(r, "partner_id", "(unknown)"),
              "orders": r.get("__count") or 0,
              "revenue": round(r.get("amount_total:sum") or 0.0, 2)}
             for r in cust_agg.get("rows", [])
         ]
 
         top_products = [
-            {"product": row["product_id"][1] if row.get("product_id") else "(none)",
+            {"product": m2o_name(row, "product_id", "(none)"),
              "revenue": row.get("price_subtotal:sum") or 0.0}
             for row in fetched["products"].get("rows", [])
         ]
@@ -494,12 +493,11 @@ def sales_snapshot(
 
         risks: list[dict] = []
         if trend_trunc:
-            risks.append({
-                "code": "truncated_trend", "count": trend_trunc["missing"],
-                "message": (
+            risks.append(truncation_risk(
+                trend_trunc, "orders", code="truncated_trend",
+                message=(
                     f"Trend series covers only {trend_trunc['fetched']} of "
-                    f"{trend_trunc['total_matching']} orders in the window."),
-            })
+                    f"{trend_trunc['total_matching']} orders in the window.")))
         if verdict == "declining":
             risks.append({
                 "code": "revenue_drop", "count": cur_count,
